@@ -60,6 +60,21 @@ installbestbin() {
   [ -x "$3" ] || chmod +x "$3"
 }
 
+installbestlink() {
+  if [ -f "$1" ]; then
+    echo "  linking binary $3 to `basename $1`"
+    ln -fs "$1" "$3"
+  else
+    if [ -f "$2" ]; then
+      echo "  linking binary $3 to `basename $2`"
+      ln -fs "$2" "$3"
+    else
+      echo "None of $1, $2 exists"
+      exit 3
+    fi
+  fi
+}
+
 installlib() {
   if [ -f "$1" ]; then
     dest="$2/`basename $1`"
@@ -156,7 +171,7 @@ echo "Installing ocamlbuild..."
 cd ocamlbuild
 installbin ocamlbuild.byte$EXE $BINDIR/ocamlbuild.byte$EXE
 installbin ocamlbuild.native$EXE $BINDIR/ocamlbuild.native$EXE
-installbestbin ocamlbuild.native$EXE ocamlbuild.byte$EXE $BINDIR/ocamlbuild$EXE
+installbestlink ocamlbuild.native$EXE ocamlbuild.byte$EXE $BINDIR/ocamlbuild$EXE
 
 installlibdir \
   ocamlbuildlib.$A \
