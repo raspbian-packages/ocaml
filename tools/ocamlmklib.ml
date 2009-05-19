@@ -57,6 +57,11 @@ and rpath = ref []          (* rpath options *)
 and debug = ref false       (* -g option *)
 and verbose = ref false
 
+(* Debian specific: inhibit rpath *)
+let byteccrpath = ""
+and nativeccrpath = ""
+and mksharedlibrpath = ""
+
 let starts_with s pref =
   String.length s >= String.length pref &&
   String.sub s 0 (String.length pref) = pref
