@@ -61,6 +61,7 @@ build/libref/%.odoc: build/%.mld | build/libref
 ALL_COMPILED_DOC=$(ALL_DOC:%=build/%.odoc)
 build/man/Stdlib.3o: $(ALL_COMPILED_DOC) | build/man
 	$(V_OCAMLDOC)$(OCAMLDOC_RUN) -man -d build/man -man-mini \
+	-man-section 3o \
 	-nostdlib -hide Stdlib -lib Stdlib -t "OCaml library" \
 	$(addprefix -load , $(ALL_COMPILED_DOC))
 
