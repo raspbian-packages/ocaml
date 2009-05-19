@@ -407,7 +407,7 @@ stdlib_man/Stdlib.3o: $(OCAMLDOC) $(DOC_ALL)
 	$(OCAMLDOC_RUN) -man -d stdlib_man -nostdlib \
 	-hide Stdlib -lib Stdlib $(DOC_ALL_INCLUDES) \
 	-pp "$(AWK) -v ocamldoc=true -f $(SRC)/stdlib/expand_module_aliases.awk" \
-	-t "OCaml library" -man-mini \
+	-t "OCaml library" -man-mini -man-section 3o \
 	$(DOC_ALL_TEXT:%=-text %) \
 	$(DOC_ALL_MLIS)
 
