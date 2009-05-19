@@ -20,7 +20,7 @@ set -e
 
 cd `dirname $0`/..
 
-. config/config.sh
+. config/config.debian.install.sh
 
 not_installed=$PWD/_build/not_installed
 
