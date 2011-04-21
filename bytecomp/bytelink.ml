@@ -439,6 +439,20 @@ let output_cds_file outfile =
     remove_file outfile;
     raise x
 
+(* List of primitives declared in caml/mlvalues.h, to avoid duplicate
+   declarations in generated .c files *)
+
+let mlvalues_primitives = [
+  "caml_get_public_method";
+  "caml_hash_variant";
+  "caml_string_length";
+  "caml_Double_val";
+  "caml_Store_double_val";
+  "caml_Int64_val";
+  "caml_atom_table";
+  "caml_set_oo_id";
+]
+
 (* Output a bytecode executable as a C file *)
 
 let link_bytecode_as_c ppf tolink outfile =
@@ -481,7 +495,7 @@ let link_bytecode_as_c ppf tolink outfile =
       (Marshal.to_string sections []);
     output_string outchan "\n};\n\n";
     (* The table of primitives *)
-    Symtable.output_primitive_table outchan;
+    Symtable.output_primitive_table outchan mlvalues_primitives;
     (* The entry point *)
     output_string outchan "\
 \nvoid caml_startup(char ** argv)\
@@ -562,7 +576,7 @@ let link ppf objfiles output_name =
         #else\n\
         typedef long value;\n\
         #endif\n";
-      Symtable.output_primitive_table poc;
+      Symtable.output_primitive_table poc [];
       output_string poc "\
         #ifdef __cplusplus\n\
         }\n\
