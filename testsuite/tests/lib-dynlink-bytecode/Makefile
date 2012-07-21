@@ -15,6 +15,9 @@ BASEDIR=../..
 COMPFLAGS=-I $(OTOPDIR)/otherlibs/dynlink
 LD_PATH=.:$(TOPDIR)/otherlibs/dynlink
 
+# This test relies on the upstream behaviour of -custom
+export OCAML_CUSTOM_EMBED=n
+
 .PHONY: default
 default:
 	@if ! $(SUPPORTS_SHARED_LIBRARIES); then \
