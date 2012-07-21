@@ -16,6 +16,9 @@ CC=$(NATIVECC) -I $(CTOPDIR)/byterun
 COMPFLAGS=-I $(OTOPDIR)/otherlibs/unix
 LD_PATH=$(TOPDIR)/otherlibs/unix
 
+# This test relies on the upstream behaviour of -custom
+export OCAML_CUSTOM_EMBED=n
+
 .PHONY: default
 default:
 	@case " $(OTHERLIBRARIES) " in \
