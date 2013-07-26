@@ -1,0 +1,25 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Fri, 26 Jul 2013 06:13:27 +0200
+Subject: Fix code generation bug with "mod 1"
+
+Backport of a patch from Benedikt Meurer. ocamlnet needs it.
+
+Bug: http://caml.inria.fr/mantis/view.php?id=5910
+---
+ asmcomp/arm/selection.ml |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/asmcomp/arm/selection.ml b/asmcomp/arm/selection.ml
+index ecda382..ef112ed 100644
+--- a/asmcomp/arm/selection.ml
++++ b/asmcomp/arm/selection.ml
+@@ -173,7 +173,7 @@ method! select_operation op args =
+   | (Cdivi, args) ->
+       (Iextcall("__aeabi_idiv", false), args)
+   | (Cmodi, [arg; Cconst_int n])
+-    when n = 1 lsl Misc.log2 n ->
++    when n > 1 && n = 1 lsl Misc.log2 n ->
+       (Iintop_imm(Imod, n), [arg])
+   | (Cmodi, args) ->
+       (* See above for fix up of return register *)
+-- 
