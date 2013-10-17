@@ -13,8 +13,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: objinfo.ml 12511 2012-05-30 13:29:48Z lefessan $ *)
-
 (* Dump info on .cmi, .cmo, .cmx, .cma, .cmxa, .cmxs files
    and on bytecode executables. *)
 
@@ -270,7 +268,8 @@ let dump_obj filename =
   end
 
 let arg_list = []
-let arg_usage = Printf.sprintf "%s [OPTIONS] FILES : give information on files" Sys.argv.(0)
+let arg_usage =
+   Printf.sprintf "%s [OPTIONS] FILES : give information on files" Sys.argv.(0)
 
 let main() =
   Arg.parse arg_list dump_obj arg_usage;

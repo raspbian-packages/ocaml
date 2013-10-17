@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: config.mli 12511 2012-05-30 13:29:48Z lefessan $ *)
-
 (* System configuration *)
 
 val version: string
@@ -36,8 +34,8 @@ val native_c_compiler: string
 val native_c_libraries: string
         (* The C libraries to link with native-code programs *)
 val native_pack_linker: string
-        (* The linker to use for packaging (ocamlopt -pack) and for partial links
-           (ocamlopt -output-obj). *)
+        (* The linker to use for packaging (ocamlopt -pack) and for partial
+           links (ocamlopt -output-obj). *)
 val mkdll: string
         (* The linker command line to build dynamic libraries. *)
 val mkexe: string
@@ -103,6 +101,8 @@ val asm: string
 
 val asm_cfi_supported: bool
         (* Whether assembler understands CFI directives *)
+val with_frame_pointers : bool
+        (* Whether assembler should maintain frame pointers *)
 
 val ext_obj: string
         (* Extension for object files, e.g. [.o] under Unix. *)

@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -31,17 +32,17 @@ let (configs, add_config) =
      configs := config :: !configs;
      Hashtbl.clear cache)
 
-let parse_string s =
-  let conf = Lexers.conf_lines None 1 (Printf.sprintf "string: %S" s) (Lexing.from_string s) in
+let parse_lexbuf ?dir source lexbuf =
+  lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = source };
+  let conf = Lexers.conf_lines dir lexbuf in
   add_config conf
 
+let parse_string s = parse_lexbuf (Printf.sprintf "String %S" s) (Lexing.from_string s)
+
 let parse_file ?dir file =
-  try
-    with_input_file file begin fun ic ->
-      let conf = Lexers.conf_lines dir 1 (Printf.sprintf "file: %S" file) (Lexing.from_channel ic) in
-      add_config conf
-    end
-  with Lexers.Error msg -> raise (Lexers.Error (file ^ ": " ^ msg))
+  with_input_file file begin fun ic ->
+    parse_lexbuf ?dir (Printf.sprintf "File %S" file) (Lexing.from_channel ic)
+  end
 
 let key_match = Glob.eval
 
@@ -61,7 +62,8 @@ let tags_of_filename s =
     let () = Hashtbl.replace cache s res in
     res
 
-let has_tag tag = Tags.mem tag (tags_of_filename "")
+let global_tags () = tags_of_filename ""
+let has_tag tag = Tags.mem tag (global_tags ())
 
 let tag_file file tags =
   if tags <> [] then parse_string (Printf.sprintf "%S: %s" file (String.concat ", " tags));;

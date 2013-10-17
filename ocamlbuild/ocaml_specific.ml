@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -159,6 +160,18 @@ rule "ocaml: cmo* -> byte"
   ~dep:"%.cmo"
   (Ocaml_compiler.byte_link "%.cmo" "%.byte");;
 
+rule "ocaml: cmo* -> byte.o"
+  ~tags:["ocaml"; "byte"; "link"; "output_obj" ]
+  ~prod:"%.byte.o"
+  ~dep:"%.cmo"
+  (Ocaml_compiler.byte_output_obj "%.cmo" "%.byte.o");;
+
+rule "ocaml: cmo* -> byte.c"
+  ~tags:["ocaml"; "byte"; "link"; "output_obj" ]
+  ~prod:"%.byte.c"
+  ~dep:"%.cmo"
+  (Ocaml_compiler.byte_output_obj "%.cmo" "%.byte.c");;
+
 rule "ocaml: p.cmx* & p.o* -> p.native"
   ~tags:["ocaml"; "native"; "profile"; "program"]
   ~prod:"%.p.native"
@@ -170,6 +183,12 @@ rule "ocaml: cmx* & o* -> native"
   ~prod:"%.native"
   ~deps:["%.cmx"; x_o]
   (Ocaml_compiler.native_link "%.cmx" "%.native");;
+
+rule "ocaml: cmx* & o* -> native.o"
+  ~tags:["ocaml"; "native"; "output_obj" ]
+  ~prod:"%.native.o"
+  ~deps:["%.cmx"; x_o]
+  (Ocaml_compiler.native_output_obj "%.cmx" "%.native.o");;
 
 rule "ocaml: mllib & d.cmo* -> d.cma"
   ~tags:["ocaml"; "byte"; "debug"; "library"]
@@ -196,8 +215,11 @@ rule "ocaml: cmo* -> cma"
   (Ocaml_compiler.byte_library_link "%.cmo" "%.cma");;
 
 rule "ocaml C stubs: clib & (o|obj)* -> (a|lib) & (so|dll)"
-  ~prods:["%(path:<**/>)lib%(libname:<*> and not <*.*>)"-.-ext_lib;
-          "%(path:<**/>)dll%(libname:<*> and not <*.*>)"-.-ext_dll]
+  ~prods:(["%(path:<**/>)lib%(libname:<*> and not <*.*>)"-.-ext_lib] @
+          if Ocamlbuild_Myocamlbuild_config.supports_shared_libraries then
+            ["%(path:<**/>)dll%(libname:<*> and not <*.*>)"-.-ext_dll]
+          else
+	    [])
   ~dep:"%(path)lib%(libname).clib"
   (C_tools.link_C_library "%(path)lib%(libname).clib" ("%(path)lib%(libname)"-.-ext_lib) "%(path)%(libname)");;
 
@@ -482,7 +504,11 @@ let camlp4_flags camlp4s =
     flag ["ocaml"; "pp"; camlp4] (A camlp4)
   end camlp4s;;
 
-camlp4_flags ["camlp4o"; "camlp4r"; "camlp4of"; "camlp4rf"; "camlp4orf"; "camlp4oof"];;
+let p4_series =  ["camlp4o"; "camlp4r"; "camlp4of"; "camlp4rf"; "camlp4orf"; "camlp4oof"];;
+let p4_opt_series = List.map (fun f -> f ^ ".opt") p4_series;;
+
+camlp4_flags p4_series;;
+camlp4_flags p4_opt_series;;
 
 let camlp4_flags' camlp4s =
   List.iter begin fun (camlp4, flags) ->
@@ -526,9 +552,15 @@ flag ["ocaml"; "link"; "native"; "output_obj"] (A"-output-obj");;
 flag ["ocaml"; "link"; "byte"; "output_obj"] (A"-output-obj");;
 flag ["ocaml"; "dtypes"; "compile"] (A "-dtypes");;
 flag ["ocaml"; "annot"; "compile"] (A "-annot");;
+flag ["ocaml"; "bin_annot"; "compile"] (A "-bin-annot");;
+flag ["ocaml"; "short_paths"; "compile"] (A "-short-paths");;
+flag ["ocaml"; "short_paths"; "infer_interface"] (A "-short-paths");;
 flag ["ocaml"; "rectypes"; "compile"] (A "-rectypes");;
 flag ["ocaml"; "rectypes"; "infer_interface"] (A "-rectypes");;
 flag ["ocaml"; "rectypes"; "doc"] (A "-rectypes");;
+flag ["ocaml"; "rectypes"; "pack"] (A "-rectypes");;
+flag ["ocaml"; "principal"; "compile"] (A "-principal");;
+flag ["ocaml"; "principal"; "infer_interface"] (A "-principal");;
 flag ["ocaml"; "linkall"; "link"] (A "-linkall");;
 flag ["ocaml"; "link"; "profile"; "native"] (A "-p");;
 flag ["ocaml"; "link"; "program"; "custom"; "byte"] (A "-custom");;
@@ -537,14 +569,13 @@ flag ["ocaml"; "compile"; "profile"; "native"] (A "-p");;
 
 (* threads, with or without findlib *)
 flag ["ocaml"; "compile"; "thread"] (A "-thread");;
+flag ["ocaml"; "link"; "thread"] (A "-thread");;
 if not !Options.use_ocamlfind then begin
   flag ["ocaml"; "doc"; "thread"] (S[A"-I"; A"+threads"]);
-  flag ["ocaml"; "link"; "thread"; "native"; "program"] (S[A "threads.cmxa"; A "-thread"]);
-  flag ["ocaml"; "link"; "thread"; "byte"; "program"] (S[A "threads.cma"; A "-thread"]);
-  flag ["ocaml"; "link"; "thread"; "native"; "toplevel"] (S[A "threads.cmxa"; A "-thread"]);
-  flag ["ocaml"; "link"; "thread"; "byte"; "toplevel"] (S[A "threads.cma"; A "-thread"])
-end else begin
-  flag ["ocaml"; "link"; "thread"; "program"] (A "-thread")
+  flag ["ocaml"; "link"; "thread"; "native"; "program"] (A "threads.cmxa");
+  flag ["ocaml"; "link"; "thread"; "byte"; "program"] (A "threads.cma");
+  flag ["ocaml"; "link"; "thread"; "native"; "toplevel"] (A "threads.cmxa");
+  flag ["ocaml"; "link"; "thread"; "byte"; "toplevel"] (A "threads.cma");
 end;;
 
 flag ["ocaml"; "compile"; "nopervasives"] (A"-nopervasives");;
@@ -563,7 +594,10 @@ let ocaml_warn_flag c =
   flag ["ocaml"; "compile"; sprintf "warn_error_%c" (Char.lowercase c)]
        (S[A"-warn-error"; A (sprintf "%c" (Char.lowercase c))]);;
 
-List.iter ocaml_warn_flag ['A'; 'C'; 'D'; 'E'; 'F'; 'L'; 'M'; 'P'; 'R'; 'S'; 'U'; 'V'; 'Y'; 'Z'; 'X'];;
+List.iter ocaml_warn_flag ['A'; 'C'; 'D'; 'E'; 'F'; 'K'; 'L'; 'M'; 'P'; 'R'; 'S'; 'U'; 'V'; 'X'; 'Y'; 'Z'];;
+
+flag ["ocaml"; "compile"; "strict-sequence"] (A "-strict-sequence");;
+flag ["ocaml"; "compile"; "strict_sequence"] (A "-strict-sequence");;
 
 flag ["ocaml"; "doc"; "docdir"; "extension:html"] (A"-html");;
 flag ["ocaml"; "doc"; "docdir"; "manpage"] (A"-man");;

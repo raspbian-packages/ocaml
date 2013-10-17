@@ -11,8 +11,6 @@
 #                                                                       #
 #########################################################################
 
-# $Id: Makefile 11156 2011-07-27 14:17:02Z doligez $
-
 # Makefile for the portable graphics library
 
 LIBNAME=graphics
@@ -28,7 +26,7 @@ EXTRACFLAGS=$(X11_INCLUDES)
 include ../Makefile
 
 depend:
-	gcc -MM $(CFLAGS) *.c | sed -e 's, /usr[^ ]*\.h,,g' > .depend
+	gcc -MM $(CFLAGS) *.c | sed -e 's, /[^ ]*\.h,,g' > .depend
 	../../boot/ocamlrun ../../tools/ocamldep *.mli *.ml >> .depend
 
 include .depend

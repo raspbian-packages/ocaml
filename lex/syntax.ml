@@ -10,18 +10,18 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: syntax.ml 11156 2011-07-27 14:17:02Z doligez $ *)
-
-(* This apparently useless implmentation file is in fact required
+(* This apparently useless implementation file is in fact required
    by the pa_ocamllex syntax extension *)
 
 (* The shallow abstract syntax *)
 
-type location =
-    { start_pos: int;
-      end_pos: int;
-      start_line: int;
-      start_col: int }
+type location = {
+  loc_file : string;
+  start_pos : int;
+  end_pos : int;
+  start_line : int;
+  start_col : int;
+}
 
 type regular_expression =
     Epsilon

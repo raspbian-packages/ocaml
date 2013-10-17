@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: unix.mli 12140 2012-02-07 16:41:02Z doligez $ *)
-
 (** Interface to the Unix system *)
 
 
@@ -189,7 +187,8 @@ val waitpid : wait_flag list -> int -> int * process_status
    as the current process.
    Negative pid arguments represent process groups.
    The list of options indicates whether [waitpid] should return
-   immediately without waiting, or also report stopped children. *)
+   immediately without waiting, and whether it should report stopped
+   children. *)
 
 val system : string -> process_status
 (** Execute the given command, wait until it terminates, and return
@@ -243,6 +242,9 @@ type open_flag =
                                    O_SYNC/O_DSYNC) *)
   | O_SHARE_DELETE              (** Windows only: allow the file to be deleted
                                    while still open *)
+  | O_CLOEXEC                   (** Set the close-on-exec flag on the
+                                   descriptor returned by {!openfile} *)
+
 (** The flags to {!Unix.openfile}. *)
 
 
@@ -251,9 +253,9 @@ type file_perm = int
     read for group, none for others *)
 
 val openfile : string -> open_flag list -> file_perm -> file_descr
-(** Open the named file with the given flags. Third argument is
-   the permissions to give to the file if it is created. Return
-   a file descriptor on the named file. *)
+(** Open the named file with the given flags. Third argument is the
+   permissions to give to the file if it is created (see
+   {!umask}). Return a file descriptor on the named file. *)
 
 val close : file_descr -> unit
 (** Close a file descriptor. *)
@@ -307,7 +309,8 @@ type seek_command =
 
 
 val lseek : file_descr -> int -> seek_command -> int
-(** Set the current position for a file descriptor *)
+(** Set the current position for a file descriptor, and return the resulting
+    offset (from the beginning of the file). *)
 
 val truncate : string -> int -> unit
 (** Truncates the named file to the given size. *)
@@ -480,7 +483,7 @@ val clear_close_on_exec : file_descr -> unit
 
 
 val mkdir : string -> file_perm -> unit
-(** Create a directory with the given permissions. *)
+(** Create a directory with the given permissions (see {!umask}). *)
 
 val rmdir : string -> unit
 (** Remove an empty directory. *)
@@ -521,7 +524,7 @@ val pipe : unit -> file_descr * file_descr
    opened for writing, that's the entrance to the pipe. *)
 
 val mkfifo : string -> file_perm -> unit
-(** Create a named pipe with the given permissions. *)
+(** Create a named pipe with the given permissions (see {!umask}). *)
 
 
 (** {6 High-level process and redirection management} *)

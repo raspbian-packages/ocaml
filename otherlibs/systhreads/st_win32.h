@@ -11,13 +11,11 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* Win32 implementation of the "st" interface */
 
 #define _WIN32_WINNT 0x0400
 #include <windows.h>
-#include <WinError.h>
+#include <winerror.h>
 #include <stdio.h>
 #include <signal.h>
 
@@ -29,7 +27,8 @@
 #else
 #include <stdio.h>
 #define TRACE(x) printf("%d: %s\n", GetCurrentThreadId(), x); fflush(stdout)
-#define TRACE1(x,y) printf("%d: %s %p\n", GetCurrentThreadId(), x, (void *)y); fflush(stdout)
+#define TRACE1(x,y) printf("%d: %s %p\n", GetCurrentThreadId(), x, (void *)y); \
+                    fflush(stdout)
 #endif
 
 typedef DWORD st_retcode;
