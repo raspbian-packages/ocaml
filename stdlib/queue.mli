@@ -11,11 +11,13 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: queue.mli 11156 2011-07-27 14:17:02Z doligez $ *)
-
 (** First-in first-out queues.
 
    This module implements queues (FIFOs), with in-place modification.
+
+   {b Warning} This module is not thread-safe: each {!Queue.t} value
+   must be protected from concurrent access (e.g. with a {!Mutex.t}).
+   Failure to do so can lead to a crash.
 *)
 
 type 'a t

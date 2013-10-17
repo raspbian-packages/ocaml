@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -160,7 +161,7 @@ let call builder r =
       begin match exists2 List.find Resource.Cache.resource_has_changed r.deps with
       | Some r -> (`cache_miss_changed_dep r, false)
       | _ ->
-        begin match exists2 Resources.find Resource.Cache.resource_has_changed dyndeps with
+        begin match exists2 Resources.find_elt Resource.Cache.resource_has_changed dyndeps with
         | Some r -> (`cache_miss_changed_dyn_dep r, false)
         | _ ->
             begin match cached_digest r with
@@ -261,11 +262,11 @@ let rule name ?(tags=[]) ?(prods=[]) ?(deps=[]) ?prod ?dep ?stamp ?(insert = `bo
     List.fold_right begin fun x acc ->
       let r = import x in
       if List.mem r acc then
-        failwith (sprintf "in rule %s, multiple occurences of the resource %s" name x)
+        failwith (sprintf "in rule %s, multiple occurrences of the resource %s" name x)
       else r :: acc
     end xs init
   in
-  if prods = [] && prod = None && stamp = None then raise (Exit_rule_error "Can't make a rule that produce nothing");
+  if prods = [] && prod = None && stamp = None then raise (Exit_rule_error "Can't make a rule that produces nothing");
   let stamp, prods =
     match stamp with
     | None -> None, prods

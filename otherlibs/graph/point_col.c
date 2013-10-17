@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id: point_col.c 11156 2011-07-27 14:17:02Z doligez $ */
-
 #include "libgraph.h"
 
 value caml_gr_point_color(value vx, value vy)
@@ -23,7 +21,8 @@ value caml_gr_point_color(value vx, value vy)
   int rgb;
 
   caml_gr_check_open();
-  im = XGetImage(caml_gr_display, caml_gr_bstore.win, x, Bcvt(y), 1, 1, (-1), ZPixmap);
+  im = XGetImage(caml_gr_display, caml_gr_bstore.win, x, Bcvt(y), 1, 1, (-1),
+                 ZPixmap);
   rgb = caml_gr_rgb_pixel(XGetPixel(im, 0, 0));
   XDestroyImage(im);
   return Val_int(rgb);

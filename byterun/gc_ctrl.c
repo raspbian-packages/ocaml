@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id: gc_ctrl.c 12708 2012-07-13 12:03:26Z doligez $ */
-
 #include "alloc.h"
 #include "compact.h"
 #include "custom.h"
@@ -129,7 +127,10 @@ static value heap_stats (int returnstats)
          free_words = 0, free_blocks = 0, largest_free = 0,
          fragments = 0, heap_chunks = 0;
   char *chunk = caml_heap_start, *chunk_end;
-  char *cur_hp, *prev_hp;
+  char *cur_hp;
+#ifdef DEBUG
+  char *prev_hp;
+#endif
   header_t cur_hd;
 
 #ifdef DEBUG
@@ -139,7 +140,9 @@ static value heap_stats (int returnstats)
   while (chunk != NULL){
     ++ heap_chunks;
     chunk_end = chunk + Chunk_size (chunk);
+#ifdef DEBUG
     prev_hp = NULL;
+#endif
     cur_hp = chunk;
     while (cur_hp < chunk_end){
       cur_hd = Hd_hp (cur_hp);
@@ -194,7 +197,9 @@ static value heap_stats (int returnstats)
         */
         break;
       }
+#ifdef DEBUG
       prev_hp = cur_hp;
+#endif
       cur_hp = Next (cur_hp);
     }                                          Assert (cur_hp == chunk_end);
     chunk = Chunk_next (chunk);
@@ -396,7 +401,7 @@ CAMLprim value caml_gc_set(value v)
 
     /* Minor heap size comes last because it will trigger a minor collection
        (thus invalidating [v]) and it can raise [Out_of_memory]. */
-  newminsize = norm_minsize (Bsize_wsize (Long_val (Field (v, 0))));
+  newminsize = Bsize_wsize (norm_minsize (Long_val (Field (v, 0))));
   if (newminsize != caml_minor_heap_size){
     caml_gc_message (0x20, "New minor heap size: %luk bytes\n",
                      newminsize/1024);

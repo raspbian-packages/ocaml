@@ -11,14 +11,12 @@
 #                                                                       #
 #########################################################################
 
-# $Id: Makefile 12585 2012-06-08 11:35:37Z xleroy $
-
 include ../../config/Makefile
 
 CAMLC=../../ocamlcomp.sh -I ../unix
 CAMLOPT=../../ocamlcompopt.sh -I ../unix
 MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
-COMPFLAGS=-warn-error A -g
+COMPFLAGS=-w +33..39 -warn-error A -g
 
 BYTECODE_C_OBJS=st_stubs_b.o
 NATIVECODE_C_OBJS=st_stubs_n.o
@@ -43,7 +41,9 @@ libthreadsnat.a: $(NATIVECODE_C_OBJS)
 	$(AR) rc libthreadsnat.a $(NATIVECODE_C_OBJS)
 
 st_stubs_n.o: st_stubs.c st_posix.h
-	$(NATIVECC) -O -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) $(SHAREDCCCOMPOPTS) -DNATIVE_CODE -DTARGET_$(ARCH) -DSYS_$(SYSTEM) -c st_stubs.c
+	$(NATIVECC) -O -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) \
+	            $(SHAREDCCCOMPOPTS) -DNATIVE_CODE -DTARGET_$(ARCH) \
+	            -DSYS_$(SYSTEM) -c st_stubs.c
 	mv st_stubs.o st_stubs_n.o
 
 threads.cma: $(THREAD_OBJS)

@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: ocamlcp.ml 11890 2011-12-20 10:35:43Z frisch $ *)
-
 open Printf
 
 let compargs = ref ([] : string list)
@@ -76,10 +74,12 @@ module Options = Main_args.Make_optcomp_options (struct
   let _p = option "-p"
   let _pack = option "-pack"
   let _pp s = incompatible "-pp"
+  let _ppx s = incompatible "-ppx"
   let _principal = option "-principal"
   let _rectypes = option "-rectypes"
   let _runtime_variant s = option_with_arg "-runtime-variant" s
   let _S = option "-S"
+  let _short_paths = option "-short-paths"
   let _strict_sequence = option "-strict-sequence"
   let _shared = option "-shared"
   let _thread = option "-thread"
@@ -94,7 +94,9 @@ module Options = Main_args.Make_optcomp_options (struct
   let _where = option "-where"
 
   let _nopervasives = option "-nopervasives"
+  let _dsource = option "-dsource"
   let _dparsetree = option "-dparsetree"
+  let _dtypedtree = option "-dtypedtree"
   let _drawlambda = option "-drawlambda"
   let _dlambda = option "-dlambda"
   let _dclambda = option "-dclambda"

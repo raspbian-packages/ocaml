@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -144,6 +145,12 @@ let rec prepare_link tag cmx extensions build =
       (if Pathname.exists (ml-.-"depends") then path_dependencies_of ml else [])
       (if Pathname.exists (mli-.-"depends") then path_dependencies_of mli else [])
   in
+  let modules =
+    if (modules = []) && (Pathname.exists (ml^"pack")) then
+      List.map (fun s -> (`mandatory, s)) (string_list_of_file (ml^"pack"))
+    else
+      modules
+  in
   if modules <> [] && not (Hashtbl.mem cache_prepare_link key) then
     let () = Hashtbl.add cache_prepare_link key true in
     let modules' = List.map (fun (_, x) -> expand_module include_dirs x extensions) modules in
@@ -224,6 +231,9 @@ let byte_link_gen = link_gen "cmo" "cma" "cma" ["cmo"; "cmi"]
 let byte_link = byte_link_gen ocamlc_link_prog
   (fun tags -> tags++"ocaml"++"link"++"byte"++"program")
 
+let byte_output_obj = byte_link_gen ocamlc_link_prog
+  (fun tags -> tags++"ocaml"++"link"++"byte"++"output_obj")
+
 let byte_library_link = byte_link_gen byte_lib_linker byte_lib_linker_tags
 
 let byte_debug_link_gen =
@@ -240,6 +250,9 @@ let native_link_gen linker =
 
 let native_link x = native_link_gen ocamlopt_link_prog
   (fun tags -> tags++"ocaml"++"link"++"native"++"program") x
+
+let native_output_obj x = native_link_gen ocamlopt_link_prog
+  (fun tags -> tags++"ocaml"++"link"++"native"++"output_obj") x
 
 let native_library_link x =
   native_link_gen native_lib_linker native_lib_linker_tags x

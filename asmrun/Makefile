@@ -11,8 +11,6 @@
 #                                                                       #
 #########################################################################
 
-# $Id: Makefile 12477 2012-05-24 16:17:19Z xleroy $
-
 include ../config/Makefile
 
 CC=$(NATIVECC)
@@ -82,6 +80,9 @@ install-noprof:
 install-prof:
 	cp libasmrunp.a $(LIBDIR)/libasmrunp.a
 	cd $(LIBDIR); $(RANLIB) libasmrunp.a
+
+power-bsd_elf.S: power-elf.S
+	cp power-elf.S power-bsd_elf.S
 
 power.o: power-$(SYSTEM).o
 	cp power-$(SYSTEM).o power.o
@@ -172,8 +173,11 @@ clean::
 .SUFFIXES: .S .d.o .p.o
 
 .S.o:
-	$(ASPP) -DSYS_$(SYSTEM) -o $*.o $*.S || \
-	{ echo "If your assembler produced syntax errors, it is probably unhappy with the"; echo "preprocessor. Check your assembler, or try producing $*.o by hand."; exit 2; }
+	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) -o $*.o $*.S || \
+	{ echo "If your assembler produced syntax errors, it is probably";\
+          echo "unhappy with the preprocessor. Check your assembler, or";\
+          echo "try producing $*.o by hand.";\
+          exit 2; }
 
 .S.p.o:
 	$(ASPP) -DSYS_$(SYSTEM) $(ASPPPROFFLAGS) -o $*.p.o $*.S

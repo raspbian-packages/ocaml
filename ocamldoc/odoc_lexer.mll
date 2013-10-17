@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: odoc_lexer.mll 12796 2012-07-30 11:22:29Z doligez $ *)
-
 (** The lexer for special comments. *)
 
 open Lexing
@@ -295,6 +293,10 @@ and elements = parse
         incr Odoc_comments_global.nb_chars;
         print_DEBUG2 "newline";
         elements lexbuf }
+  | "@"
+      {
+        raise (Failure (Odoc_messages.should_escape_at_sign))
+      }
 
   | "@"lowercase+
       {
@@ -340,6 +342,10 @@ and elements = parse
   | eof
       {
         EOF
+      }
+  | _ {
+        let s = Lexing.lexeme lexbuf in
+        failwith ("Unexpected character '"^s^"'")
       }
 
 

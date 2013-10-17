@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: main.ml 12800 2012-07-30 18:59:07Z doligez $ *)
-
 open Clflags
 
 let compile_file filename =
@@ -21,7 +19,8 @@ let compile_file filename =
   let lb = Lexing.from_channel ic in
   try
     while true do
-      Asmgen.compile_phrase Format.std_formatter (Parsecmm.phrase Lexcmm.token lb)
+      Asmgen.compile_phrase Format.std_formatter
+                            (Parsecmm.phrase Lexcmm.token lb)
     done
   with
       End_of_file ->

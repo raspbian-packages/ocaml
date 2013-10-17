@@ -11,21 +11,21 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id: windbug.h 12023 2012-01-14 09:40:49Z xleroy $ */
-
 #ifdef DEBUG
 
 #include <stdio.h>
 #include <windows.h>
 
-/* According to MSDN, MSVC supports the gcc ## operator (to deal with empty argument lists)
+/* According to MSDN, MSVC supports the gcc ## operator (to deal with empty
+   argument lists)
  */
 #define DEBUG_PRINT(fmt, ...) \
   do \
   { \
     if (debug_test()) \
     { \
-      fprintf(stderr, "DBUG (pid:%ld, tid: %ld): ", GetCurrentProcessId(), GetCurrentThreadId()); \
+      fprintf(stderr, "DBUG (pid:%ld, tid: %ld): ", GetCurrentProcessId(), \
+              GetCurrentThreadId()); \
       fprintf(stderr, fmt, ##__VA_ARGS__); \
       fprintf(stderr, "\n"); \
       fflush(stderr); \
