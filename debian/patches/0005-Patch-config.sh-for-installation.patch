@@ -4,15 +4,15 @@ Subject: Patch config.sh for installation
 
 Use for installatation a patched config.sh (created by debian/rules).
 ---
- build/install.sh         |    2 +-
- build/partial-install.sh |    2 +-
+ build/install.sh         | 2 +-
+ build/partial-install.sh | 2 +-
  2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/build/install.sh b/build/install.sh
-index df01db4..546d65a 100755
+index d092d66..d80a158 100755
 --- a/build/install.sh
 +++ b/build/install.sh
-@@ -18,7 +18,7 @@ set -e
+@@ -16,7 +16,7 @@ set -e
  
  cd `dirname $0`/..
  
@@ -22,10 +22,10 @@ index df01db4..546d65a 100755
  not_installed=$PWD/_build/not_installed
  
 diff --git a/build/partial-install.sh b/build/partial-install.sh
-index a8113c9..15071d4 100755
+index c06154a..42c3558 100755
 --- a/build/partial-install.sh
 +++ b/build/partial-install.sh
-@@ -22,7 +22,7 @@ set -e
+@@ -20,7 +20,7 @@ set -e
  
  cd `dirname $0`/..
  
