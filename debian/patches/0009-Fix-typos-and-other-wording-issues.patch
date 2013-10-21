@@ -1,0 +1,82 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Mon, 21 Oct 2013 16:34:12 +0200
+Subject: Fix typos and other wording issues
+
+---
+ man/ocaml.m         | 2 +-
+ man/ocamlc.m        | 2 +-
+ man/ocamldoc.m      | 2 +-
+ man/ocamlopt.m      | 2 +-
+ stdlib/printexc.mli | 6 +++---
+ 5 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/man/ocaml.m b/man/ocaml.m
+index 39baf7b..cd3fb0d 100644
+--- a/man/ocaml.m
++++ b/man/ocaml.m
+@@ -136,7 +136,7 @@ directories searched for source and compiled files.
+ .BI \-ppx \ command
+ After parsing, pipe the abstract syntax tree through the preprocessor
+ .IR command .
+-The format of the input and ouput of the preprocessor
++The format of the input and output of the preprocessor
+ are not yet documented.
+ .TP
+ .B \-principal
+diff --git a/man/ocamlc.m b/man/ocamlc.m
+index fb3902a..1cdd9bd 100644
+--- a/man/ocamlc.m
++++ b/man/ocamlc.m
+@@ -478,7 +478,7 @@ implementation (.ml) file.
+ .BI \-ppx \ command
+ After parsing, pipe the abstract syntax tree through the preprocessor
+ .IR command .
+-The format of the input and ouput of the preprocessor
++The format of the input and output of the preprocessor
+ are not yet documented.
+ .TP
+ .B \-principal
+diff --git a/man/ocamldoc.m b/man/ocamldoc.m
+index 73ca3a6..b25833a 100644
+--- a/man/ocamldoc.m
++++ b/man/ocamldoc.m
+@@ -170,7 +170,7 @@ the comments in implementation files.
+ Always keep the source code for values, methods and instance variables, when
+ available. The source code is always kept when a .ml
+ file is given, but is by default discarded when a .mli
+-is given. This option allows to always keep the source code.
++is given. This option allows the source code to be always kept.
+ .TP
+ .BI \-load \ file
+ Load information from
+diff --git a/man/ocamlopt.m b/man/ocamlopt.m
+index 998651b..dea2249 100644
+--- a/man/ocamlopt.m
++++ b/man/ocamlopt.m
+@@ -431,7 +431,7 @@ errors, the intermediate file is deleted afterwards.
+ .BI \-ppx \ command
+ After parsing, pipe the abstract syntax tree through the preprocessor
+ .IR command .
+-The format of the input and ouput of the preprocessor
++The format of the input and output of the preprocessor
+ are not yet documented.
+ .TP
+ .B \-principal
+diff --git a/stdlib/printexc.mli b/stdlib/printexc.mli
+index 773fed8..fca086d 100644
+--- a/stdlib/printexc.mli
++++ b/stdlib/printexc.mli
+@@ -91,9 +91,9 @@ type raw_backtrace
+     a low-level format, instead of directly exposing them as string as
+     the [get_backtrace()] function does.
+ 
+-    This allows to pay the performance overhead of representation
+-    conversion and formatting only at printing time, which is useful
+-    if you want to record more backtrace than you actually print.
++    This allows delaying the formatting of backtraces to when they are
++    actually printed, which might be useful if you record more
++    backtraces than you print.
+ *)
+ 
+ val get_raw_backtrace: unit -> raw_backtrace
+-- 
