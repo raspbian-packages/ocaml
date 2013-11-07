@@ -1,0 +1,26 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Thu, 7 Nov 2013 16:06:57 +0100
+Subject: Enable mkstemp in yacc
+
+Use the feature test macro found in the mkstemp(3) manpage.
+---
+ yacc/main.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/yacc/main.c b/yacc/main.c
+index f6cac60..66b63ec 100644
+--- a/yacc/main.c
++++ b/yacc/main.c
+@@ -57,6 +57,11 @@ char *verbose_file_name;
+ #define HAVE_MKSTEMP
+ #endif
+ 
++#if _BSD_SOURCE || _SVID_SOURCE || _XOPEN_SOURCE >= 500 \
++  || _XOPEN_SOURCE && _XOPEN_SOURCE_EXTENDED || _POSIX_C_SOURCE >= 200112L
++#define HAVE_MKSTEMP
++#endif
++
+ #ifdef HAVE_MKSTEMP
+ int action_fd = -1, entry_fd = -1, text_fd = -1, union_fd = -1;
+ #endif
+-- 
