@@ -57,6 +57,11 @@ char *verbose_file_name;
 #define HAVE_MKSTEMP
 #endif
 
+#if _BSD_SOURCE || _SVID_SOURCE || _XOPEN_SOURCE >= 500 \
+  || _XOPEN_SOURCE && _XOPEN_SOURCE_EXTENDED || _POSIX_C_SOURCE >= 200112L
+#define HAVE_MKSTEMP
+#endif
+
 #ifdef HAVE_MKSTEMP
 int action_fd = -1, entry_fd = -1, text_fd = -1, union_fd = -1;
 #endif
