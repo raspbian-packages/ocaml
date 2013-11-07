@@ -7,3 +7,4 @@
 0007-Avoid-multiple-declarations-in-generated-.c-files-in.patch
 0008-Embed-bytecode-in-C-object-when-using-custom.patch
 0009-Fix-typos-and-other-wording-issues.patch
+0010-Add-const-qualifiers-in-Tcl-Tk-bindings.patch
