@@ -36,7 +36,7 @@
 
 #ifdef UTFCONVERSION
 
-char *external_to_utf( char *str ){
+char *external_to_utf( CONST84 char *str ){
   char *res;
   Tcl_DString dstr;
   int length;
@@ -50,7 +50,7 @@ char *external_to_utf( char *str ){
   return res;
 }
 
-char *utf_to_external( char *str ){
+char *utf_to_external( CONST84 char *str ){
   char *res;
   Tcl_DString dstr;
   int length;
@@ -69,7 +69,7 @@ char *caml_string_to_tcl( value s )
   return external_to_utf( String_val(s) );
 }
 
-value tcl_string_to_caml( char *s )
+value tcl_string_to_caml( CONST84 char *s )
 {
   CAMLparam0();
   CAMLlocal1(res);
@@ -84,6 +84,6 @@ value tcl_string_to_caml( char *s )
 #else
 
 char *caml_string_to_tcl(value s){ return string_to_c(s); }
-value tcl_string_to_caml(char *s){ return copy_string(s); }
+value tcl_string_to_caml(CONST84 char *s){ return copy_string(s); }
 
 #endif
