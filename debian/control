@@ -13,8 +13,8 @@ Build-Depends:
  quilt,
  autotools-dev,
  binutils-dev,
- tcl8.5-dev,
- tk8.5-dev,
+ tcl-dev,
+ tk-dev,
  libncurses5-dev,
  bzip2,
  dh-ocaml (>= 1.0.0~)
@@ -131,8 +131,8 @@ Depends:
 Provides:
  ${ocaml:Provides}
 Suggests:
- tcl8.5-dev,
- tk8.5-dev
+ tcl-dev,
+ tk-dev
 Replaces: ocaml-nox (<< 3.11.0-2)
 Description: ML language implementation with a class-based object system
  Objective Caml (OCaml) is an implementation of the ML language, based on

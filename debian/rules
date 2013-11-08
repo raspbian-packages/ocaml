@@ -65,8 +65,8 @@ CONFIGURE_OPTS := \
   -libdir $(DEB_TEST_BUILD_PREFIX)$(OCAML_STDLIB_DIR) \
   -x11lib "$(shell pkg-config --variable=libdir x11)" \
   -mandir $(DEB_TEST_BUILD_PREFIX)/usr/share/man \
-  -tkdefs "-I/usr/include/tcl8.5" \
-  -tklibs "-L/usr/lib -ltk8.5 -ltcl8.5"
+  -tkdefs "-I/usr/include/tcl" \
+  -tklibs "-L/usr/lib -ltk -ltcl"
 
 CONFIGURE_SED := \
   -e "/LIBBFD_LINK/s%-lbfd%-Wl,-Bstatic -lbfd -Wl,-Bdynamic%" \
