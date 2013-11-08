@@ -37,7 +37,7 @@ let process (n, conds, nprocs) =
   done
 
 let main() =
-  let nprocs = try int_of_string Sys.argv.(1) with _ -> 100 in
+  let nprocs = try int_of_string Sys.argv.(1) with _ -> 30 in
   let iter = try int_of_string Sys.argv.(2) with _ -> 1000 in
   let conds = Array.make nprocs (Condition.create()) in
   for i = 1 to nprocs - 1 do conds.(i) <- Condition.create() done;
