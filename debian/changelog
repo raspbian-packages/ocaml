@@ -1,8 +1,17 @@
-ocaml (4.01.0-1) UNRELEASED; urgency=low
+ocaml (4.01.0-1) experimental; urgency=low
 
   * New upstream release
+  * debian/patches:
+    - Fix code generation bug with "mod 1" (merged upstream)
+    + More tests need upstream behaviour of -custom
+    + Fix upstream typos and bad wordings
+    + Add const qualifiers in Tcl/Tk bindings
+    + Enable mkstemp in yacc
+  * Remove testsuite special casing for now
+  * Use unversioned Tcl/Tk dependencies
+  * Update debian/control.in
 
- -- Stéphane Glondu <glondu@debian.org>  Thu, 17 Oct 2013 11:40:49 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 08 Nov 2013 09:45:16 +0100
 
 ocaml (4.00.1-2) experimental; urgency=low
 
