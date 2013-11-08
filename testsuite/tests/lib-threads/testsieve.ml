@@ -41,7 +41,7 @@ let premiers = Event.new_channel ()
 let main _ =
   Thread.create sieve premiers;
   while true do
-    for i = 1 to 100 do
+    for i = 1 to 30 do
       let n = Event.sync (Event.receive premiers) in
       print_int n; print_newline()
     done;
