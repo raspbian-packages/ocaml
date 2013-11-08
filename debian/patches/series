@@ -10,3 +10,4 @@
 0010-Add-const-qualifiers-in-Tcl-Tk-bindings.patch
 0011-Enable-mkstemp-in-yacc.patch
 0012-Fix-ocamlopt-on-sparc.patch
+0013-Tune-resource-usage-of-some-tests.patch
