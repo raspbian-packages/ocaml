@@ -40,6 +40,6 @@ let go max =
   in Thread.create (integers 2) ch;
      print_primes ch max;;
 
-let _ = go 500
+let _ = go 50
 
 ;;
