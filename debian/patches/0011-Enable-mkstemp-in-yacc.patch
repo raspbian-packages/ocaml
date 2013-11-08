@@ -3,6 +3,8 @@ Date: Thu, 7 Nov 2013 16:06:57 +0100
 Subject: Enable mkstemp in yacc
 
 Use the feature test macro found in the mkstemp(3) manpage.
+
+Bug: http://caml.inria.fr/mantis/view.php?id=6232
 ---
  yacc/main.c | 5 +++++
  1 file changed, 5 insertions(+)

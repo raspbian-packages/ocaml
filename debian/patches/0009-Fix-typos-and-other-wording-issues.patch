@@ -2,6 +2,7 @@ From: Stephane Glondu <steph@glondu.net>
 Date: Mon, 21 Oct 2013 16:34:12 +0200
 Subject: Fix typos and other wording issues
 
+Bug: http://caml.inria.fr/mantis/view.php?id=6231
 ---
  man/ocaml.m         | 2 +-
  man/ocamlc.m        | 2 +-

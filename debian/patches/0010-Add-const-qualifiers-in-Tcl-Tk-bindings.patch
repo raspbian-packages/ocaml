@@ -2,6 +2,7 @@ From: Stephane Glondu <steph@glondu.net>
 Date: Thu, 7 Nov 2013 15:45:50 +0100
 Subject: Add const qualifiers in Tcl/Tk bindings
 
+Bug: http://caml.inria.fr/mantis/view.php?id=6230
 ---
  otherlibs/labltk/support/camltk.h   | 4 ++--
  otherlibs/labltk/support/cltkCaml.c | 2 +-
