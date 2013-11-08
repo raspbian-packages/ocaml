@@ -33,7 +33,7 @@ let process (n, ins, outs, nprocs) =
   done
 
 let main() =
-  let nprocs = try int_of_string Sys.argv.(1) with _ -> 100 in
+  let nprocs = try int_of_string Sys.argv.(1) with _ -> 30 in
   let iter = try int_of_string Sys.argv.(2) with _ -> 1000 in
   let ins = Array.create nprocs Unix.stdin in
   let outs = Array.create nprocs Unix.stdout in
