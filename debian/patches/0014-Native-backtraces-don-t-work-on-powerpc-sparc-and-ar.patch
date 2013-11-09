@@ -1,0 +1,25 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Sat, 9 Nov 2013 07:56:39 +0100
+Subject: Native backtraces don't work on powerpc, sparc and arm*
+
+---
+ testsuite/tests/backtrace/Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/testsuite/tests/backtrace/Makefile b/testsuite/tests/backtrace/Makefile
+index 83f9472..ce563be 100644
+--- a/testsuite/tests/backtrace/Makefile
++++ b/testsuite/tests/backtrace/Makefile
+@@ -18,7 +18,10 @@ OTHERFILES=backtrace2.ml raw_backtrace.ml
+ 
+ default:
+ 	$(MAKE) byte
+-	@if $(BYTECODE_ONLY); then : ; else $(MAKE) native; fi
++	@case `dpkg-architecture -qDEB_BUILD_ARCH` in \
++	  sparc|powerpc|arm*) : ;; \
++	  *) if $(BYTECODE_ONLY) ; then : ; else $(MAKE) native; fi ;; \
++	esac
+ 
+ .PHONY: byte
+ byte:
+-- 
