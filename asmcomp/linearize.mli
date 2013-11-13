@@ -42,6 +42,9 @@ val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction
 val instr_cons:
   instruction_desc -> Reg.t array -> Reg.t array -> instruction -> instruction
+val instr_cons_debug:
+ instruction_desc -> Reg.t array -> Reg.t array -> Debuginfo.t ->
+ instruction -> instruction
 val invert_test: Mach.test -> Mach.test
 
 type fundecl =
