@@ -29,7 +29,10 @@ LOCATIONFILTER=grep -oE \
 
 default:
 	@$(MAKE) byte
-	@if $(BYTECODE_ONLY); then $(MAKE) skip ; else $(MAKE) native; fi
+	@case `dpkg-architecture -qDEB_BUILD_ARCH` in \
+	  sparc|powerpc*) : ;; \
+	  *) if $(BYTECODE_ONLY); then $(MAKE) skip ; else $(MAKE) native; fi ;; \
+	esac
 
 .PHONY: byte
 byte:
