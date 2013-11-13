@@ -86,6 +86,12 @@ let instr_cons d a r n =
   { desc = d; next = n; arg = a; res = r;
     dbg = Debuginfo.none; live = Reg.Set.empty }
 
+(* Cons an instruction (live empty) *)
+
+let instr_cons_debug d a r dbg n =
+ { desc = d; next = n; arg = a; res = r;
+ dbg = dbg; live = Reg.Set.empty }
+
 (* Cons a simple instruction (arg, res, live empty) *)
 
 let cons_instr d n =
