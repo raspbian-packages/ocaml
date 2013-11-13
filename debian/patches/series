@@ -11,4 +11,5 @@
 0011-Enable-mkstemp-in-yacc.patch
 0012-Fix-ocamlopt-on-sparc.patch
 0013-Tune-resource-usage-of-some-tests.patch
-0014-Native-backtraces-don-t-work-on-powerpc-sparc-and-ar.patch
+0014-Native-backtraces-don-t-work-on-powerpc-and-sparc.patch
+0015-Fix-native-backtraces-on-arm.patch
