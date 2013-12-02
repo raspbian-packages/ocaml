@@ -1,3 +1,14 @@
+ocaml (4.01.0-3) unstable; urgency=low
+
+  * Upload to unstable
+  * debian/patches:
+    + Fix native backtraces on arm*
+    ~ Disable native backtraces on powerpcspe too
+  * Update SLOW_ARCHITECTURES and do not run almabench test there
+  * Add libiberty-dev to Build-Depends (Closes: #731047)
+
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 02 Dec 2013 20:03:03 +0100
+
 ocaml (4.01.0-2) experimental; urgency=low
 
   * debian/patches:
