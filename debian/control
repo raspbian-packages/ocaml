@@ -13,6 +13,7 @@ Build-Depends:
  quilt,
  autotools-dev,
  binutils-dev,
+ libiberty-dev,
  tcl-dev,
  tk-dev,
  libncurses5-dev,
