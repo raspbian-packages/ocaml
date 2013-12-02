@@ -7,7 +7,7 @@ Subject: Native backtraces don't work on powerpc and sparc
  1 file changed, 4 insertions(+), 1 deletion(-)
 
 diff --git a/testsuite/tests/backtrace/Makefile b/testsuite/tests/backtrace/Makefile
-index 83f9472..e71863a 100644
+index 83f9472..3695ff6 100644
 --- a/testsuite/tests/backtrace/Makefile
 +++ b/testsuite/tests/backtrace/Makefile
 @@ -18,7 +18,10 @@ OTHERFILES=backtrace2.ml raw_backtrace.ml
@@ -16,7 +16,7 @@ index 83f9472..e71863a 100644
  	$(MAKE) byte
 -	@if $(BYTECODE_ONLY); then : ; else $(MAKE) native; fi
 +	@case `dpkg-architecture -qDEB_BUILD_ARCH` in \
-+	  sparc|powerpc) : ;; \
++	  sparc|powerpc*) : ;; \
 +	  *) if $(BYTECODE_ONLY) ; then : ; else $(MAKE) native; fi ;; \
 +	esac
  
