@@ -279,13 +279,16 @@ regenerate: debian/control
 	> debian/MANIFEST
 
 # Architectures where running the test suite completely makes the
-# whole build last more than one hour on buildds. Originally, because
-# some tests do not even finish on mips.
-SLOW_ARCHITECTURES := hurd-i386 mips mipsel powerpc sparc armel
+# whole build last more than 30 minutes on buildds. Originally,
+# because some tests do not even finish on mips.
+SLOW_ARCHITECTURES := armel armhf ia64 mips mipsel powerpc powerpcspe sparc
 
 .PHONY: override_dh_auto_test
 override_dh_auto_test:
 ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
+ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
+	rm -f testsuite/tests/misc-unsafe/almabench.ml
+endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 	cd testsuite && make all
 endif
