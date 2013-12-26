@@ -336,9 +336,8 @@ method private reschedule ready_queue date cont =
             if son.emitted_ancestors = son.ancestors then
               new_queue := son :: !new_queue)
           node.sons;
-        instr_cons_debug node.instr.desc node.instr.arg node.instr.res
-        node.instr.dbg
-          (self#reschedule !new_queue (date + issue_cycles) cont)
+        { node.instr with next =
+            self#reschedule !new_queue (date + issue_cycles) cont }
   end
 
 (* Entry point *)
