@@ -1,8 +1,12 @@
-ocaml (4.01.0-4) UNRELEASED; urgency=medium
+ocaml (4.01.0-4) unstable; urgency=medium
 
-  * NOT RELEASED YET
+  * debian/patches:
+    + Make "ocamlopt -g" more resistant to ill-formed locations
+    + Fix lost locations in out-of-bounds exceptions
+  * Disable the testsocket test because it tries to reach the net
+    (Closes: #732951)
 
- -- Stéphane Glondu <glondu@debian.org>  Thu, 12 Dec 2013 15:32:10 +0100
+ -- Stéphane Glondu <glondu@debian.org>  Sat, 17 May 2014 15:26:14 +0200
 
 ocaml (4.01.0-3) unstable; urgency=low
 
