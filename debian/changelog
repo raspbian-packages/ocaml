@@ -1,8 +1,10 @@
 ocaml (4.01.0-5) UNRELEASED; urgency=medium
 
   * ocaml-mode: change dependency on emacs23 to emacs (closes: #754021)
+  * ocaml-mode: add versionend dependency on emacs-common, add a file
+    ocaml-mode.emacsen-compat (closes: #749311)
 
- --
+ -- Ralf Treinen <treinen@debian.org>  Thu, 10 Jul 2014 20:08:23 +0200
 
 ocaml (4.01.0-4) unstable; urgency=medium
 
