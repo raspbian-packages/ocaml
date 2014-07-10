@@ -1,3 +1,9 @@
+ocaml (4.01.0-5) UNRELEASED; urgency=medium
+
+  * ocaml-mode: change dependency on emacs23 to emacs (closes: #754021)
+
+ --
+
 ocaml (4.01.0-4) unstable; urgency=medium
 
   * debian/patches:
