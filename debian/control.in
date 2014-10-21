@@ -13,8 +13,10 @@ Build-Depends:
  quilt,
  autotools-dev,
  binutils-dev,
+ libiberty-dev,
  libncurses5-dev,
- bzip2,
+ libx11-dev,
+ zlib1g-dev,
  dh-ocaml (>= 1.0.0~)
 Standards-Version: 3.9.4
 Vcs-Git: git://anonscm.debian.org/pkg-ocaml-maint/packages/ocaml.git

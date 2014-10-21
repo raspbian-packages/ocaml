@@ -50,10 +50,15 @@ OPT: @OCamlStdlibDir@/libthreadsnat.a
      usr/share/man/man3/Bigarray.Array3.3o
      usr/share/man/man3/Bigarray.Genarray.3o
      usr/share/man/man3/Buffer.3o
+     usr/share/man/man3/Bytes.3o
+     usr/share/man/man3/BytesLabels.3o
      usr/share/man/man3/Callback.3o
+     usr/share/man/man3/CamlinternalFormat.3o
+     usr/share/man/man3/CamlinternalFormatBasics.3o
      usr/share/man/man3/CamlinternalLazy.3o
      usr/share/man/man3/CamlinternalMod.3o
      usr/share/man/man3/CamlinternalOO.3o
+     usr/share/man/man3/Char.3o
      usr/share/man/man3/Complex.3o
      usr/share/man/man3/Digest.3o
      usr/share/man/man3/Filename.3o
@@ -69,6 +74,7 @@ OPT: @OCamlStdlibDir@/libthreadsnat.a
      usr/share/man/man3/Hashtbl.SeededS.3o
      usr/share/man/man3/Int32.3o
      usr/share/man/man3/Int64.3o
+     usr/share/man/man3/Lazy.3o
      usr/share/man/man3/Lexing.3o
      usr/share/man/man3/List.3o
      usr/share/man/man3/ListLabels.3o
@@ -101,12 +107,14 @@ OPT: @OCamlStdlibDir@/libthreadsnat.a
      usr/share/man/man3/Pervasives.3o
      usr/share/man/man3/Pervasives.LargeFile.3o
      usr/share/man/man3/Printexc.3o
+     usr/share/man/man3/Printexc.Slot.3o
      usr/share/man/man3/Printf.3o
      usr/share/man/man3/Queue.3o
      usr/share/man/man3/Random.3o
      usr/share/man/man3/Random.State.3o
      usr/share/man/man3/Scanf.3o
      usr/share/man/man3/Scanf.Scanning.3o
+     usr/share/man/man3/Set.3o
      usr/share/man/man3/Set.Make.3o
      usr/share/man/man3/Set.OrderedType.3o
      usr/share/man/man3/Set.S.3o
@@ -114,10 +122,12 @@ OPT: @OCamlStdlibDir@/libthreadsnat.a
      usr/share/man/man3/Stack.3o
      usr/share/man/man3/StdLabels.3o
      usr/share/man/man3/StdLabels.Array.3o
+     usr/share/man/man3/StdLabels.Bytes.3o
      usr/share/man/man3/StdLabels.List.3o
      usr/share/man/man3/StdLabels.String.3o
      usr/share/man/man3/Str.3o
      usr/share/man/man3/Stream.3o
+     usr/share/man/man3/String.3o
      usr/share/man/man3/StringLabels.3o
      usr/share/man/man3/Sys.3o
      usr/share/man/man3/Unix.3o
@@ -134,7 +144,6 @@ OPT: usr/share/man/man1/ocamloptp.1
      usr/share/man/man1/ocamlmktop.1
      usr/share/man/man1/ocamldoc.1
      usr/share/man/man1/ocamlyacc.1
-     usr/share/man/man1/ocamlbuild.1
      usr/share/man/man1/ocamldebug.1
      usr/share/man/man1/ocamllex.1
 STD: arg.ml
@@ -157,9 +166,25 @@ STD: bigarray.mli
 STD: buffer.ml
 STD: buffer.mli
 STD: buffer.cmx
+STD: bytes.cmi
+STD: bytes.cmx
+STD: bytes.ml
+STD: bytes.mli
+STD: bytesLabels.cmi
+STD: bytesLabels.cmx
+STD: bytesLabels.ml
+STD: bytesLabels.mli
 STD: callback.ml
 STD: callback.mli
 STD: callback.cmx
+STD: camlinternalFormat.cmi
+STD: camlinternalFormat.cmx
+STD: camlinternalFormat.ml
+STD: camlinternalFormat.mli
+STD: camlinternalFormatBasics.cmi
+STD: camlinternalFormatBasics.cmx
+STD: camlinternalFormatBasics.ml
+STD: camlinternalFormatBasics.mli
 STD: camlinternalLazy.cmi
 STD: camlinternalLazy.cmx
 STD: camlinternalLazy.ml

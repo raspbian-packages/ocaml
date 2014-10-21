@@ -32,7 +32,7 @@ MD5SUMSDIR = /var/lib/ocaml/md5sums
 INSTDIR = $(CURDIR)/debian/tmp/usr
 DISTDIR = $(PACKAGE)-$(OCAML_ABI)
 UPSTREAM_VERSION = $(shell dpkg-parsechangelog | awk '/^Version:/{print $$2}' | { read u; echo $${u%-*}; })
-UPSTREAM_TARBALL = ../$(PACKAGE)_$(UPSTREAM_VERSION).orig.tar.bz2
+UPSTREAM_TARBALL = ../$(PACKAGE)_$(UPSTREAM_VERSION).orig.tar.xz
 SRCTARBALL = $(PACKAGE)-source-$(OCAML_ABI).tar
 
 TESTDIR := debian/test-build
@@ -187,7 +187,6 @@ ifneq (,$(findstring ocaml-mode,$(ALL_PACKAGES)))
 	$(MAKE) -C emacs SCRIPTDIR=$(CURDIR)/debian/ocaml-mode/usr/bin install-ocamltags
 endif
 # Install OCaml
-	sed -e 's|PREFIX=\"/.*\"|PREFIX=\"$(INSTDIR)"|' < config/config.sh > config/config.debian.install.sh
 	$(MAKE) install PREFIX=$(INSTDIR)
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 # Remove empty directory
