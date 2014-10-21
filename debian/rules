@@ -65,8 +65,6 @@ CONFIGURE_OPTS := \
   -libdir $(DEB_TEST_BUILD_PREFIX)$(OCAML_STDLIB_DIR) \
   -x11lib "$(shell pkg-config --variable=libdir x11)" \
   -mandir $(DEB_TEST_BUILD_PREFIX)/usr/share/man \
-  -tkdefs "-I/usr/include/tcl" \
-  -tklibs "-L/usr/lib -ltk -ltcl"
 
 CONFIGURE_SED := \
   -e "/LIBBFD_LINK/s%-lbfd%-Wl,-Bstatic -lbfd -Wl,-Bdynamic%" \
@@ -122,12 +120,6 @@ override_dh_auto_configure: config-stamp
 config-stamp: pre-config-stamp ocamlinit-stamp
 	./configure $(CONFIGURE_OPTS)
 	sed -i $(CONFIGURE_SED) config/Makefile
-	if test -z "`grep "OTHERLIBRARIES.*labltk" config/Makefile`"; then \
-	  echo "Error, labltk library was not detected"; \
-	  echo "Check your tcl/tk development packages"; \
-	  echo "Aborting."; \
-	  exit 1; \
-	fi
 	touch $@
 
 .PHONY: override_dh_auto_build
@@ -138,8 +130,6 @@ build-stamp: config-stamp
 	  cp -xa boot boot.debian; \
 	fi
 	rm -Rf debian/examples && mkdir debian/examples
-	cp -a otherlibs/labltk/examples_labltk debian/examples/labltk
-	find debian/examples/labltk -name .cvsignore -delete
 ifeq ($(BUILDCACHE),)
 	$(MAKE) world
 	$(MAKE) bootstrap
@@ -227,7 +217,6 @@ endif
 	fi
 # Install additional files not handled by dh_install
 # Beware: dh_install does not handle renamings, please pay attention
-	cp otherlibs/labltk/README debian/ocaml/usr/share/doc/ocaml/README.labltk
 	for u in dumpobj; do \
 	  if [ -f tools/$$u ]; then \
 	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
@@ -244,10 +233,6 @@ endif
 endif
 # Remaining stuff
 	touch $@
-
-.PHONY: override_dh_compress
-override_dh_compress:
-	dh_compress -Xexamples/labltk
 
 .PHONY: override_dh_gencontrol
 override_dh_gencontrol:

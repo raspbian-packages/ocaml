@@ -1,6 +1,3 @@
-     usr/bin/labltk
-     usr/bin/ocamlbrowser
-     @OCamlStdlibDir@/labltk
      @OCamlStdlibDir@/libgraphics.a
 STD: graphics.cmi
 STD: graphics.cmx
