@@ -72,53 +72,6 @@ Description: ML implementation with a class-based object system (no X)
  This package contains everything needed to develop OCaml applications
  that do not require the graphics library.
 
-Package: camlp4
-Architecture: any
-Depends:
- ${shlibs:Depends},
- ${misc:Depends},
- ${ocaml:Depends}
-Provides:
- ${ocaml:Provides}
-Description: Pre Processor Pretty Printer for OCaml
- Objective Caml (OCaml) is an implementation of the ML language,
- based on the Caml Light dialect extended with a complete
- class-based object system and a powerful module system in the
- style of Standard ML.
- .
- CamlP4 is a Pre-Processor-Pretty-Printer for Objective Caml. It
- offers tools for syntax (Stream Parsers and Grammars) and the
- ability to modify the concrete syntax of the language
- (Quotations, Syntax Extensions).
- .
- This package contains the basic CamlP4 executables and libraries
- for pre-processing and pretty-printing OCaml sources both
- interactively and in a batch fashion.
-
-Package: camlp4-extra
-Architecture: any
-Depends:
- camlp4,
- ${shlibs:Depends},
- ${misc:Depends},
- ${ocaml:Depends},
- ocaml-nox-${F:OCamlABI},
- camlp4-${F:OCamlABI}
-Description: Pre Processor Pretty Printer for OCaml - extras
- Objective Caml (OCaml) is an implementation of the ML language,
- based on the Caml Light dialect extended with a complete
- class-based object system and a powerful module system in the
- style of Standard ML.
- .
- CamlP4 is a Pre-Processor-Pretty-Printer for Objective Caml. It
- offers tools for syntax (Stream Parsers and Grammars) and the
- ability to modify the concrete syntax of the language
- (Quotations, Syntax Extensions).
- .
- This package contains pre-linked executables and libraries for
- pre-processing and pretty-printing OCaml sources out of the box
- for various common needs.
-
 Package: ocaml
 Architecture: any
 Depends:

@@ -2,12 +2,6 @@ debian/MANIFEST
 debian/README.Debian
 debian/README.source
 debian/TODO.Debian
-debian/camlp4-extra.install.in
-debian/camlp4-extra.links
-debian/camlp4.dirs.in
-debian/camlp4.install.in
-debian/camlp4.links.in
-debian/camlp4.manpages
 debian/changelog
 debian/clean
 debian/compat
