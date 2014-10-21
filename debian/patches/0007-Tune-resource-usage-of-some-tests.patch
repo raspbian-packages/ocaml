@@ -206,7 +206,7 @@ index b6b8c06..6e97d2c 100644
 -509
 -521
 diff --git a/testsuite/tests/lib-threads/token1.ml b/testsuite/tests/lib-threads/token1.ml
-index d6e7a1b..3208150 100644
+index d0a7528..692efba 100644
 --- a/testsuite/tests/lib-threads/token1.ml
 +++ b/testsuite/tests/lib-threads/token1.ml
 @@ -37,7 +37,7 @@ let process (n, conds, nprocs) =
@@ -216,10 +216,10 @@ index d6e7a1b..3208150 100644
 -  let nprocs = try int_of_string Sys.argv.(1) with _ -> 100 in
 +  let nprocs = try int_of_string Sys.argv.(1) with _ -> 30 in
    let iter = try int_of_string Sys.argv.(2) with _ -> 1000 in
-   let conds = Array.create nprocs (Condition.create()) in
+   let conds = Array.make nprocs (Condition.create()) in
    for i = 1 to nprocs - 1 do conds.(i) <- Condition.create() done;
 diff --git a/testsuite/tests/lib-threads/token2.ml b/testsuite/tests/lib-threads/token2.ml
-index 9ef0580..25a9004 100644
+index c3548fb..177b32a 100644
 --- a/testsuite/tests/lib-threads/token2.ml
 +++ b/testsuite/tests/lib-threads/token2.ml
 @@ -33,7 +33,7 @@ let process (n, ins, outs, nprocs) =
@@ -229,6 +229,6 @@ index 9ef0580..25a9004 100644
 -  let nprocs = try int_of_string Sys.argv.(1) with _ -> 100 in
 +  let nprocs = try int_of_string Sys.argv.(1) with _ -> 30 in
    let iter = try int_of_string Sys.argv.(2) with _ -> 1000 in
-   let ins = Array.create nprocs Unix.stdin in
-   let outs = Array.create nprocs Unix.stdout in
+   let ins = Array.make nprocs Unix.stdin in
+   let outs = Array.make nprocs Unix.stdout in
 -- 

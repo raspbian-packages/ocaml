@@ -7,10 +7,10 @@ Subject: Put manpages in section 3o instead of 3
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/ocamldoc/Makefile b/ocamldoc/Makefile
-index 144b95d..4d4f3f2 100644
+index 7a487c6..a6b11c4 100644
 --- a/ocamldoc/Makefile
 +++ b/ocamldoc/Makefile
-@@ -345,7 +345,7 @@ test_texi: dummy
+@@ -312,7 +312,7 @@ test_texi: dummy
  stdlib_man/Pervasives.3o: $(STDLIB_MLIS)
  	$(MKDIR) stdlib_man
  	$(OCAMLDOC_RUN) -man -d stdlib_man $(INCLUDES) \
@@ -18,5 +18,5 @@ index 144b95d..4d4f3f2 100644
 +	-t "OCaml library" -man-mini -man-section 3o \
  	$(STDLIB_MLIS)
  
- autotest_stdlib: dummy
+ stdlib_html/Pervasives.html: $(STDLIB_MLIS)
 -- 

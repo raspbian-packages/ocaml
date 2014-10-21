@@ -3,13 +3,13 @@ Date: Tue, 19 May 2009 17:24:14 +0200
 Subject: Don't use rpath
 
 ---
- tools/ocamlmklib.mlp | 5 +++++
+ tools/ocamlmklib.ml | 5 +++++
  1 file changed, 5 insertions(+)
 
-diff --git a/tools/ocamlmklib.mlp b/tools/ocamlmklib.mlp
-index 9a47d1b..729145f 100644
---- a/tools/ocamlmklib.mlp
-+++ b/tools/ocamlmklib.mlp
+diff --git a/tools/ocamlmklib.ml b/tools/ocamlmklib.ml
+index 77ae57b..4fdb391 100644
+--- a/tools/ocamlmklib.ml
++++ b/tools/ocamlmklib.ml
 @@ -37,6 +37,11 @@ and output_c = ref ""       (* Output name for C part of library *)
  and rpath = ref []          (* rpath options *)
  and verbose = ref false
