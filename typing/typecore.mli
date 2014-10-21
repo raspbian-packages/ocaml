@@ -20,14 +20,14 @@ val is_nonexpansive: Typedtree.expression -> bool
 
 val type_binding:
         Env.t -> rec_flag ->
-          (Parsetree.pattern * Parsetree.expression) list ->
+          Parsetree.value_binding list ->
           Annot.ident option ->
-          (Typedtree.pattern * Typedtree.expression) list * Env.t
+          Typedtree.value_binding list * Env.t
 val type_let:
         Env.t -> rec_flag ->
-          (Parsetree.pattern * Parsetree.expression) list ->
+          Parsetree.value_binding list ->
           Annot.ident option ->
-          (Typedtree.pattern * Typedtree.expression) list * Env.t
+          Typedtree.value_binding list * Env.t
 val type_expression:
         Env.t -> Parsetree.expression -> Typedtree.expression
 val type_class_arg_pattern:
@@ -67,6 +67,7 @@ type error =
   | Constructor_arity_mismatch of Longident.t * int * int
   | Label_mismatch of Longident.t * (type_expr * type_expr) list
   | Pattern_type_clash of (type_expr * type_expr) list
+  | Or_pattern_type_clash of Ident.t * (type_expr * type_expr) list
   | Multiply_bound_variable of string
   | Orpat_vars of Ident.t
   | Expr_type_clash of (type_expr * type_expr) list
@@ -75,11 +76,10 @@ type error =
   | Label_multiply_defined of string
   | Label_missing of Ident.t list
   | Label_not_mutable of Longident.t
-  | Wrong_name of string * Path.t * Longident.t
+  | Wrong_name of string * type_expr * string * Path.t * Longident.t
   | Name_type_mismatch of
       string * Longident.t * (Path.t * Path.t) * (Path.t * Path.t) list
-  | Incomplete_format of string
-  | Bad_conversion of string * int * char
+  | Invalid_format of string
   | Undefined_method of type_expr * string
   | Undefined_inherited_method of string
   | Virtual_class of Longident.t
@@ -105,10 +105,16 @@ type error =
   | Recursive_local_constraint of (type_expr * type_expr) list
   | Unexpected_existential
   | Unqualified_gadt_pattern of Path.t * string
+  | Invalid_interval
+  | Invalid_for_loop_index
+  | No_value_clauses
+  | Exception_pattern_below_toplevel
 
 exception Error of Location.t * Env.t * error
+exception Error_forward of Location.error
 
 val report_error: Env.t -> formatter -> error -> unit
+ (* Deprecated.  Use Location.{error_of_exn, report_error}. *)
 
 (* Forward declaration, to be filled in by Typemod.type_module *)
 val type_module: (Env.t -> Parsetree.module_expr -> Typedtree.module_expr) ref

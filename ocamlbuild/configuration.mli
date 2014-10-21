@@ -18,7 +18,7 @@
 
 (** Incorporate a newline-separated configuration string into the current configuration.
     Will usually raising an [Invalid_arg] with an appropriately explicit message in case of error. *)
-val parse_string : string -> unit
+val parse_string : ?source:Loc.source -> string -> unit
 
 (** [parse_file ?dir fn] incorporates the configuration file named [fn], prefixing its glob patterns
     with [dir] if given. *)
@@ -37,3 +37,8 @@ val tag_any : Tags.elt list -> unit
 
 (** the tags that apply to any file *)
 val global_tags : unit -> Tags.t
+
+(** Given the list of all tags that are really used by an existing
+    flagset, traverse existing configuration files and warns on tags
+    that will never get used. *)
+val check_tags_usage : Tags.t -> unit

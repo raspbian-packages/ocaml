@@ -16,7 +16,7 @@ include Makefile.common
 CFLAGS=-DCAML_NAME_SPACE -O $(BYTECCCOMPOPTS) $(IFLEXDIR)
 DFLAGS=-DCAML_NAME_SPACE -g -DDEBUG $(BYTECCCOMPOPTS) $(IFLEXDIR)
 
-OBJS=$(COMMONOBJS) unix.o main.o
+OBJS=$(COMMONOBJS) $(UNIX_OR_WIN32).o main.o
 DOBJS=$(OBJS:.o=.d.o) instrtrace.d.o
 PICOBJS=$(OBJS:.o=.pic.o)
 
@@ -46,7 +46,7 @@ libcamlrun_shared.so: $(PICOBJS)
 
 install::
 	if test -f libcamlrun_shared.so; then \
-	  cp libcamlrun_shared.so $(LIBDIR)/libcamlrun_shared.so; fi
+	  cp libcamlrun_shared.so $(INSTALL_LIBDIR)/libcamlrun_shared.so; fi
 
 clean::
 	rm -f libcamlrun_shared.so

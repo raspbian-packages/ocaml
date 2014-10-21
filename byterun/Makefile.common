@@ -32,7 +32,8 @@ PRIMS=\
 
 PUBLIC_INCLUDES=\
   alloc.h callback.h config.h custom.h fail.h hash.h intext.h \
-  memory.h misc.h mlvalues.h printexc.h signals.h compatibility.h
+  memory.h misc.h mlvalues.h printexc.h signals.h compatibility.h \
+  version.h
 
 
 all:: ocamlrun$(EXE) ld.conf libcamlrun.$(A) all-$(RUNTIMED)
@@ -48,15 +49,22 @@ ld.conf: ../config/Makefile
 	echo "$(STUBLIBDIR)" > ld.conf
 	echo "$(LIBDIR)" >> ld.conf
 
+# Installation
+
+INSTALL_BINDIR=$(DESTDIR)$(BINDIR)
+INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
+
+
 install::
-	cp ocamlrun$(EXE) $(BINDIR)/ocamlrun$(EXE)
-	cp libcamlrun.$(A) $(LIBDIR)/libcamlrun.$(A)
-	cd $(LIBDIR); $(RANLIB) libcamlrun.$(A)
-	if test -d $(LIBDIR)/caml; then : ; else mkdir $(LIBDIR)/caml; fi
+	cp ocamlrun$(EXE) $(INSTALL_BINDIR)/ocamlrun$(EXE)
+	cp libcamlrun.$(A) $(INSTALL_LIBDIR)/libcamlrun.$(A)
+	cd $(INSTALL_LIBDIR); $(RANLIB) libcamlrun.$(A)
+	if test -d $(INSTALL_LIBDIR)/caml; then : ; \
+	  else mkdir $(INSTALL_LIBDIR)/caml; fi
 	for i in $(PUBLIC_INCLUDES); do \
-	  sed -f ../tools/cleanup-header $$i > $(LIBDIR)/caml/$$i; \
+	  sed -f ../tools/cleanup-header $$i > $(INSTALL_LIBDIR)/caml/$$i; \
 	done
-	cp ld.conf $(LIBDIR)/ld.conf
+	cp ld.conf $(INSTALL_LIBDIR)/ld.conf
 .PHONY: install
 
 install:: install-$(RUNTIMED)
@@ -65,8 +73,8 @@ install-noruntimed:
 .PHONY: install-noruntimed
 
 install-runtimed:
-	cp ocamlrund$(EXE) $(BINDIR)/ocamlrund$(EXE)
-	cp libcamlrund.$(A) $(LIBDIR)/libcamlrund.$(A)
+	cp ocamlrund$(EXE) $(INSTALL_BINDIR)/ocamlrund$(EXE)
+	cp libcamlrund.$(A) $(INSTALL_LIBDIR)/libcamlrund.$(A)
 .PHONY: install-runtimed
 
 # If primitives contain duplicated lines (e.g. because the code is defined
@@ -110,8 +118,8 @@ jumptbl.h : instruct.h
 	sed -n -e '/^  /s/ \([A-Z]\)/ \&\&lbl_\1/gp' \
 	       -e '/^}/q' instruct.h > jumptbl.h
 
-version.h : ../VERSION
-	echo "#define OCAML_VERSION \"`sed -e 1q ../VERSION`\"" > version.h
+version.h : ../VERSION ../tools/make-version-header.sh
+	../tools/make-version-header.sh ../VERSION > version.h
 
 clean ::
 	rm -f ocamlrun$(EXE) ocamlrund$(EXE) *.$(O) *.$(A) *.$(SO)

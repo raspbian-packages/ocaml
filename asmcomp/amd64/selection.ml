@@ -91,6 +91,10 @@ let pseudoregs_for_operation op arg res =
      (rax, rbx, rcx or rdx). Keep it simple, just force the argument in rax. *)
   | Ispecific(Ibswap 16) ->
       ([| rax |], [| rax |])
+  (* For imulq, first arg must be in rax, rax is clobbered, and result is in
+     rdx. *)
+  | Iintop(Imulh) ->
+      ([| rax; arg.(1) |], [| rdx |])
   | Ispecific(Ifloatarithmem(_,_)) ->
       let arg' = Array.copy arg in
       arg'.(0) <- res.(0);
@@ -105,10 +109,6 @@ let pseudoregs_for_operation op arg res =
       ([| rax; rcx |], [| rax |])
   | Iintop(Imod) ->
       ([| rax; rcx |], [| rdx |])
-  (* For div and mod with immediate operand, arg must not be in rax.
-     Keep it simple, force it in rdx. *)
-  | Iintop_imm((Idiv|Imod), _) ->
-      ([| rdx |], [| rdx |])
   (* Other instructions are regular *)
   | _ -> raise Use_default
 
@@ -152,20 +152,20 @@ method select_addressing chunk exp =
     | Ascaledadd(e1, e2, scale) ->
         (Iindexed2scaled(scale, d), Ctuple[e1; e2])
 
-method! select_store addr exp =
+method! select_store is_assign addr exp =
   match exp with
     Cconst_int n when self#is_immediate n ->
-      (Ispecific(Istore_int(Nativeint.of_int n, addr)), Ctuple [])
-  | Cconst_natint n when self#is_immediate_natint n ->
-      (Ispecific(Istore_int(n, addr)), Ctuple [])
+      (Ispecific(Istore_int(Nativeint.of_int n, addr, is_assign)), Ctuple [])
+  | (Cconst_natint n | Cconst_blockheader n) when self#is_immediate_natint n ->
+      (Ispecific(Istore_int(n, addr, is_assign)), Ctuple [])
   | Cconst_pointer n when self#is_immediate n ->
-      (Ispecific(Istore_int(Nativeint.of_int n, addr)), Ctuple [])
+      (Ispecific(Istore_int(Nativeint.of_int n, addr, is_assign)), Ctuple [])
   | Cconst_natpointer n when self#is_immediate_natint n ->
-      (Ispecific(Istore_int(n, addr)), Ctuple [])
+      (Ispecific(Istore_int(n, addr, is_assign)), Ctuple [])
   | Cconst_symbol s when not (!pic_code || !Clflags.dlcode) ->
-      (Ispecific(Istore_symbol(s, addr)), Ctuple [])
+      (Ispecific(Istore_symbol(s, addr, is_assign)), Ctuple [])
   | _ ->
-      super#select_store addr exp
+      super#select_store is_assign addr exp
 
 method! select_operation op args =
   match op with
@@ -175,21 +175,6 @@ method! select_operation op args =
         (Iindexed d, _) -> super#select_operation op args
       | (Iindexed2 0, _) -> super#select_operation op args
       | (addr, arg) -> (Ispecific(Ilea addr), [arg])
-      end
-  (* Recognize (x / cst) and (x % cst) only if cst is a power of 2. *)
-  | Cdivi ->
-      begin match args with
-        [arg1; Cconst_int n] when self#is_immediate n
-                               && n = 1 lsl (Misc.log2 n) ->
-          (Iintop_imm(Idiv, n), [arg1])
-      | _ -> (Iintop Idiv, args)
-      end
-  | Cmodi ->
-      begin match args with
-        [arg1; Cconst_int n] when self#is_immediate n
-                               && n = 1 lsl (Misc.log2 n) ->
-          (Iintop_imm(Imod, n), [arg1])
-      | _ -> (Iintop Imod, args)
       end
   (* Recognize float arithmetic with memory. *)
   | Caddf ->
@@ -227,6 +212,9 @@ method! select_operation op args =
   | Cextcall("caml_int64_direct_bswap", _, _, _)
   | Cextcall("caml_nativeint_direct_bswap", _, _, _) ->
       (Ispecific (Ibswap 64), args)
+  (* AMD64 does not support immediate operands for multiply high signed *)
+  | Cmulhi ->
+      (Iintop Imulh, args)
   | _ -> super#select_operation op args
 
 (* Recognize float arithmetic with mem *)
@@ -245,6 +233,9 @@ method select_floatarith commutative regular_op mem_op args =
       (regular_op, [arg1; arg2])
   | _ ->
       assert false
+
+method! mark_c_tailcall =
+  Proc.contains_calls := true
 
 (* Deal with register constraints *)
 

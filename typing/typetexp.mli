@@ -25,8 +25,9 @@ val transl_simple_type_delayed:
 val transl_type_scheme:
         Env.t -> Parsetree.core_type -> Typedtree.core_type
 val reset_type_variables: unit -> unit
-val enter_type_variable: bool -> Location.t -> string -> type_expr
 val type_variable: Location.t -> string -> type_expr
+val transl_type_param:
+  Env.t -> Parsetree.core_type -> Typedtree.core_type
 
 type variable_context
 val narrow: unit -> variable_context
@@ -62,6 +63,7 @@ type error =
   | Unbound_cltype of Longident.t
   | Ill_typed_functor_application of Longident.t
   | Illegal_reference_to_recursive_module
+  | Access_functor_as_structure of Longident.t
 
 exception Error of Location.t * Env.t * error
 
@@ -82,19 +84,21 @@ val find_type:
 val find_constructor:
     Env.t -> Location.t -> Longident.t -> constructor_description
 val find_all_constructors:
-    Env.t -> Location.t -> Longident.t -> 
+    Env.t -> Location.t -> Longident.t ->
     (constructor_description * (unit -> unit)) list
 val find_label:
     Env.t -> Location.t -> Longident.t -> label_description
 val find_all_labels:
-    Env.t -> Location.t -> Longident.t -> 
+    Env.t -> Location.t -> Longident.t ->
     (label_description * (unit -> unit)) list
 val find_value:
     Env.t -> Location.t -> Longident.t -> Path.t * value_description
 val find_class:
     Env.t -> Location.t -> Longident.t -> Path.t * class_declaration
 val find_module:
-    Env.t -> Location.t -> Longident.t -> Path.t * module_type
+    Env.t -> Location.t -> Longident.t -> Path.t * module_declaration
+val lookup_module:
+    ?load:bool -> Env.t -> Location.t -> Longident.t -> Path.t
 val find_modtype:
     Env.t -> Location.t -> Longident.t -> Path.t * modtype_declaration
 val find_class_type:
@@ -108,3 +112,13 @@ val spellcheck_simple:
     Format.formatter ->
     (('a -> cd -> cd) -> Longident.t option -> 'b -> cd -> cd) ->
     ('a -> string) -> 'b -> Longident.t -> unit
+
+val check_deprecated: Location.t -> Parsetree.attributes -> string -> unit
+
+val warning_enter_scope: unit -> unit
+val warning_leave_scope: unit -> unit
+val warning_attribute: Parsetree.attributes -> unit
+
+val error_of_extension: Parsetree.extension -> Location.error
+
+val emit_external_warnings: Ast_mapper.mapper

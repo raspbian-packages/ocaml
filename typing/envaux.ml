@@ -28,7 +28,7 @@ let reset_cache () =
   Env.reset_cache()
 
 let extract_sig env mty =
-  match Mtype.scrape env mty with
+  match Env.scrape_alias env mty with
     Mty_signature sg -> sg
   | _ -> fatal_error "Envaux.extract_sig"
 
@@ -44,14 +44,17 @@ let rec env_from_summary sum subst =
           Env.add_value id (Subst.value_description subst desc)
                         (env_from_summary s subst)
       | Env_type(s, id, desc) ->
-          Env.add_type id (Subst.type_declaration subst desc)
-                       (env_from_summary s subst)
-      | Env_exception(s, id, desc) ->
-          Env.add_exception id (Subst.exception_declaration subst desc)
-                            (env_from_summary s subst)
+          Env.add_type ~check:false id
+            (Subst.type_declaration subst desc)
+            (env_from_summary s subst)
+      | Env_extension(s, id, desc) ->
+          Env.add_extension ~check:false id
+            (Subst.extension_constructor subst desc)
+            (env_from_summary s subst)
       | Env_module(s, id, desc) ->
-          Env.add_module id (Subst.modtype subst desc)
-                         (env_from_summary s subst)
+          Env.add_module_declaration id
+            (Subst.module_declaration subst desc)
+            (env_from_summary s subst)
       | Env_modtype(s, id, desc) ->
           Env.add_modtype id (Subst.modtype_declaration subst desc)
                           (env_from_summary s subst)
@@ -64,13 +67,18 @@ let rec env_from_summary sum subst =
       | Env_open(s, path) ->
           let env = env_from_summary s subst in
           let path' = Subst.module_path subst path in
-          let mty =
+          let md =
             try
               Env.find_module path' env
             with Not_found ->
               raise (Error (Module_not_found path'))
           in
-          Env.open_signature Asttypes.Override path' (extract_sig env mty) env
+          Env.open_signature Asttypes.Override path'
+            (extract_sig env md.md_type) env
+      | Env_functor_arg(Env_module(s, id, desc), id') when Ident.same id id' ->
+          Env.add_module_declaration id (Subst.module_declaration subst desc)
+            ~arg:true (env_from_summary s subst)
+      | Env_functor_arg _ -> assert false
     in
       Hashtbl.add env_cache (sum, subst) env;
       env

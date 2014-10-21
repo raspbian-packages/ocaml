@@ -35,13 +35,19 @@ MANDIR=$(PREFIX)/man
 ########## Toolchain and OS dependencies
 
 TOOLCHAIN=msvc
+
+# It doesn't make much sense to set "TARGET" and "HOST" for msvc but it's needed
+# for the myocamlbuild config.
+# The only case these will be used currently is to check whether we're
+# cross-compiling or not so setting them to the same value is what matters.
+HOST=msvc64
+TARGET=$(HOST)
+
 CCOMPTYPE=msvc
 O=obj
 A=lib
 S=asm
 SO=s.obj
-DO=d.obj
-DBGO=dbg.obj
 EXE=.exe
 EXT_DLL=.dll
 EXT_OBJ=.$(O)
@@ -62,13 +68,14 @@ ASPP=
 ASPPPROFFLAGS=
 PROFILING=noprof
 DYNLINKOPTS=
-DEBUGGER=ocamldebugger
 CC_PROFILE=
 SYSTHREAD_SUPPORT=true
 CMXS=cmxs
 NATDYNLINK=true
 RUNTIMED=noruntimed
 ASM_CFI_SUPPORTED=false
+UNIXLIB=win32unix
+GRAPHLIB=win32graph
 
 ########## Configuration for the bytecode compiler
 
@@ -143,12 +150,14 @@ NATIVECCLINKOPTS=
 ### Build partially-linked object file
 PACKLD=link /lib /nologo /machine:AMD64 /out:# must have no space after '/out:'
 
-############# Configuration for camlp4
+### Clear this to disable compiling ocamldebug
+WITH_DEBUGGER=ocamldebugger
 
-# This variable controls whether camlp4 will be built.
-# If it is set to camlp4, then it will be built.
-# If it is set to the empty string, then it will not be built.
-CAMLP4=camlp4
+### Clear this to disable compiling ocamlbuild
+WITH_OCAMLBUILD=ocamlbuild
+
+### Clear this to disable compiling ocamldoc
+WITH_OCAMLDOC=ocamldoc
 
 ############# Configuration for the contributed libraries
 
@@ -157,10 +166,6 @@ OTHERLIBRARIES=win32unix systhreads str num win32graph dynlink bigarray
 ### Name of the target architecture for the "num" library
 BNG_ARCH=generic
 BNG_ASM_LEVEL=0
-
-### Configuration for LablTk (not supported)
-TK_DEFS=
-TK_LINK=
 
 ############# Aliases for common commands
 

@@ -72,7 +72,7 @@ let rotate_registers = false
 (* Representation of hard registers by pseudo-registers *)
 
 let hard_int_reg =
-  let v = Array.create 7 Reg.dummy in
+  let v = Array.make 7 Reg.dummy in
   for i = 0 to 6 do v.(i) <- Reg.at_location Int (Reg i) done;
   v
 
@@ -111,7 +111,7 @@ let word_addressed = false
 
 let calling_conventions first_int last_int first_float last_float make_stack
                         arg =
-  let loc = Array.create (Array.length arg) Reg.dummy in
+  let loc = Array.make (Array.length arg) Reg.dummy in
   let int = ref first_int in
   let float = ref first_float in
   let ofs = ref (-64) in
@@ -154,6 +154,21 @@ let loc_external_results res =
 
 let loc_exn_bucket = eax
 
+(* Volatile registers: the x87 top of FP stack is *)
+
+let reg_is_volatile = function
+  | { typ = Float; loc = Reg _ } -> true
+  | _ -> false
+
+let regs_are_volatile rs =
+  try
+    for i = 0 to Array.length rs - 1 do
+      if reg_is_volatile rs.(i) then raise Exit
+    done;
+    false
+  with Exit ->
+    true
+
 (* Registers destroyed by operations *)
 
 let destroyed_at_c_call =               (* ebx, esi, edi, ebp preserved *)
@@ -163,8 +178,7 @@ let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) -> all_phys_regs
   | Iop(Iextcall(_, false)) -> destroyed_at_c_call
   | Iop(Iintop(Idiv | Imod)) -> [| eax; edx |]
-  | Iop(Iintop_imm(Imod, _)) -> [| eax |]
-  | Iop(Ialloc _) -> [| eax |]
+  | Iop(Ialloc _ | Iintop Imulh) -> [| eax |]
   | Iop(Iintop(Icomp _) | Iintop_imm(Icomp _, _)) -> [| eax |]
   | Iop(Iintoffloat) -> [| eax |]
   | Iifthenelse(Ifloattest(_, _), _, _) -> [| eax |]
@@ -182,6 +196,17 @@ let max_register_pressure = function
   | Ialloc _ | Iintop(Icomp _) | Iintop_imm(Icomp _, _) |
     Iintoffloat -> [| 6; max_int |]
   | _ -> [|7; max_int |]
+
+(* Pure operations (without any side effect besides updating their result
+   registers).  *)
+
+let op_is_pure = function
+  | Icall_ind | Icall_imm _ | Itailcall_ind | Itailcall_imm _
+  | Iextcall _ | Istackoffset _ | Istore _ | Ialloc _
+  | Iintop(Icheckbound) | Iintop_imm(Icheckbound, _) -> false
+  | Ispecific(Ilea _) -> true
+  | Ispecific _ -> false
+  | _ -> true
 
 (* Layout of the stack frame *)
 

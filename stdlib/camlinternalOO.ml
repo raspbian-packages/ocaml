@@ -15,20 +15,13 @@ open Obj
 
 (**** Object representation ****)
 
-let last_id = ref 0
-let () = Callback.register "CamlinternalOO.last_id" last_id
-
-let set_id o id =
-  let id0 = !id in
-  Array.unsafe_set (Obj.magic o : int array) 1 id0;
-  id := id0 + 1
+external set_id: 'a -> 'a = "caml_set_oo_id" "noalloc"
 
 (**** Object copy ****)
 
 let copy o =
   let o = (Obj.obj (Obj.dup (Obj.repr o))) in
-  set_id o last_id;
-  o
+  set_id o
 
 (**** Compression options ****)
 (* Parameters *)
@@ -135,7 +128,7 @@ let rec fit_size n =
 let new_table pub_labels =
   incr table_count;
   let len = Array.length pub_labels in
-  let methods = Array.create (len*2+2) dummy_met in
+  let methods = Array.make (len*2+2) dummy_met in
   methods.(0) <- magic len;
   methods.(1) <- magic (fit_size len * Sys.word_size / 8 - 1);
   for i = 0 to len - 1 do methods.(i*2+3) <- magic pub_labels.(i) done;
@@ -151,7 +144,7 @@ let new_table pub_labels =
 let resize array new_size =
   let old_size = Array.length array.methods in
   if new_size > old_size then begin
-    let new_buck = Array.create new_size dummy_met in
+    let new_buck = Array.make new_size dummy_met in
     Array.blit array.methods 0 new_buck 0 old_size;
     array.methods <- new_buck
  end
@@ -274,7 +267,7 @@ let to_array arr =
 let new_methods_variables table meths vals =
   let meths = to_array meths in
   let nmeths = Array.length meths and nvals = Array.length vals in
-  let res = Array.create (nmeths + nvals) 0 in
+  let res = Array.make (nmeths + nvals) 0 in
   for i = 0 to nmeths - 1 do
     res.(i) <- get_method_label table meths.(i)
   done;
@@ -359,8 +352,7 @@ let create_object table =
   let obj = Obj.new_block Obj.object_tag table.size in
   (* XXX Appel de [caml_modify] *)
   Obj.set_field obj 0 (Obj.repr table.methods);
-  set_id obj last_id;
-  (Obj.obj obj)
+  Obj.obj (set_id obj)
 
 let create_object_opt obj_0 table =
   if (Obj.magic obj_0 : bool) then obj_0 else begin
@@ -368,8 +360,7 @@ let create_object_opt obj_0 table =
     let obj = Obj.new_block Obj.object_tag table.size in
     (* XXX Appel de [caml_modify] *)
     Obj.set_field obj 0 (Obj.repr table.methods);
-    set_id obj last_id;
-    (Obj.obj obj)
+    Obj.obj (set_id obj)
   end
 
 let rec iter_f obj =
@@ -412,9 +403,12 @@ type tables = Empty | Cons of closure * tables * tables
 type mut_tables =
     {key: closure; mutable data: tables; mutable next: tables}
 external mut : tables -> mut_tables = "%identity"
+external demut : mut_tables -> tables = "%identity"
 
 let build_path n keys tables =
-  let res = Cons (Obj.magic 0, Empty, Empty) in
+  (* Be careful not to create a seemingly immutable block, otherwise it could
+     be statically allocated.  See #5779. *)
+  let res = demut {key = Obj.magic 0; data = Empty; next = Empty} in
   let r = ref res in
   for i = 0 to n do
     r := Cons (keys.(i), !r, Empty)

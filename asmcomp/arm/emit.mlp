@@ -173,19 +173,23 @@ let name_for_comparison = function
   | Iunsigned Cge -> "cs" | Iunsigned Clt -> "cc" | Iunsigned Cgt -> "hi"
 
 let name_for_int_operation = function
-    Iadd -> "add"
-  | Isub -> "sub"
-  | Imul -> "mul"
-  | Iand -> "and"
-  | Ior  -> "orr"
-  | Ixor -> "eor"
+  (* Use adds,subs,... to enable 16-bit T1 encoding *)
+    Iadd  -> "adds"
+  | Isub  -> "subs"
+  | Imul  -> "mul"
+  | Imulh -> "smmul"
+  | Iand  -> "ands"
+  | Ior   -> "orrs"
+  | Ixor  -> "eors"
+  | Ilsl  -> "lsls"
+  | Ilsr  -> "lsrs"
+  | Iasr  -> "asrs"
   | _ -> assert false
 
 let name_for_shift_operation = function
-    Ilsl -> "lsl"
-  | Ilsr -> "lsr"
-  | Iasr -> "asr"
-  | _ -> assert false
+    Ishiftlogicalleft -> "lsl"
+  | Ishiftlogicalright -> "lsr"
+  | Ishiftarithmeticright -> "asr"
 
 (* General functional to decompose a non-immediate integer constant
    into 8-bit chunks shifted left 0 ... 30 bits. *)
@@ -233,8 +237,9 @@ let emit_intconst dst n =
     decompose_intconst n
       (fun bits ->
         if !first
-        then `	mov	{emit_reg dst}, #{emit_int32 bits} @ {emit_int32 n}\n`
-        else `	add	{emit_reg dst}, {emit_reg dst}, #{emit_int32 bits}\n`;
+        (* Use movs,adds here to enable 16-bit T1 encoding *)
+        then `	movs	{emit_reg dst}, #{emit_int32 bits} @ {emit_int32 n}\n`
+        else `	adds	{emit_reg dst}, {emit_reg dst}, #{emit_int32 bits}\n`;
         first := false)
   end
 
@@ -268,7 +273,7 @@ let function_name = ref ""
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 (* Pending floating-point literals *)
-let float_literals = ref ([] : (string * label) list)
+let float_literals = ref ([] : (int64 * label) list)
 (* Pending relative references to the global offset table *)
 let gotrel_literals = ref ([] : (label * label) list)
 (* Pending symbol literals *)
@@ -278,12 +283,13 @@ let num_literals = ref 0
 
 (* Label a floating-point literal *)
 let float_literal f =
+  let repr = Int64.bits_of_float f in
   try
-    List.assoc f !float_literals
+    List.assoc repr !float_literals
   with Not_found ->
     let lbl = new_label() in
     num_literals := !num_literals + 2;
-    float_literals := (f, lbl) :: !float_literals;
+    float_literals := (repr, lbl) :: !float_literals;
     lbl
 
 (* Label a GOTREL literal *)
@@ -309,7 +315,7 @@ let emit_literals() =
     `	.align	3\n`;
     List.iter
       (fun (f, lbl) ->
-        `{emit_label lbl}:	.double	{emit_string f}\n`)
+        `{emit_label lbl}:`; emit_float64_split_directive ".long" f)
       !float_literals;
     float_literals := []
   end;
@@ -382,11 +388,10 @@ let emit_instr i =
               `	ldr	{emit_reg dst}, {emit_stack src}\n`
           end; 1
         end
-    | Lop(Iconst_int n) ->
+    | Lop(Iconst_int n | Iconst_blockheader n) ->
         emit_intconst i.res.(0) (Nativeint.to_int32 n)
     | Lop(Iconst_float f) when !fpu = Soft ->
-        `	@ {emit_string f}\n`;
-        let bits = Int64.bits_of_float (float_of_string f) in
+        let bits = Int64.bits_of_float f in
         let high_bits = Int64.to_int32 (Int64.shift_right_logical bits 32)
         and low_bits = Int64.to_int32 bits in
         if is_immediate low_bits || is_immediate high_bits then begin
@@ -401,7 +406,7 @@ let emit_instr i =
         end
     | Lop(Iconst_float f) when !fpu = VFPv2 ->
         let lbl = float_literal f in
-        `	fldd	{emit_reg i.res.(0)}, {emit_label lbl} @ {emit_string f}\n`;
+        `	fldd	{emit_reg i.res.(0)}, {emit_label lbl}\n`;
         1
     | Lop(Iconst_float f) ->
         let encode imm =
@@ -420,12 +425,12 @@ let emit_instr i =
               let ex = ((ex + 3) land 0x07) lxor 0x04 in
               Some((sg lsl 7) lor (ex lsl 4) lor mn)
           end in
-        begin match encode (Int64.bits_of_float (float_of_string f)) with
+        begin match encode (Int64.bits_of_float f) with
           None ->
             let lbl = float_literal f in
-            `	fldd	{emit_reg i.res.(0)}, {emit_label lbl} @ {emit_string f}\n`
+            `	fldd	{emit_reg i.res.(0)}, {emit_label lbl}\n`
         | Some imm8 ->
-            `	fconstd	{emit_reg i.res.(0)}, #{emit_int imm8} @ {emit_string f}\n`
+            `	fconstd	{emit_reg i.res.(0)}, #{emit_int imm8}\n`
         end; 1
     | Lop(Iconst_symbol s) ->
         emit_load_symbol_addr i.res.(0) s
@@ -503,10 +508,10 @@ let emit_instr i =
           | Double_u -> "fldd"
           | _ (* 32-bit quantities *) -> "ldr" in
         `	{emit_string instr}	{emit_reg r}, {emit_addressing addr i.arg 0}\n`; 1
-    | Lop(Istore(Single, addr)) when !fpu >= VFPv2 ->
+    | Lop(Istore(Single, addr, _)) when !fpu >= VFPv2 ->
         `	fcvtsd	s14, {emit_reg i.arg.(0)}\n`;
         `	fsts	s14, {emit_addressing addr i.arg 1}\n`; 2
-    | Lop(Istore((Double | Double_u), addr)) when !fpu = Soft ->
+    | Lop(Istore((Double | Double_u), addr, _)) when !fpu = Soft ->
         (* Use STM or STRD if possible *)
         begin match i.arg.(0), i.arg.(1), addr with
           {loc = Reg rt}, {loc = Reg rt2}, Iindexed 0
@@ -520,7 +525,7 @@ let emit_instr i =
             `	str	{emit_reg i.arg.(0)}, {emit_addressing addr i.arg 2}\n`;
             `	str	{emit_reg i.arg.(1)}, {emit_addressing addr' i.arg 2}\n`; 2
         end
-    | Lop(Istore(size, addr)) ->
+    | Lop(Istore(size, addr, _)) ->
         let r = i.arg.(0) in
         let instr =
           match size with
@@ -562,9 +567,6 @@ let emit_instr i =
           `{emit_label lbl_frame}:	add	{emit_reg i.res.(0)}, alloc_ptr, #4\n`;
           1 + ninstr
         end
-    | Lop(Iintop(Ilsl | Ilsr | Iasr as op)) ->
-        let shift = name_for_shift_operation op in
-        `	mov	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_string shift} {emit_reg i.arg.(1)}\n`; 1
     | Lop(Iintop(Icomp cmp)) ->
         let compthen = name_for_comparison cmp in
         let compelse = name_for_comparison (negate_integer_comparison cmp) in
@@ -587,45 +589,21 @@ let emit_instr i =
         let lbl = bound_error_label i.dbg in
         `	cmp	{emit_reg i.arg.(0)}, #{emit_int n}\n`;
         `	bls	{emit_label lbl}\n`; 2
-    | Lop(Ispecific(Ishiftcheckbound shift)) ->
+    | Lop(Ispecific(Ishiftcheckbound(shiftop, n))) ->
         let lbl = bound_error_label i.dbg in
-        `	cmp	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}, lsr #{emit_int shift}\n`;
+        let op = name_for_shift_operation shiftop in
+        `	cmp	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}, {emit_string op} #{emit_int n}\n`;
         `	bcs	{emit_label lbl}\n`; 2
+    | Lop(Iintop Imulh) when !arch < ARMv6 ->
+        `	smull	r12, {emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`; 1
+    | Lop(Ispecific Imulhadd) ->
+        `	smmla	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}, {emit_reg i.arg.(2)}\n`; 1
     | Lop(Iintop op) ->
         let instr = name_for_int_operation op in
-        `	{emit_string instr}     {emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`; 1
-    | Lop(Iintop_imm(Idiv, n)) -> (* n is a power of 2 *)
-        let l = Misc.log2 n in
-        let r = i.res.(0) in
-        `	movs	{emit_reg r}, {emit_reg i.arg.(0)}\n`;
-        if n <= 256 then begin
-          `	it	lt\n`;
-          `	addlt	{emit_reg r}, {emit_reg r}, #{emit_int (n-1)}\n`
-        end else begin
-          `	itt	lt\n`;
-          `	addlt	{emit_reg r}, {emit_reg r}, #{emit_int n}\n`;
-          `	sublt	{emit_reg r}, {emit_reg r}, #1\n`
-        end;
-        `	mov	{emit_reg r}, {emit_reg r}, asr #{emit_int l}\n`; 5
-    | Lop(Iintop_imm(Imod, n)) -> (* n is a power of 2 *)
-        let l = Misc.log2 n in
-        let a = i.arg.(0) in
-        let r = i.res.(0) in
-        let lbl = new_label() in
-        `	cmp	{emit_reg a}, #0\n`;
-        `	mov	{emit_reg r}, {emit_reg a}, lsl #{emit_int (32-l)}\n`;
-        `	mov	{emit_reg r}, {emit_reg r}, lsr #{emit_int (32-l)}\n`;
-        `	bpl	{emit_label lbl}\n`;
-        `	cmp	{emit_reg r}, #0\n`;
-        `	it	ne\n`;
-        `	subne	{emit_reg r}, {emit_reg r}, #{emit_int n}\n`;
-        `{emit_label lbl}:\n`; 7
-    | Lop(Iintop_imm((Ilsl | Ilsr | Iasr as op), n)) ->
-        let shift = name_for_shift_operation op in
-        `	mov	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_string shift} #{emit_int n}\n`; 1
+        `	{emit_string instr}	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`; 1
     | Lop(Iintop_imm(op, n)) ->
         let instr = name_for_int_operation op in
-        `	{emit_string instr}     {emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, #{emit_int n}\n`; 1
+        `	{emit_string instr}	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, #{emit_int n}\n`; 1
     | Lop(Iabsf | Inegf as op) when !fpu = Soft ->
         let instr = (match op with
                        Iabsf -> "bic"
@@ -664,16 +642,16 @@ let emit_instr i =
                      | _ -> assert false) in
         `	{emit_string instr}	{emit_reg i.res.(0)}, {emit_reg i.arg.(1)}, {emit_reg i.arg.(2)}\n`;
         1
-    | Lop(Ispecific(Ishiftarith(op, shift))) ->
+    | Lop(Ispecific(Ishiftarith(op, shiftop, n))) ->
         let instr = (match op with
                        Ishiftadd    -> "add"
                      | Ishiftsub    -> "sub"
-                     | Ishiftsubrev -> "rsb") in
-        `	{emit_string instr}	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}`;
-        if shift >= 0
-        then `, lsl #{emit_int shift}\n`
-        else `, asr #{emit_int (-shift)}\n`;
-        1
+                     | Ishiftsubrev -> "rsb"
+                     | Ishiftand    -> "and"
+                     | Ishiftor     -> "orr"
+                     | Ishiftxor    -> "eor") in
+        let op = name_for_shift_operation shiftop in
+        `	{emit_string instr}	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}, {emit_string op} #{emit_int n}\n`; 1
     | Lop(Ispecific(Irevsubimm n)) ->
         `	rsb	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, #{emit_int n}\n`; 1
     | Lop(Ispecific(Imuladd | Imulsub as op)) ->
@@ -803,11 +781,13 @@ let emit_instr i =
         `	pop	\{trap_ptr, lr}\n`;
         cfi_adjust_cfa_offset (-8);
         stack_offset := !stack_offset - 8; 1
-    | Lraise ->
-        if !Clflags.debug then begin
+    | Lraise k ->
+        begin match !Clflags.debug, k with
+        | true, (Lambda.Raise_regular | Lambda.Raise_reraise) ->
           `	{emit_call "caml_raise_exn"}\n`;
           `{record_frame Reg.Set.empty i.dbg}\n`; 1
-        end else begin
+        | false, _
+        | true, Lambda.Raise_notrace ->
           `	mov	sp, trap_ptr\n`;
           `	pop	\{trap_ptr, pc}\n`; 2
         end
@@ -894,8 +874,8 @@ let emit_item = function
   | Cint16 n -> `	.short	{emit_int n}\n`
   | Cint32 n -> `	.long	{emit_int32 (Nativeint.to_int32 n)}\n`
   | Cint n -> `	.long	{emit_int32 (Nativeint.to_int32 n)}\n`
-  | Csingle f -> `	.single	{emit_string f}\n`
-  | Cdouble f -> `	.double	{emit_string f}\n`
+  | Csingle f -> emit_float32_directive ".long" (Int32.bits_of_float f)
+  | Cdouble f -> emit_float64_split_directive ".long" (Int64.bits_of_float f)
   | Csymbol_address s -> `	.word	{emit_symbol s}\n`
   | Clabel_address lbl -> `	.word	{emit_data_label lbl}\n`
   | Cstring s -> emit_string_directive "	.ascii  " s

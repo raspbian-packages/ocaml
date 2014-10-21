@@ -31,10 +31,18 @@ let bind_variables scope =
 
 let bind_bindings scope bindings =
   let o = bind_variables scope in
-  List.iter (fun (p, _) -> o # pattern p) bindings
+  List.iter (fun x -> o # pattern x.vb_pat) bindings
 
 let bind_cases l =
-  List.iter (fun (p, e) -> (bind_variables e.exp_loc) # pattern p) l
+  List.iter
+    (fun {c_lhs; c_guard; c_rhs} ->
+      let loc =
+        let open Location in
+        match c_guard with
+        | None -> c_rhs.exp_loc
+        | Some g -> {c_rhs.exp_loc with loc_start=g.exp_loc.loc_start}
+      in
+      (bind_variables loc) # pattern c_lhs) l
 
 let iterator rebuild_env =
   object(this)
@@ -79,8 +87,10 @@ let iterator rebuild_env =
           bind_bindings exp.exp_loc bindings
       | Texp_let (Nonrecursive, bindings, body) ->
           bind_bindings body.exp_loc bindings
+      | Texp_match (_, f1, f2, _) ->
+        bind_cases f1;
+        bind_cases f2
       | Texp_function (_, f, _)
-      | Texp_match (_, f, _)
       | Texp_try (_, f) ->
           bind_cases f
       | _ -> ()
@@ -98,7 +108,6 @@ let iterator rebuild_env =
           let open Location in
           let doit loc_start = bind_bindings {scope with loc_start} bindings in
           begin match rec_flag, rem with
-          | Default, _ -> ()
           | Recursive, _ -> doit loc.loc_start
           | Nonrecursive, [] -> doit loc.loc_end
           | Nonrecursive,  {str_loc = loc2} :: _ -> doit loc2.loc_start
@@ -147,7 +156,7 @@ let gen_annot target_filename filename
     match target_filename with
     | None -> Some (filename ^ ".annot")
     | Some "-" -> None
-    | Some filename -> target_filename
+    | Some _ -> target_filename
   in
   let iterator = iterator cmt_use_summaries in
   match cmt_annots with
@@ -170,9 +179,13 @@ let gen_ml target_filename filename cmt =
   let (printer, ext) =
     match cmt.Cmt_format.cmt_annots with
       | Cmt_format.Implementation typedtree ->
-        (fun ppf -> Pprintast.structure ppf (Untypeast.untype_structure typedtree)), ".ml"
+        (fun ppf -> Pprintast.structure ppf
+                                        (Untypeast.untype_structure typedtree)),
+        ".ml"
       | Cmt_format.Interface typedtree ->
-        (fun ppf -> Pprintast.signature ppf (Untypeast.untype_signature typedtree)), ".mli"
+        (fun ppf -> Pprintast.signature ppf
+                                        (Untypeast.untype_signature typedtree)),
+        ".mli"
       | _ ->
         Printf.fprintf stderr "File was generated with an error\n%!";
         exit 2
@@ -180,7 +193,7 @@ let gen_ml target_filename filename cmt =
   let target_filename = match target_filename with
       None -> Some (filename ^ ext)
     | Some "-" -> None
-    | Some filename -> target_filename
+    | Some _ -> target_filename
   in
   let oc = match target_filename with
       None -> None

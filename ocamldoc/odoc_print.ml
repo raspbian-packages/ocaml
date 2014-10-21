@@ -25,13 +25,9 @@ let new_fmt () =
 
 let (type_fmt, flush_type_fmt) = new_fmt ()
 let _ =
-  let (out, flush, outnewline, outspace) =
-    pp_get_all_formatter_output_functions type_fmt ()
-  in
-  pp_set_all_formatter_output_functions type_fmt
-    ~out ~flush
-    ~newline: (fun () -> out "\n  " 0 3)
-    ~spaces: outspace
+  let outfuns = pp_get_formatter_out_functions type_fmt () in
+  pp_set_formatter_out_functions type_fmt
+    {outfuns with out_newline = fun () -> outfuns.out_string "\n  " 0 3}
 
 let (modtype_fmt, flush_modtype_fmt) = new_fmt ()
 
@@ -55,6 +51,7 @@ let simpl_module_type ?code t =
   let rec iter t =
     match t with
       Types.Mty_ident p -> t
+    | Types.Mty_alias p -> t
     | Types.Mty_signature _ ->
         (
          match code with
@@ -62,7 +59,7 @@ let simpl_module_type ?code t =
          | Some s -> raise (Use_code s)
         )
     | Types.Mty_functor (id, mt1, mt2) ->
-        Types.Mty_functor (id, iter mt1, iter mt2)
+        Types.Mty_functor (id, Misc.may_map iter mt1, iter mt2)
   in
   iter t
 
@@ -84,15 +81,15 @@ let simpl_class_type t =
         (* on vire les vals et methods pour ne pas qu'elles soient imprimees
            quand on affichera le type *)
         let tnil = { Types.desc = Types.Tnil ; Types.level = 0; Types.id = 0 } in
-        Types.Cty_signature { Types.cty_self = { cs.Types.cty_self with
+        Types.Cty_signature { Types.csig_self = { cs.Types.csig_self with
                                                   Types.desc = Types.Tobject (tnil, ref None) };
-                               Types.cty_vars = Types.Vars.empty ;
-                               Types.cty_concr = Types.Concr.empty ;
-                               Types.cty_inher = []
+                              csig_vars = Types.Vars.empty ;
+                              csig_concr = Types.Concr.empty ;
+                              csig_inher = []
                              }
-    | Types.Cty_fun (l, texp, ct) ->
+    | Types.Cty_arrow (l, texp, ct) ->
         let new_ct = iter ct in
-        Types.Cty_fun (l, texp, new_ct)
+        Types.Cty_arrow (l, texp, new_ct)
   in
   iter t
 

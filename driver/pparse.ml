@@ -59,11 +59,12 @@ let apply_rewriter magic fn_in ppx =
     Misc.remove_file fn_out;
     raise (Error (CannotRun comm));
   end;
-  if not (Sys.file_exists fn_out) then raise (Error (WrongMagic comm));
+  if not (Sys.file_exists fn_out) then
+    raise (Error (WrongMagic comm));
   (* check magic before passing to the next ppx *)
   let ic = open_in_bin fn_out in
   let buffer =
-    try Misc.input_bytes ic (String.length magic) with End_of_file -> "" in
+    try really_input_string ic (String.length magic) with End_of_file -> "" in
   close_in ic;
   if buffer <> magic then begin
     Misc.remove_file fn_out;
@@ -74,7 +75,7 @@ let apply_rewriter magic fn_in ppx =
 let read_ast magic fn =
   let ic = open_in_bin fn in
   try
-    let buffer = Misc.input_bytes ic (String.length magic) in
+    let buffer = really_input_string ic (String.length magic) in
     assert(buffer = magic); (* already checked by apply_rewriter *)
     Location.input_name := input_value ic;
     let ast = input_value ic in
@@ -86,23 +87,51 @@ let read_ast magic fn =
     Misc.remove_file fn;
     raise exn
 
-let apply_rewriters magic ast =
+let apply_rewriters ~tool_name magic ast =
+  let ctx = Ast_mapper.ppx_context ~tool_name () in
   match !Clflags.all_ppx with
   | [] -> ast
   | ppxs ->
+      let ast =
+        if magic = Config.ast_impl_magic_number
+        then Obj.magic (Ast_helper.Str.attribute ctx :: (Obj.magic ast))
+        else Obj.magic (Ast_helper.Sig.attribute ctx :: (Obj.magic ast))
+      in
       let fn =
-        List.fold_left (apply_rewriter magic) (write_ast magic ast) ppxs in
-      read_ast magic fn
+        List.fold_left (apply_rewriter magic) (write_ast magic ast)
+          (List.rev ppxs)
+      in
+      let ast = read_ast magic fn in
+      let open Parsetree in
+      if magic = Config.ast_impl_magic_number then
+        let ast =
+          match Obj.magic ast with
+          | {pstr_desc = Pstr_attribute({Location.txt = "ocaml.ppx.context"}, _)}
+            :: items ->
+              items
+          | items -> items
+        in
+        Obj.magic ast
+      else
+        let ast =
+          match Obj.magic ast with
+          | {psig_desc = Psig_attribute({Location.txt = "ocaml.ppx.context"}, _)}
+            :: items ->
+              items
+          | items -> items
+        in
+        Obj.magic ast
+
 
 (* Parse a file or get a dumped syntax tree from it *)
 
 exception Outdated_version
 
-let file ppf inputfile parse_fun ast_magic =
+let file ppf ~tool_name inputfile parse_fun ast_magic =
   let ic = open_in_bin inputfile in
   let is_ast_file =
     try
-      let buffer = Misc.input_bytes ic (String.length ast_magic) in
+      let buffer = really_input_string ic (String.length ast_magic) in
       if buffer = ast_magic then true
       else if String.sub buffer 0 9 = String.sub ast_magic 0 9 then
         raise Outdated_version
@@ -131,7 +160,7 @@ let file ppf inputfile parse_fun ast_magic =
     with x -> close_in ic; raise x
   in
   close_in ic;
-  apply_rewriters ast_magic ast
+  apply_rewriters ~tool_name ast_magic ast
 
 let report_error ppf = function
   | CannotRun cmd ->
@@ -140,3 +169,29 @@ let report_error ppf = function
   | WrongMagic cmd ->
       fprintf ppf "External preprocessor does not produce a valid file@.\
                    Command line: %s@." cmd
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error err -> Some (Location.error_of_printer_file report_error err)
+      | _ -> None
+    )
+
+let parse_all ~tool_name parse_fun magic ppf sourcefile =
+  Location.input_name := sourcefile;
+  let inputfile = preprocess sourcefile in
+  let ast =
+    try file ppf ~tool_name inputfile parse_fun magic
+    with exn ->
+      remove_preprocessed inputfile;
+      raise exn
+  in
+  remove_preprocessed inputfile;
+  ast
+
+let parse_implementation ppf ~tool_name sourcefile =
+  parse_all ~tool_name Parse.implementation
+    Config.ast_impl_magic_number ppf sourcefile
+let parse_interface ppf ~tool_name sourcefile =
+  parse_all ~tool_name Parse.interface
+    Config.ast_intf_magic_number ppf sourcefile

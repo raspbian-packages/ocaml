@@ -248,19 +248,21 @@ and edit that file to remove all declarations of unexported names.
 .TP
 .BI \-I \ directory
 Add the given directory to the list of directories searched for
-compiled interface files (.cmi) and compiled object code files
-(.cmo). By default, the current directory is searched first, then the
-standard library directory. Directories added with \-I are searched
-after the current directory, in the order in which they were given on
-the command line, but before the standard library directory.
+compiled interface files (.cmi), compiled object code files (.cmx),
+and libraries (.cmxa). By default, the current directory is searched
+first, then the standard library directory. Directories added with \-I
+are searched after the current directory, in the order in which they
+were given on the command line, but before the standard library
+directory. See also option
+.BR \-nostdlib .
 
 If the given directory starts with
 .BR + ,
 it is taken relative to the
 standard library directory. For instance,
-.B \-I\ +labltk
+.B \-I\ +camlp4
 adds the subdirectory
-.B labltk
+.B camlp4
 of the standard library to the search path.
 .TP
 .BI \-impl \ filename
@@ -296,6 +298,9 @@ Recognize file names ending with
 .I string
 as interface files (instead of the default .mli).
 .TP
+.B \-keep-locs
+Keep locations in generated .cmi files.
+.TP
 .B \-labels
 Labels are not ignored in types, labels may be used in applications,
 and labelled parameters can be given in any order.  This is the default.
@@ -310,6 +315,9 @@ flag), setting the
 flag forces all
 subsequent links of programs involving that library to link all the
 modules contained in the library.
+.TP
+.B \-no-alias-deps
+Do not record dependencies for module aliases.
 .TP
 .B \-no\-app\-funct
 Deactivates the applicative behaviour of functors. With this option,
@@ -337,6 +345,12 @@ and pass the correct C libraries and options on the command line.
 Allow the compiler to use some optimizations that are valid only for code
 that is never dynlinked.
 .TP
+.B -nostdlib
+Do not automatically add the standard library directory the list of
+directories searched for compiled interface files (.cmi), compiled
+object code files (.cmx), and libraries (.cmxa). See also option
+.BR \-I .
+.TP
 .B \-nolabels
 Ignore non-optional labels in types. Labels cannot be used in
 applications, and parameter order becomes strict.
@@ -353,6 +367,18 @@ If the
 option is given, specify the name of the output file produced. If the
 .B \-shared
 option is given, specify the name of plugin file produced.
+This can also be used when compiling an interface or implementation
+file, without linking, in which case it sets the name of the cmi or
+cmo file, and also sets the module name to the file name up to the
+first dot.
+.TP
+.BI \-open \ module
+Opens the given module before processing the interface or
+implementation files. If several
+.B \-open
+options are given, they are processed in order, just as if
+the statements open! module1;; ... open! moduleN;; were added
+at the top of each file.
 .TP
 .B \-output\-obj
 Cause the linker to produce a C object file instead of an executable
@@ -431,7 +457,7 @@ errors, the intermediate file is deleted afterwards.
 .BI \-ppx \ command
 After parsing, pipe the abstract syntax tree through the preprocessor
 .IR command .
-The format of the input and ouput of the preprocessor
+The format of the input and output of the preprocessor
 are not yet documented.
 .TP
 .B \-principal
@@ -463,6 +489,12 @@ code for the source file
 .IR x .ml
 is saved in the file
 .IR x .s.
+.TP
+.B \-safe\-string
+Enforce the separation between types
+.BR string \ and\  bytes ,
+thereby making strings read-only. This will become the default in
+a future version of OCaml.
 .TP
 .B \-shared
 Build a plugin (usually .cmxs) that can be dynamically loaded with
@@ -511,6 +543,13 @@ program or continue with an unspecified result instead of raising a
 .B Division_by_zero
 exception.
 .TP
+.B \-unsafe\-string
+Identify the types
+.BR string \ and\  bytes ,
+thereby making strings writable. For reasons of backward compatibility,
+this is the default setting for the moment, but this will change in a future
+version of OCaml.
+.TP
 .B \-v
 Print the version number of the compiler and the location of the
 standard library directory, then exit.
@@ -519,7 +558,7 @@ standard library directory, then exit.
 Print all external commands before they are executed, in particular
 invocations of the assembler, C compiler, and linker.
 .TP
-.BR \-vnum or \-version
+.BR \-version \ or\  \-vnum
 Print the version number of the compiler in short form (e.g. "3.11.0"),
 then exit.
 .TP
@@ -552,14 +591,13 @@ Note: it is not recommended to use the
 .B \-warn\-error
 option in production code, because it will almost certainly prevent
 compiling your program with later versions of OCaml when they add new
-warnings.
+warnings or modify existing warnings.
 
 The default setting is
 .B \-warn\-error\ -a (all warnings are non-fatal).
 .TP
 .B \-warn\-help
 Show the description of all available warning numbers.
-.TP
 .TP
 .B \-where
 Print the location of the standard library, then exit.
@@ -620,6 +658,37 @@ Generate SPARC version 9 code.
 .P
 The default is to generate code for SPARC version 7, which runs on all
 SPARC processors.
+
+.SH OPTIONS FOR THE ARM ARCHITECTURE
+The ARM code generator supports the following additional options:
+.TP
+.B \-farch=armv4|armv5|armv5te|armv6|armv6t2|armv7
+Select the ARM target architecture
+.TP
+.B \-ffpu=soft|vfpv2|vfpv3\-d16|vfpv3
+Select the floating-point hardware
+.TP
+.B \-fPIC
+Generate position-independent machine code.
+.TP
+.B \-fno\-PIC
+Generate position-dependent machine code.  This is the default.
+.TP
+.B \-fthumb
+Enable Thumb/Thumb-2 code generation
+.TP
+.B \-fno\-thumb
+Disable Thumb/Thumb-2 code generation
+.P
+The default values for target architecture, floating-point hardware
+and thumb usage were selected at configure-time when building
+.B ocamlopt
+itself. This configuration can be inspected using
+.BR ocamlopt\ \-config .
+Target architecture depends on the "model" setting, while
+floating-point hardware and thumb support are determined from the ABI
+setting in "system" (
+.BR linux_eabi or linux_eabihf ).
 
 .SH SEE ALSO
 .BR ocamlc (1).

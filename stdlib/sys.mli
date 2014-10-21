@@ -11,7 +11,12 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(** System interface. *)
+(** System interface.
+
+  Every function in this module raises [Sys_error] with an
+  informative message when the underlying system call signal
+  an error.
+*)
 
 val argv : string array
 (** The command line arguments given to the process.
@@ -99,7 +104,7 @@ val big_endian : bool
     @since 4.00.0 *)
 
 val max_string_length : int
-(** Maximum length of a string. *)
+(** Maximum length of strings and byte sequences. *)
 
 val max_array_length : int
 (** Maximum length of a normal array.  The maximum length of a float

@@ -54,7 +54,7 @@ method makereg r =
 
 method private makeregs rv =
   let n = Array.length rv in
-  let newv = Array.create n Reg.dummy in
+  let newv = Array.make n Reg.dummy in
   for i = 0 to n-1 do newv.(i) <- self#makereg rv.(i) done;
   newv
 
@@ -88,7 +88,7 @@ method private reload i =
        already at the correct position (e.g. on stack for some arguments).
        However, something needs to be done for the function pointer in
        indirect calls. *)
-    Iend | Ireturn | Iop(Itailcall_imm _) | Iraise -> i
+    Iend | Ireturn | Iop(Itailcall_imm _) | Iraise _ -> i
   | Iop(Itailcall_ind) ->
       let newarg = self#makereg1 i.arg in
       insert_moves i.arg newarg

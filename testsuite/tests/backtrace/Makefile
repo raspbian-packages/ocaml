@@ -14,7 +14,8 @@ BASEDIR=../..
 EXECNAME=program$(EXE)
 
 ABCDFILES=backtrace.ml
-OTHERFILES=backtrace2.ml raw_backtrace.ml
+OTHERFILES=backtrace2.ml raw_backtrace.ml \
+           backtrace_deprecated.ml backtrace_slots.ml
 
 default:
 	$(MAKE) byte
@@ -62,7 +63,7 @@ native:
 	@for file in $(OTHERFILES); do \
 	  rm -f program program.exe; \
 	  $(OCAMLOPT) -g -o $(EXECNAME) $$file; \
-	  printf " ... testing '$$file' with ocamlc:"; \
+	  printf " ... testing '$$file' with ocamlopt:"; \
 	  F="`basename $$file .ml`"; \
 	  (OCAMLRUNPARAM=b=1 ./$(EXECNAME) $$arg || true) \
 	       >$$F.native.result 2>&1; \

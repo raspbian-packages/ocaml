@@ -4,13 +4,27 @@
         ^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
-# * * *             Characters 131-134:
+# * * *             Characters 140-141:
   module F (S : sig type #'a s end) = struct
-                ^^^
-Syntax error: 'end' expected, the highlighted 'sig' might be unmatched
+                         ^
+Error: Syntax error
 # * * * * *             Characters 296-374:
   ........['a] c x =
       object constraint 'a = 'b T.t val x' : 'b = x method x = x' end
+Error: In this definition, a type variable cannot be deduced
+       from the type parameters.
+#       Characters 83-128:
+  type 'x t = A of 'a constraint 'x = [< `X of 'a ] ;; (* fail *)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this definition, a type variable cannot be deduced
+       from the type parameters.
+#     Characters 36-37:
+    let A x = A x in
+        ^
+Error: Unbound constructor A
+# Characters 4-37:
+  type 'a t = A : 'a -> [< `X of 'a ] t;; (* fail *)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
 #     type (_, _) eq = Eq : ('a, 'a) eq
@@ -31,10 +45,10 @@ Error: In this definition, a type variable cannot be deduced
                   ^
 Error: Unbound module type S
 # * *         module M : sig type 'a t = 'a -> unit end
-#   Characters 11-14:
+#   Characters 20-21:
   module F(X:sig type #'a t end) =
-             ^^^
-Syntax error: 'end' expected, the highlighted 'sig' might be unmatched
+                      ^
+Error: Syntax error
 # * * * *       type 'a q = Q
 # Characters 5-36:
   type +'a t = 'b constraint 'a = 'b q;;

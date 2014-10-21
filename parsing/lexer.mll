@@ -22,7 +22,7 @@ type error =
   | Illegal_escape of string
   | Unterminated_comment of Location.t
   | Unterminated_string
-  | Unterminated_string_in_comment of Location.t
+  | Unterminated_string_in_comment of Location.t * Location.t
   | Keyword_as_label of string
   | Literal_overflow of string
 ;;
@@ -94,7 +94,7 @@ let keyword_table =
 
 (* To buffer string literals *)
 
-let initial_string_buffer = String.create 256
+let initial_string_buffer = Bytes.create 256
 let string_buff = ref initial_string_buffer
 let string_index = ref 0
 
@@ -103,22 +103,24 @@ let reset_string_buffer () =
   string_index := 0
 
 let store_string_char c =
-  if !string_index >= String.length (!string_buff) then begin
-    let new_buff = String.create (String.length (!string_buff) * 2) in
-      String.blit (!string_buff) 0 new_buff 0 (String.length (!string_buff));
-      string_buff := new_buff
+  if !string_index >= Bytes.length !string_buff then begin
+    let new_buff = Bytes.create (Bytes.length (!string_buff) * 2) in
+    Bytes.blit !string_buff 0 new_buff 0 (Bytes.length !string_buff);
+    string_buff := new_buff
   end;
-  String.unsafe_set (!string_buff) (!string_index) c;
+  Bytes.unsafe_set !string_buff !string_index c;
   incr string_index
 
-let store_lexeme lexbuf =
-  let s = Lexing.lexeme lexbuf in
+let store_string s =
   for i = 0 to String.length s - 1 do
     store_string_char s.[i];
   done
 
+let store_lexeme lexbuf =
+  store_string (Lexing.lexeme lexbuf)
+
 let get_stored_string () =
-  let s = String.sub (!string_buff) 0 (!string_index) in
+  let s = Bytes.sub_string !string_buff 0 !string_index in
   string_buff := initial_string_buffer;
   s
 
@@ -179,13 +181,14 @@ let cvt_nativeint_literal s =
 
 let remove_underscores s =
   let l = String.length s in
+  let b = Bytes.create l in
   let rec remove src dst =
     if src >= l then
-      if dst >= l then s else String.sub s 0 dst
+      if dst >= l then s else Bytes.sub_string b 0 dst
     else
       match s.[src] with
         '_' -> remove (src + 1) dst
-      |  c  -> s.[dst] <- c; remove (src + 1) (dst + 1)
+      |  c  -> Bytes.set b dst c; remove (src + 1) (dst + 1)
   in remove 0 0
 
 (* recover the name from a LABEL or OPTLABEL token *)
@@ -213,6 +216,8 @@ let update_loc lexbuf file line absolute chars =
   }
 ;;
 
+let preprocessor = ref None
+
 (* Warn about Latin-1 characters used in idents *)
 
 let warn_latin1 lexbuf =
@@ -233,18 +238,28 @@ let report_error ppf = function
       fprintf ppf "Comment not terminated"
   | Unterminated_string ->
       fprintf ppf "String literal not terminated"
-  | Unterminated_string_in_comment _ ->
-      fprintf ppf "This comment contains an unterminated string literal"
+  | Unterminated_string_in_comment (_, loc) ->
+      fprintf ppf "This comment contains an unterminated string literal@.\
+                   %aString literal begins here"
+              Location.print_error loc
   | Keyword_as_label kwd ->
       fprintf ppf "`%s' is a keyword, it cannot be used as label name" kwd
   | Literal_overflow ty ->
       fprintf ppf "Integer literal exceeds the range of representable \
                    integers of type %s" ty
-;;
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error (err, loc) ->
+          Some (Location.error_of_printer loc report_error err)
+      | _ ->
+          None
+    )
 
 }
 
-let newline = ('\010' | "\013\010" )
+let newline = ('\013'* '\010')
 let blank = [' ' '\009' '\012']
 let lowercase = ['a'-'z' '_']
 let uppercase = ['A'-'Z']
@@ -271,9 +286,19 @@ let float_literal =
   (['e' 'E'] ['+' '-']? ['0'-'9'] ['0'-'9' '_']*)?
 
 rule token = parse
+  | "\\" newline {
+      match !preprocessor with
+      | None ->
+        raise (Error(Illegal_character (Lexing.lexeme_char lexbuf 0),
+                     Location.curr lexbuf))
+      | Some _ ->
+        update_loc lexbuf None 1 false 0;
+        token lexbuf }
   | newline
       { update_loc lexbuf None 1 false 0;
-        token lexbuf
+        match !preprocessor with
+        | None -> token lexbuf
+        | Some _ -> EOL
       }
   | blank +
       { token lexbuf }
@@ -332,7 +357,18 @@ rule token = parse
         string lexbuf;
         is_in_string := false;
         lexbuf.lex_start_p <- string_start;
-        STRING (get_stored_string()) }
+        STRING (get_stored_string(), None) }
+  | "{" lowercase* "|"
+      { reset_string_buffer();
+        let delim = Lexing.lexeme lexbuf in
+        let delim = String.sub delim 1 (String.length delim - 2) in
+        is_in_string := true;
+        let string_start = lexbuf.lex_start_p in
+        string_start_loc := Location.curr lexbuf;
+        quoted_string delim lexbuf;
+        is_in_string := false;
+        lexbuf.lex_start_p <- string_start;
+        STRING (get_stored_string(), Some delim) }
   | "'" newline "'"
       { update_loc lexbuf None 1 false 1;
         CHAR (Lexing.lexeme_char lexbuf 1) }
@@ -419,11 +455,16 @@ rule token = parse
   | ">]" { GREATERRBRACKET }
   | "}"  { RBRACE }
   | ">}" { GREATERRBRACE }
+  | "[@" { LBRACKETAT }
+  | "[%" { LBRACKETPERCENT }
+  | "[%%" { LBRACKETPERCENTPERCENT }
+  | "[@@" { LBRACKETATAT }
+  | "[@@@" { LBRACKETATATAT }
   | "!"  { BANG }
-
   | "!=" { INFIXOP0 "!=" }
   | "+"  { PLUS }
   | "+." { PLUSDOT }
+  | "+=" { PLUSEQ }
   | "-"  { MINUS }
   | "-." { MINUSDOT }
 
@@ -439,6 +480,7 @@ rule token = parse
             { INFIXOP2(Lexing.lexeme lexbuf) }
   | "**" symbolchar *
             { INFIXOP4(Lexing.lexeme lexbuf) }
+  | '%'     { PERCENT }
   | ['*' '/' '%'] symbolchar *
             { INFIXOP3(Lexing.lexeme lexbuf) }
   | eof { EOF }
@@ -467,17 +509,41 @@ and comment = parse
         store_string_char '"';
         is_in_string := true;
         begin try string lexbuf
-        with Error (Unterminated_string, _) ->
+        with Error (Unterminated_string, str_start) ->
           match !comment_start_loc with
           | [] -> assert false
           | loc :: _ ->
             let start = List.hd (List.rev !comment_start_loc) in
             comment_start_loc := [];
-            raise (Error (Unterminated_string_in_comment start, loc))
+            raise (Error (Unterminated_string_in_comment (start, str_start),
+                          loc))
         end;
         is_in_string := false;
         store_string_char '"';
         comment lexbuf }
+  | "{" lowercase* "|"
+      {
+        let delim = Lexing.lexeme lexbuf in
+        let delim = String.sub delim 1 (String.length delim - 2) in
+        string_start_loc := Location.curr lexbuf;
+        store_lexeme lexbuf;
+        is_in_string := true;
+        begin try quoted_string delim lexbuf
+        with Error (Unterminated_string, str_start) ->
+          match !comment_start_loc with
+          | [] -> assert false
+          | loc :: _ ->
+            let start = List.hd (List.rev !comment_start_loc) in
+            comment_start_loc := [];
+            raise (Error (Unterminated_string_in_comment (start, str_start),
+                          loc))
+        end;
+        is_in_string := false;
+        store_string_char '|';
+        store_string delim;
+        store_string_char '}';
+        comment lexbuf }
+
   | "''"
       { store_lexeme lexbuf; comment lexbuf }
   | "'" newline "'"
@@ -554,6 +620,26 @@ and string = parse
       { store_string_char(Lexing.lexeme_char lexbuf 0);
         string lexbuf }
 
+and quoted_string delim = parse
+  | newline
+      { update_loc lexbuf None 1 false 0;
+        store_lexeme lexbuf;
+        quoted_string delim lexbuf
+      }
+  | eof
+      { is_in_string := false;
+        raise (Error (Unterminated_string, !string_start_loc)) }
+  | "|" lowercase* "}"
+      {
+        let edelim = Lexing.lexeme lexbuf in
+        let edelim = String.sub edelim 1 (String.length edelim - 2) in
+        if delim = edelim then ()
+        else (store_lexeme lexbuf; quoted_string delim lexbuf)
+      }
+  | _
+      { store_string_char(Lexing.lexeme_char lexbuf 0);
+        quoted_string delim lexbuf }
+
 and skip_sharp_bang = parse
   | "#!" [^ '\n']* '\n' [^ '\n']* "\n!#\n"
        { update_loc lexbuf None 3 false 0 }
@@ -562,7 +648,11 @@ and skip_sharp_bang = parse
   | "" { () }
 
 {
-  let token_with_comments = token
+
+  let token_with_comments lexbuf =
+    match !preprocessor with
+    | None -> token lexbuf
+    | Some (_init, preprocess) -> preprocess token lexbuf
 
   let last_comments = ref []
   let rec token lexbuf =
@@ -572,9 +662,16 @@ and skip_sharp_bang = parse
           token lexbuf
       | tok -> tok
   let comments () = List.rev !last_comments
+
   let init () =
     is_in_string := false;
     last_comments := [];
-    comment_start_loc := []
+    comment_start_loc := [];
+    match !preprocessor with
+    | None -> ()
+    | Some (init, _preprocess) -> init ()
+
+  let set_preprocessor init preprocess =
+    preprocessor := Some (init, preprocess)
 
 }

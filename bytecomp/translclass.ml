@@ -109,6 +109,15 @@ let create_object cl obj init =
                            [obj; Lvar obj'; Lvar cl]))))
   end
 
+let name_pattern default p =
+  match p.pat_desc with
+  | Tpat_var (id, _) -> id
+  | Tpat_alias(p, id, _) -> id
+  | _ -> Ident.create default
+
+let normalize_cl_path cl path =
+  Env.normalize_path (Some cl.cl_loc) cl.cl_env path
+
 let rec build_object_init cl_table obj params inh_init obj_init cl =
   match cl.cl_desc with
     Tcl_ident ( path, _, _) ->
@@ -118,7 +127,8 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
         match envs with None -> []
         | Some envs -> [Lprim(Pfield (List.length inh_init + 1), [Lvar envs])]
       in
-      ((envs, (obj_init, path)::inh_init),
+      ((envs, (obj_init, normalize_cl_path cl path)
+        ::inh_init),
        mkappl(Lvar obj_init, env @ [obj]))
   | Tcl_structure str ->
       create_object cl_table obj (fun obj ->
@@ -126,18 +136,18 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
           List.fold_right
             (fun field (inh_init, obj_init, has_init) ->
                match field.cf_desc with
-                 Tcf_inher (_, cl, _, _, _) ->
+                 Tcf_inherit (_, cl, _, _, _) ->
                    let (inh_init, obj_init') =
                      build_object_init cl_table (Lvar obj) [] inh_init
                        (fun _ -> lambda_unit) cl
                    in
                    (inh_init, lsequence obj_init' obj_init, true)
-               | Tcf_val (_, _, _, id, Tcfk_concrete exp, _) ->
+               | Tcf_val (_, _, id, Tcfk_concrete (_, exp), _) ->
                    (inh_init, lsequence (set_inst_var obj id exp) obj_init,
                     has_init)
-               | Tcf_meth _ | Tcf_val _ | Tcf_constr _ ->
+               | Tcf_method _ | Tcf_val _ | Tcf_constraint _ | Tcf_attribute _->
                    (inh_init, obj_init, has_init)
-               | Tcf_init _ ->
+               | Tcf_initializer _ ->
                    (inh_init, obj_init, true)
             )
             str.cstr_fields
@@ -156,7 +166,7 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
       in
       (inh_init,
        let build params rem =
-         let param = name_pattern "param" [pat, ()] in
+         let param = name_pattern "param" pat in
          Lfunction (Curried, param::params,
                     Matching.for_function
                       pat.pat_loc None (Lvar param) [pat, rem] partial)
@@ -247,7 +257,7 @@ let rec build_class_init cla cstr super inh_init cl_init msubst top cl =
     Tcl_ident ( path, _, _) ->
       begin match inh_init with
         (obj_init, path')::inh_init ->
-          let lpath = transl_path path in
+          let lpath = transl_path ~loc:cl.cl_loc cl.cl_env path in
           (inh_init,
            Llet (Strict, obj_init,
                  mkappl(Lprim(Pfield 1, [lpath]), Lvar cla ::
@@ -262,38 +272,42 @@ let rec build_class_init cla cstr super inh_init cl_init msubst top cl =
         List.fold_right
           (fun field (inh_init, cl_init, methods, values) ->
             match field.cf_desc with
-              Tcf_inher (_, cl, _, vals, meths) ->
+              Tcf_inherit (_, cl, _, vals, meths) ->
                 let cl_init = output_methods cla methods cl_init in
                 let inh_init, cl_init =
                   build_class_init cla false
                     (vals, meths_super cla str.cstr_meths meths)
                     inh_init cl_init msubst top cl in
                 (inh_init, cl_init, [], values)
-            | Tcf_val (name, _, _, id, exp, over) ->
-                let values = if over then values else (name, id) :: values in
+            | Tcf_val (name, _, id, _, over) ->
+                let values =
+                  if over then values else (name.txt, id) :: values
+                in
                 (inh_init, cl_init, methods, values)
-            | Tcf_meth (_, _, _, Tcfk_virtual _, _)
-            | Tcf_constr _
+            | Tcf_method (_, _, Tcfk_virtual _)
+            | Tcf_constraint _
               ->
                 (inh_init, cl_init, methods, values)
-            | Tcf_meth (name, _, _, Tcfk_concrete exp, over) ->
+            | Tcf_method (name, _, Tcfk_concrete (_, exp)) ->
                 let met_code = msubst true (transl_exp exp) in
                 let met_code =
                   if !Clflags.native_code && List.length met_code = 1 then
                     (* Force correct naming of method for profiles *)
-                    let met = Ident.create ("method_" ^ name) in
+                    let met = Ident.create ("method_" ^ name.txt) in
                     [Llet(Strict, met, List.hd met_code, Lvar met)]
                   else met_code
                 in
                 (inh_init, cl_init,
-                 Lvar (Meths.find name str.cstr_meths) :: met_code @ methods,
+                 Lvar(Meths.find name.txt str.cstr_meths) :: met_code @ methods,
                  values)
-            | Tcf_init exp ->
+            | Tcf_initializer exp ->
                 (inh_init,
                  Lsequence(mkappl (oo_prim "add_initializer",
                                    Lvar cla :: msubst false (transl_exp exp)),
                            cl_init),
-                 methods, values))
+                 methods, values)
+            | Tcf_attribute _ ->
+                (inh_init, cl_init, methods, values))
           str.cstr_fields
           (inh_init, cl_init, [], [])
       in
@@ -325,8 +339,8 @@ let rec build_class_init cla cstr super inh_init cl_init msubst top cl =
       let cl = ignore_cstrs cl in
       begin match cl.cl_desc, inh_init with
         Tcl_ident (path, _, _), (obj_init, path')::inh_init ->
-          assert (Path.same path path');
-          let lpath = transl_path path in
+          assert (Path.same (normalize_cl_path cl path) path');
+          let lpath = transl_normal_path path' in
           let inh = Ident.create "inh"
           and ofs = List.length vals + 1
           and valids, methids = super in
@@ -392,11 +406,11 @@ let rec transl_class_rebind obj_init cl vf =
         try if (Env.find_class path cl.cl_env).cty_new = None then raise Exit
         with Not_found -> raise Exit
       end;
-      (path, obj_init)
+      (normalize_cl_path cl path, obj_init)
   | Tcl_fun (_, pat, _, cl, partial) ->
       let path, obj_init = transl_class_rebind obj_init cl vf in
       let build params rem =
-        let param = name_pattern "param" [pat, ()] in
+        let param = name_pattern "param" pat in
         Lfunction (Curried, param::params,
                    Matching.for_function
                      pat.pat_loc None (Lvar param) [pat, rem] partial)
@@ -416,7 +430,7 @@ let rec transl_class_rebind obj_init cl vf =
       let path, obj_init = transl_class_rebind obj_init cl' vf in
       let rec check_constraint = function
           Cty_constr(path', _, _) when Path.same path path' -> ()
-        | Cty_fun (_, _, cty) -> check_constraint cty
+        | Cty_arrow (_, _, cty) -> check_constraint cty
         | _ -> raise Exit
       in
       check_constraint cl.cl_type;
@@ -440,7 +454,7 @@ let transl_class_rebind ids cl vf =
     if not (Translcore.check_recursive_lambda ids obj_init') then
       raise(Error(cl.cl_loc, Illegal_class_expr));
     let id = (obj_init' = lfunction [self] obj_init0) in
-    if id then transl_path path else
+    if id then transl_normal_path path else
 
     let cla = Ident.create "class"
     and new_init = Ident.create "new_init"
@@ -450,7 +464,7 @@ let transl_class_rebind ids cl vf =
     Llet(
     Strict, new_init, lfunction [obj_init] obj_init',
     Llet(
-    Alias, cla, transl_path path,
+    Alias, cla, transl_normal_path path,
     Lprim(Pmakeblock(0, Immutable),
           [mkappl(Lvar new_init, [lfield cla 0]);
            lfunction [table]
@@ -735,7 +749,7 @@ let transl_class ids cl_id pub_meths cl vflag =
     Lprim(Pmakeblock(0, Immutable),
           menv :: List.map (fun id -> Lvar id) !new_ids_init)
   and linh_envs =
-    List.map (fun (_, p) -> Lprim(Pfield 3, [transl_path p]))
+    List.map (fun (_, p) -> Lprim(Pfield 3, [transl_normal_path p]))
       (List.rev inh_init)
   in
   let make_envs lam =
@@ -752,7 +766,7 @@ let transl_class ids cl_id pub_meths cl vflag =
     List.filter
       (fun (_,path) -> List.mem (Path.head path) new_ids) inh_init in
   let inh_keys =
-    List.map (fun (_,p) -> Lprim(Pfield 1, [transl_path p])) inh_paths in
+    List.map (fun (_,p) -> Lprim(Pfield 1, [transl_normal_path p])) inh_paths in
   let lclass lam =
     Llet(Strict, class_init,
          Lfunction(Curried, [cla], def_ids cla cl_init), lam)
@@ -798,7 +812,7 @@ let transl_class ids cl_id pub_meths cl vflag =
 (*
     let cl_id = ci.ci_id_class in
 (* TODO: cl_id is used somewhere else as typesharp ? *)
-  let _arity = List.length (fst ci.ci_params) in
+  let _arity = List.length ci.ci_params in
   let pub_meths = m in
   let cl = ci.ci_expr in
   let vflag = vf in
@@ -820,3 +834,12 @@ let report_error ppf = function
   | Tags (lab1, lab2) ->
       fprintf ppf "Method labels `%s' and `%s' are incompatible.@ %s"
         lab1 lab2 "Change one of them."
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error (loc, err) ->
+        Some (Location.error_of_printer loc report_error err)
+      | _ ->
+        None
+    )
