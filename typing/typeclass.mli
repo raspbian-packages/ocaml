@@ -88,7 +88,7 @@ type error =
   | Unbound_class_type_2 of Longident.t
   | Abbrev_type_clash of type_expr * type_expr * type_expr
   | Constructor_type_mismatch of string * (type_expr * type_expr) list
-  | Virtual_class of bool * string list * string list
+  | Virtual_class of bool * bool * string list * string list
   | Parameter_arity_mismatch of Longident.t * int * int
   | Parameter_mismatch of (type_expr * type_expr) list
   | Bad_parameters of Ident.t * type_expr * type_expr
@@ -106,5 +106,6 @@ type error =
   | Duplicate of string * string
 
 exception Error of Location.t * Env.t * error
+exception Error_forward of Location.error
 
 val report_error : Env.t -> formatter -> error -> unit

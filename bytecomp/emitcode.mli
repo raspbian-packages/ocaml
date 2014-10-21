@@ -15,13 +15,14 @@
 open Cmo_format
 open Instruct
 
-val to_file: out_channel -> string -> instruction list -> unit
+val to_file: out_channel -> string -> string -> instruction list -> unit
         (* Arguments:
              channel on output file
              name of compilation unit implemented
+             path of cmo file being written
              list of instructions to emit *)
 val to_memory: instruction list -> instruction list ->
-                    string * int * (reloc_info * int) list
+                    bytes * int * (reloc_info * int) list
         (* Arguments:
              initialization code (terminated by STOP)
              function code
@@ -36,3 +37,5 @@ val to_packed_file:
              list of instructions to emit
            Result:
              relocation information (reversed) *)
+
+val reset: unit -> unit

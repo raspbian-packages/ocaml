@@ -20,6 +20,7 @@ open Parsetree
 open Types
 open Typedtree
 open Outcometree
+open Ast_helper
 
 type directive_fun =
    | Directive_none of (unit -> unit)
@@ -30,17 +31,18 @@ type directive_fun =
 
 (* The table of toplevel value bindings and its accessors *)
 
-let toplevel_value_bindings =
-  (Hashtbl.create 37 : (string, Obj.t) Hashtbl.t)
+module StringMap = Map.Make(String)
+
+let toplevel_value_bindings : Obj.t StringMap.t ref = ref StringMap.empty
 
 let getvalue name =
   try
-    Hashtbl.find toplevel_value_bindings name
+    StringMap.find name !toplevel_value_bindings
   with Not_found ->
     fatal_error (name ^ " unbound at toplevel")
 
 let setvalue name v =
-  Hashtbl.replace toplevel_value_bindings name v
+  toplevel_value_bindings := StringMap.add name v !toplevel_value_bindings
 
 (* Return the value referred to by a path *)
 
@@ -51,7 +53,7 @@ let rec eval_path = function
       else begin
         let name = Translmod.toplevel_name id in
         try
-          Hashtbl.find toplevel_value_bindings name
+          StringMap.find name !toplevel_value_bindings
         with Not_found ->
           raise (Symtable.Error(Symtable.Undefined_global name))
       end
@@ -60,12 +62,15 @@ let rec eval_path = function
   | Papply(p1, p2) ->
       fatal_error "Toploop.eval_path"
 
+let eval_path env path =
+  eval_path (Env.normalize_path (Some Location.none) env path)
+
 (* To print values *)
 
 module EvalPath = struct
   type valu = Obj.t
   exception Error
-  let eval_path p = try eval_path p with Symtable.Error _ -> raise Error
+  let eval_path env p = try eval_path env p with Symtable.Error _ -> raise Error
   let same_value v1 v2 = (v1 == v2)
 end
 
@@ -78,6 +83,7 @@ let print_out_value = Oprint.out_value
 let print_out_type = Oprint.out_type
 let print_out_class_type = Oprint.out_class_type
 let print_out_module_type = Oprint.out_module_type
+let print_out_type_extension = Oprint.out_type_extension
 let print_out_sig_item = Oprint.out_sig_item
 let print_out_signature = Oprint.out_signature
 let print_out_phrase = Oprint.out_phrase
@@ -113,11 +119,13 @@ let parse_mod_use_file name lb =
          (!parse_use_file lb))
   in
   [ Ptop_def
-      [ { pstr_desc =
-            Pstr_module ( Location.mknoloc modname ,
-                          { pmod_desc = Pmod_structure items;
-                            pmod_loc = Location.none } );
-          pstr_loc = Location.none } ] ]
+      [ Str.module_
+          (Mb.mk
+             (Location.mknoloc modname)
+             (Mod.structure items)
+          )
+       ]
+   ]
 
 (* Hooks for initialization *)
 
@@ -143,6 +151,7 @@ let load_lambda ppf lam =
   Symtable.patch_object code reloc;
   Symtable.check_global_initialized reloc;
   Symtable.update_global_table();
+  let initial_bindings = !toplevel_value_bindings in
   try
     may_trace := true;
     let retval = (Meta.reify_bytecode code code_size) () in
@@ -158,6 +167,7 @@ let load_lambda ppf lam =
       Meta.static_release_bytecode code code_size;
       Meta.static_free code;
     end;
+    toplevel_value_bindings := initial_bindings; (* PR#6211 *)
     Symtable.restore_state initial_symtable;
     Exception x
 
@@ -184,11 +194,11 @@ let rec pr_item env items =
   | Sig_type(id, decl, rs) :: rem ->
       let tree = Printtyp.tree_of_type_declaration id decl rs in
       Some (tree, None, rem)
-  | Sig_exception(id, decl) :: rem ->
-      let tree = Printtyp.tree_of_exception_declaration id decl in
+  | Sig_typext(id, ext, es) :: rem ->
+      let tree = Printtyp.tree_of_extension_constructor id ext es in
       Some (tree, None, rem)
-  | Sig_module(id, mty, rs) :: rem ->
-      let tree = Printtyp.tree_of_module id mty rs in
+  | Sig_module(id, md, rs) :: rem ->
+      let tree = Printtyp.tree_of_module id md.md_type rs in
       Some (tree, None, rem)
   | Sig_modtype(id, decl) :: rem ->
       let tree = Printtyp.tree_of_modtype_declaration id decl in
@@ -250,7 +260,7 @@ let execute_phrase print_outcome ppf phr =
               if print_outcome then
                 Printtyp.wrap_printing_env oldenv (fun () ->
                   match str.str_items with
-                  | [ { str_desc = Tstr_eval exp }] ->
+                  | [ { str_desc = Tstr_eval (exp, _attrs) }] ->
                       let outv = outval_of_value newenv v exp.exp_type in
                       let ty = Printtyp.tree_of_type_scheme exp.exp_type in
                       Ophr_eval (outv, ty)
@@ -274,19 +284,27 @@ let execute_phrase print_outcome ppf phr =
         toplevel_env := oldenv; raise x
       end
   | Ptop_dir(dir_name, dir_arg) ->
-      try
-        match (Hashtbl.find directive_table dir_name, dir_arg) with
-        | (Directive_none f, Pdir_none) -> f (); true
-        | (Directive_string f, Pdir_string s) -> f s; true
-        | (Directive_int f, Pdir_int n) -> f n; true
-        | (Directive_ident f, Pdir_ident lid) -> f lid; true
-        | (Directive_bool f, Pdir_bool b) -> f b; true
-        | (_, _) ->
-            fprintf ppf "Wrong type of argument for directive `%s'.@." dir_name;
-            false
-      with Not_found ->
-        fprintf ppf "Unknown directive `%s'.@." dir_name;
-        false
+      let d =
+        try Some (Hashtbl.find directive_table dir_name)
+        with Not_found -> None
+      in
+      begin match d with
+      | None ->
+          fprintf ppf "Unknown directive `%s'.@." dir_name;
+          false
+      | Some d ->
+          match d, dir_arg with
+          | Directive_none f, Pdir_none -> f (); true
+          | Directive_string f, Pdir_string s -> f s; true
+          | Directive_int f, Pdir_int n -> f n; true
+          | Directive_ident f, Pdir_ident lid -> f lid; true
+          | Directive_bool f, Pdir_bool b -> f b; true
+          | _ ->
+              fprintf ppf "Wrong type of argument for directive `%s'.@."
+                dir_name;
+              false
+      end
+
 
 (* Temporary assignment to a reference *)
 
@@ -305,11 +323,14 @@ let protect r newval body =
 
 let use_print_results = ref true
 
-let phrase ppf phr =
+let preprocess_phrase ppf phr =
   let phr =
     match phr with
     | Ptop_def str ->
-        Ptop_def (Pparse.apply_rewriters ast_impl_magic_number str)
+        let str =
+          Pparse.apply_rewriters_str ~restore:true ~tool_name:"ocaml" str
+        in
+        Ptop_def str
     | phr -> phr
   in
   if !Clflags.dump_parsetree then Printast.top_phrase ppf phr;
@@ -336,7 +357,7 @@ let use_file ppf wrap_mod name =
         try
           List.iter
             (fun ph ->
-              let ph = phrase ppf ph in
+              let ph = preprocess_phrase ppf ph in
               if not (execute_phrase !use_print_results ppf ph) then raise Exit)
             (if wrap_mod then
                parse_mod_use_file name lb
@@ -346,7 +367,7 @@ let use_file ppf wrap_mod name =
         with
         | Exit -> false
         | Sys.Break -> fprintf ppf "Interrupted.@."; false
-        | x -> Errors.report_error ppf x; false) in
+        | x -> Location.report_exception ppf x; false) in
     if must_close then close_in ic;
     success
   with Not_found -> fprintf ppf "Cannot find file %s.@." name; false
@@ -369,7 +390,7 @@ let read_input_default prompt buffer len =
     while true do
       if !i >= len then raise Exit;
       let c = input_char Pervasives.stdin in
-      buffer.[!i] <- c;
+      Bytes.set buffer !i c;
       incr i;
       if c = '\n' then raise Exit;
     done;
@@ -410,12 +431,17 @@ let _ =
   let crc_intfs = Symtable.init_toplevel() in
   Compmisc.init_path false;
   List.iter
-    (fun (name, crc) ->
-      Consistbl.set Env.crc_units name crc Sys.executable_name)
+    (fun (name, crco) ->
+      Env.add_import name;
+      match crco with
+        None -> ()
+      | Some crc->
+          Consistbl.set Env.crc_units name crc Sys.executable_name)
     crc_intfs
 
 let load_ocamlinit ppf =
-  match !Clflags.init_file with
+  if !Clflags.noinit then ()
+  else match !Clflags.init_file with
   | Some f -> if Sys.file_exists f then ignore (use_silently ppf f)
               else fprintf ppf "Init file not found: \"%s\".@." f
   | None ->
@@ -457,14 +483,14 @@ let loop ppf =
       Location.reset();
       first_line := true;
       let phr = try !parse_toplevel_phrase lb with Exit -> raise PPerror in
-      let phr = phrase ppf phr  in
+      let phr = preprocess_phrase ppf phr  in
       Env.reset_cache_toplevel ();
       ignore(execute_phrase true ppf phr)
     with
     | End_of_file -> exit 0
     | Sys.Break -> fprintf ppf "Interrupted.@."; Btype.backtrack snap
     | PPerror -> ()
-    | x -> Errors.report_error ppf x; Btype.backtrack snap
+    | x -> Location.report_exception ppf x; Btype.backtrack snap
   done
 
 (* Execute a script.  If [name] is "", read the script from stdin. *)

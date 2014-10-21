@@ -43,10 +43,10 @@ intnat caml_stat_minor_collections = 0,
        caml_stat_compactions = 0,
        caml_stat_heap_chunks = 0;
 
-extern uintnat caml_major_heap_increment;  /* bytes; see major_gc.c */
-extern uintnat caml_percent_free;          /*        see major_gc.c */
-extern uintnat caml_percent_max;           /*        see compact.c */
-extern uintnat caml_allocation_policy;     /*        see freelist.c */
+extern uintnat caml_major_heap_increment; /* percent or words; see major_gc.c */
+extern uintnat caml_percent_free;         /*        see major_gc.c */
+extern uintnat caml_percent_max;          /*        see compact.c */
+extern uintnat caml_allocation_policy;    /*        see freelist.c */
 
 #define Next(hp) ((hp) + Bhsize_hp (hp))
 
@@ -321,7 +321,7 @@ CAMLprim value caml_gc_get(value v)
 
   res = caml_alloc_tuple (7);
   Store_field (res, 0, Val_long (Wsize_bsize (caml_minor_heap_size)));  /* s */
-  Store_field (res, 1,Val_long(Wsize_bsize(caml_major_heap_increment)));/* i */
+  Store_field (res, 1, Val_long (caml_major_heap_increment));           /* i */
   Store_field (res, 2, Val_long (caml_percent_free));                   /* o */
   Store_field (res, 3, Val_long (caml_verb_gc));                        /* v */
   Store_field (res, 4, Val_long (caml_percent_max));                    /* O */
@@ -344,14 +344,6 @@ static uintnat norm_pfree (uintnat p)
 static uintnat norm_pmax (uintnat p)
 {
   return p;
-}
-
-static intnat norm_heapincr (uintnat i)
-{
-#define Psv (Wsize_bsize (Page_size))
-  i = ((i + Psv - 1) / Psv) * Psv;
-  if (i < Heap_chunk_min) i = Heap_chunk_min;
-  return i;
 }
 
 static intnat norm_minsize (intnat s)
@@ -386,11 +378,16 @@ CAMLprim value caml_gc_set(value v)
     caml_gc_message (0x20, "New max overhead: %d%%\n", caml_percent_max);
   }
 
-  newheapincr = Bsize_wsize (norm_heapincr (Long_val (Field (v, 1))));
+  newheapincr = Long_val (Field (v, 1));
   if (newheapincr != caml_major_heap_increment){
     caml_major_heap_increment = newheapincr;
-    caml_gc_message (0x20, "New heap increment size: %luk bytes\n",
-                     caml_major_heap_increment/1024);
+    if (newheapincr > 1000){
+      caml_gc_message (0x20, "New heap increment size: %luk words\n",
+                       caml_major_heap_increment/1024);
+    }else{
+      caml_gc_message (0x20, "New heap increment size: %lu%%\n",
+                       caml_major_heap_increment);
+    }
   }
   oldpolicy = caml_allocation_policy;
   caml_set_allocation_policy (Long_val (Field (v, 6)));
@@ -475,17 +472,26 @@ CAMLprim value caml_gc_compaction(value v)
   return Val_unit;
 }
 
+uintnat caml_normalize_heap_increment (uintnat i)
+{
+  if (i < Bsize_wsize (Heap_chunk_min)){
+    i = Bsize_wsize (Heap_chunk_min);
+  }
+  return ((i + Page_size - 1) >> Page_log) << Page_log;
+}
+
 void caml_init_gc (uintnat minor_size, uintnat major_size,
                    uintnat major_incr, uintnat percent_fr,
                    uintnat percent_m)
 {
-  uintnat major_heap_size = Bsize_wsize (norm_heapincr (major_size));
+  uintnat major_heap_size =
+    Bsize_wsize (caml_normalize_heap_increment (major_size));
 
   if (caml_page_table_initialize(Bsize_wsize(minor_size) + major_heap_size)){
     caml_fatal_error ("OCaml runtime error: cannot initialize page table\n");
   }
   caml_set_minor_heap_size (Bsize_wsize (norm_minsize (minor_size)));
-  caml_major_heap_increment = Bsize_wsize (norm_heapincr (major_incr));
+  caml_major_heap_increment = major_incr;
   caml_percent_free = norm_pfree (percent_fr);
   caml_percent_max = norm_pmax (percent_m);
   caml_init_major_heap (major_heap_size);
@@ -495,8 +501,13 @@ void caml_init_gc (uintnat minor_size, uintnat major_size,
                    major_heap_size / 1024);
   caml_gc_message (0x20, "Initial space overhead: %lu%%\n", caml_percent_free);
   caml_gc_message (0x20, "Initial max overhead: %lu%%\n", caml_percent_max);
-  caml_gc_message (0x20, "Initial heap increment: %luk bytes\n",
-                   caml_major_heap_increment / 1024);
+  if (caml_major_heap_increment > 1000){
+    caml_gc_message (0x20, "Initial heap increment: %luk words\n",
+                     caml_major_heap_increment / 1024);
+  }else{
+    caml_gc_message (0x20, "Initial heap increment: %lu%%\n",
+                     caml_major_heap_increment);
+  }
   caml_gc_message (0x20, "Initial allocation policy: %d\n",
                    caml_allocation_policy);
 }

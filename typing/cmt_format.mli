@@ -48,6 +48,8 @@ and binary_part =
 type cmt_infos = {
   cmt_modname : string;
   cmt_annots : binary_annots;
+  cmt_value_dependencies :
+    (Types.value_description * Types.value_description) list;
   cmt_comments : (string * Location.t) list;
   cmt_args : string array;
   cmt_sourcefile : string option;
@@ -55,7 +57,7 @@ type cmt_infos = {
   cmt_loadpath : string list;
   cmt_source_digest : string option;
   cmt_initial_env : Env.t;
-  cmt_imports : (string * Digest.t) list;
+  cmt_imports : (string * Digest.t option) list;
   cmt_interface_digest : Digest.t option;
   cmt_use_summaries : bool;
 }
@@ -94,9 +96,14 @@ val save_cmt :
 
 val read_magic_number : in_channel -> string
 
+val clear: unit -> unit
+
 val add_saved_type : binary_part -> unit
 val get_saved_types : unit -> binary_part list
 val set_saved_types : binary_part list -> unit
+
+val record_value_dependency:
+  Types.value_description -> Types.value_description -> unit
 
 
 (*

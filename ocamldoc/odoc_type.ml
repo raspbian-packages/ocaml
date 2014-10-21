@@ -22,7 +22,7 @@ type variant_constructor = {
     vc_name : string ;
     vc_args : Types.type_expr list ; (** arguments of the constructor *)
     vc_ret : Types.type_expr option ;
-    mutable vc_text : Odoc_types.text option ; (** optional user description *)
+    mutable vc_text : Odoc_types.info option ; (** optional user description *)
   }
 
 (** Description of a record type field. *)
@@ -30,7 +30,7 @@ type record_field = {
     rf_name : string ;
     rf_mutable : bool ; (** true if mutable *)
     rf_type : Types.type_expr ;
-    mutable rf_text : Odoc_types.text option ; (** optional user description *)
+    mutable rf_text : Odoc_types.info option ; (** optional user description *)
   }
 
 (** The various kinds of type. *)
@@ -40,6 +40,17 @@ type type_kind =
                    (** constructors *)
   | Type_record of record_field list
                    (** fields *)
+  | Type_open
+
+type object_field = {
+  of_name : string ;
+  of_type : Types.type_expr ;
+  mutable of_text : Odoc_types.info option ; (** optional user description *)
+}
+
+type type_manifest =
+  | Other of Types.type_expr (** Type manifest directly taken from Typedtre. *)
+  | Object_type of object_field list
 
 (** Representation of a type. *)
 type t_type = {
@@ -49,7 +60,7 @@ type t_type = {
                     (** type parameters: (type, covariant, contravariant) *)
     ty_kind : type_kind ;
     ty_private : private_flag;
-    ty_manifest : Types.type_expr option; (** type manifest *)
+    ty_manifest : type_manifest option;
     mutable ty_loc : Odoc_types.location ;
     mutable ty_code : string option;
   }

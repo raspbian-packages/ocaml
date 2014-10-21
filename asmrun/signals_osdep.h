@@ -92,6 +92,25 @@
   #define CONTEXT_YOUNG_PTR (context->uc_mcontext.arm_r8)
   #define CONTEXT_FAULTING_ADDRESS ((char *) context->uc_mcontext.fault_address)
 
+/****************** ARM64, Linux */
+
+#elif defined(TARGET_arm64) && defined(SYS_linux)
+
+  #include <sys/ucontext.h>
+
+  #define DECLARE_SIGNAL_HANDLER(name) \
+    static void name(int sig, siginfo_t * info, ucontext_t * context)
+
+  #define SET_SIGACT(sigact,name) \
+     sigact.sa_sigaction = (void (*)(int,siginfo_t *,void *)) (name); \
+     sigact.sa_flags = SA_SIGINFO
+
+  typedef unsigned long context_reg;
+  #define CONTEXT_PC (context->uc_mcontext.pc)
+  #define CONTEXT_EXCEPTION_POINTER (context->uc_mcontext.regs[26])
+  #define CONTEXT_YOUNG_PTR (context->uc_mcontext.regs[27])
+  #define CONTEXT_FAULTING_ADDRESS ((char *) context->uc_mcontext.fault_address)
+
 /****************** AMD64, Solaris x86 */
 
 #elif defined(TARGET_amd64) && defined (SYS_solaris)
@@ -111,6 +130,22 @@
   #define CONTEXT_YOUNG_PTR (context->uc_mcontext.gregs[REG_R15])
   #define CONTEXT_FAULTING_ADDRESS ((char *) info->si_addr)
 
+/****************** AMD64, OpenBSD */
+
+#elif defined(TARGET_amd64) && defined (SYS_openbsd)
+
+ #define DECLARE_SIGNAL_HANDLER(name) \
+ static void name(int sig, siginfo_t * info, struct sigcontext * context)
+
+ #define SET_SIGACT(sigact,name) \
+ sigact.sa_sigaction = (void (*)(int,siginfo_t *,void *)) (name); \
+ sigact.sa_flags = SA_SIGINFO
+
+ #define CONTEXT_PC (context->sc_rip)
+ #define CONTEXT_EXCEPTION_POINTER (context->sc_r14)
+ #define CONTEXT_YOUNG_PTR (context->sc_r15)
+ #define CONTEXT_FAULTING_ADDRESS ((char *) info->si_addr)
+
 /****************** I386, Linux */
 
 #elif defined(TARGET_i386) && defined(SYS_linux_elf)
@@ -123,6 +158,20 @@
      sigact.sa_flags = 0
 
   #define CONTEXT_FAULTING_ADDRESS ((char *) context.cr2)
+
+/****************** I386, BSD_ELF */
+
+#elif defined(TARGET_i386) && defined(SYS_bsd_elf)
+
+ #define DECLARE_SIGNAL_HANDLER(name) \
+ static void name(int sig, siginfo_t * info, struct sigcontext * context)
+
+ #define SET_SIGACT(sigact,name) \
+ sigact.sa_sigaction = (void (*)(int,siginfo_t *,void *)) (name); \
+ sigact.sa_flags = SA_SIGINFO
+
+ #define CONTEXT_PC (context->sc_eip)
+ #define CONTEXT_FAULTING_ADDRESS ((char *) info->si_addr)
 
 /****************** I386, BSD */
 
@@ -234,6 +283,7 @@
   #define CONTEXT_EXCEPTION_POINTER (context->regs->gpr[29])
   #define CONTEXT_YOUNG_LIMIT (context->regs->gpr[30])
   #define CONTEXT_YOUNG_PTR (context->regs->gpr[31])
+  #define CONTEXT_SP (context->regs->gpr[1])
 
 /****************** PowerPC, BSD */
 
@@ -247,9 +297,11 @@
      sigact.sa_flags = 0
 
   typedef unsigned long context_reg;
+  #define CONTEXT_PC (context->sc_frame.srr0)
   #define CONTEXT_EXCEPTION_POINTER (context->sc_frame.fixreg[29])
   #define CONTEXT_YOUNG_LIMIT (context->sc_frame.fixreg[30])
   #define CONTEXT_YOUNG_PTR (context->sc_frame.fixreg[31])
+  #define CONTEXT_SP (context->sc_frame.fixreg[1])
 
 /****************** SPARC, Solaris */
 
@@ -268,6 +320,7 @@
   #define CONTEXT_PC (context->uc_mcontext.gregs[REG_PC])
     /* Local register number N is saved on the stack N words
        after the stack pointer */
+  #define CONTEXT_SP (context->uc_mcontext.gregs[REG_SP])
   #define SPARC_L_REG(n) ((long *)(context->uc_mcontext.gregs[REG_SP]))[n]
   #define CONTEXT_EXCEPTION_POINTER (SPARC_L_REG(5))
   #define CONTEXT_YOUNG_LIMIT (SPARC_L_REG(7))

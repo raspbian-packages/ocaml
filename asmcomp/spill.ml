@@ -40,7 +40,7 @@ let spill_reg r =
   with Not_found ->
     let spill_r = Reg.create r.typ in
     spill_r.spill <- true;
-    if String.length r.name > 0 then spill_r.name <- "spilled-" ^ r.name;
+    if not (Reg.anonymous r) then spill_r.raw_name <- r.raw_name;
     spill_env := Reg.Map.add r spill_r !spill_env;
     spill_r
 
@@ -64,7 +64,7 @@ let add_superpressure_regs op live_regs res_regs spilled =
   let max_pressure = Proc.max_register_pressure op in
   let regs = Reg.add_set_array live_regs res_regs in
   (* Compute the pressure in each register class *)
-  let pressure = Array.create Proc.num_register_classes 0 in
+  let pressure = Array.make Proc.num_register_classes 0 in
   Reg.Set.iter
     (fun r ->
       if Reg.Set.mem r spilled then () else begin
@@ -233,12 +233,17 @@ let rec reload i before =
       (i, Reg.Set.empty)
   | Itrywith(body, handler) ->
       let (new_body, after_body) = reload body before in
-      let (new_handler, after_handler) = reload handler handler.live in
+      (* All registers live at the beginning of the handler are destroyed,
+         except the exception bucket *)
+      let before_handler =
+        Reg.Set.remove Proc.loc_exn_bucket
+                       (Reg.add_set_array handler.live handler.arg) in
+      let (new_handler, after_handler) = reload handler before_handler in
       let (new_next, finally) =
         reload i.next (Reg.Set.union after_body after_handler) in
       (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
        finally)
-  | Iraise ->
+  | Iraise _ ->
       (add_reloads (Reg.inter_set_array before i.arg) i, Reg.Set.empty)
 
 (* Second pass: add spill instructions based on what we've decided to reload.
@@ -379,15 +384,19 @@ let rec spill i finally =
       spill_at_raise := saved_spill_at_raise;
       (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
        before_body)
-  | Iraise ->
+  | Iraise _ ->
       (i, !spill_at_raise)
 
 (* Entry point *)
 
-let fundecl f =
+let reset () =
   spill_env := Reg.Map.empty;
   use_date := Reg.Map.empty;
-  current_date := 0;
+  current_date := 0
+
+let fundecl f =
+  reset ();
+
   let (body1, _) = reload f.fun_body Reg.Set.empty in
   let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in
   let new_body =

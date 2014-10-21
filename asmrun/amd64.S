@@ -32,7 +32,7 @@
         .align FUNCTION_ALIGN; \
         name:
 
-#elif defined(SYS_mingw64)
+#elif defined(SYS_mingw64) || defined(SYS_cygwin)
 
 #define LBL(x) .L##x
 #define G(r) r
@@ -90,7 +90,7 @@
 
 #endif
 
-#if defined(__PIC__) && !defined(SYS_mingw64)
+#if defined(__PIC__) && !defined(SYS_mingw64) && !defined(SYS_cygwin)
 
 /* Position-independent operations on global variables. */
 
@@ -98,6 +98,10 @@
 #define STORE_VAR(srcreg,dstlabel) \
         movq    GREL(dstlabel)(%rip), %r11 ; \
         movq    srcreg, (%r11)
+
+#define STORE_VAR32(srcreg,dstlabel) \
+        movq    GREL(dstlabel)(%rip), %r11 ; \
+        movl    srcreg, (%r11)
 
 /* Load global [srclabel] in register [dstreg].  Clobbers %r11. */
 #define LOAD_VAR(srclabel,dstreg) \
@@ -144,6 +148,9 @@
 #define STORE_VAR(srcreg,dstlabel) \
         movq    srcreg, G(dstlabel)(%rip)
 
+#define STORE_VAR32(srcreg,dstlabel) \
+        movl    srcreg, G(dstlabel)(%rip)
+
 #define LOAD_VAR(srclabel,dstreg) \
         movq    G(srclabel)(%rip), dstreg
 
@@ -172,7 +179,7 @@
 /* Save and restore all callee-save registers on stack.
    Keep the stack 16-aligned. */
 
-#if defined(SYS_mingw64)
+#if defined(SYS_mingw64) || defined(SYS_cygwin)
 
 /* Win64 API: callee-save regs are rbx, rbp, rsi, rdi, r12-r15, xmm6-xmm15 */
 
@@ -242,7 +249,7 @@
 
 #endif
 
-#ifdef SYS_mingw64
+#if defined(SYS_mingw64) || defined (SYS_cygwin)
    /* Calls from OCaml to C must reserve 32 bytes of extra stack space */
 #  define PREPARE_FOR_C_CALL subq $32, %rsp; CFI_ADJUST(32)
 #  define CLEANUP_AFTER_C_CALL addq $32, %rsp; CFI_ADJUST(-32)
@@ -264,7 +271,7 @@ FUNCTION(G(caml_call_gc))
         CFI_STARTPROC
         RECORD_STACK_FRAME(0)
 LBL(caml_call_gc):
-#ifndef SYS_mingw64
+#if !defined(SYS_mingw64) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
        if insufficient space remains */
         subq    $32768, %rsp
@@ -441,7 +448,7 @@ LBL(caml_c_call):
         STORE_VAR(%r12, caml_last_return_address)
         STORE_VAR(%rsp, caml_bottom_of_stack)
         subq    $8, %rsp; CFI_ADJUST(8) /* equivalent to pushq %r12 */
-#ifndef SYS_mingw64
+#if !defined(SYS_mingw64) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
        if insufficient space remains */
         subq    $32768, %rsp
@@ -510,7 +517,7 @@ CFI_ENDPROC
 
 /* Registers holding arguments of C functions. */
 
-#ifdef SYS_mingw64
+#if defined(SYS_mingw64) || defined(SYS_cygwin)
 #define C_ARG_1 %rcx
 #define C_ARG_2 %rdx
 #define C_ARG_3 %r8
@@ -532,6 +539,8 @@ CFI_STARTPROC
         popq    %r14
         ret
 LBL(110):
+        STORE_VAR32($0, caml_backtrace_pos)
+LBL(111):
         movq    %rax, %r12            /* Save exception bucket */
         movq    %rax, C_ARG_1         /* arg 1: exception bucket */
 #ifdef WITH_FRAME_POINTERS
@@ -553,18 +562,27 @@ LBL(110):
         ret
 CFI_ENDPROC
 
+FUNCTION(G(caml_reraise_exn))
+CFI_STARTPROC
+        TESTL_VAR($1, caml_backtrace_active)
+        jne     LBL(111)
+        movq    %r14, %rsp
+        popq    %r14
+        ret
+CFI_ENDPROC
+
 /* Raise an exception from C */
 
 FUNCTION(G(caml_raise_exception))
 CFI_STARTPROC
         TESTL_VAR($1, caml_backtrace_active)
-        jne     LBL(111)
+        jne     LBL(112)
         movq    C_ARG_1, %rax
         LOAD_VAR(caml_exception_pointer, %rsp)  /* Cut stack */
         popq    %r14                   /* Recover previous exception handler */
         LOAD_VAR(caml_young_ptr, %r15) /* Reload alloc ptr */
         ret
-LBL(111):
+LBL(112):
 #ifdef WITH_FRAME_POINTERS
         ENTER_FUNCTION          ;
 #endif
@@ -592,7 +610,7 @@ CFI_ENDPROC
    backtrace anyway. */
 
 FUNCTION(G(caml_stack_overflow))
-        LEA_VAR(caml_bucket_Stack_overflow, %rax)
+        LEA_VAR(caml_exn_Stack_overflow, %rax)
         movq    %r14, %rsp            /* cut the stack */
         popq    %r14                  /* recover previous exn handler */
         ret                           /* jump to handler's code */
@@ -656,7 +674,7 @@ G(caml_system__frametable):
 
 #if defined(SYS_macosx)
         .literal16
-#elif defined(SYS_mingw64)
+#elif defined(SYS_mingw64) || defined(SYS_cygwin)
         .section .rdata,"dr"
 #else
         .section    .rodata.cst8,"a",@progbits

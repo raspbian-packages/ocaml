@@ -23,9 +23,7 @@ open Typedtree
 
 let read_magic_number ic =
   let len_magic_number = String.length Config.cmt_magic_number in
-  let magic_number = String.create len_magic_number in
-  really_input ic magic_number 0 len_magic_number;
-  magic_number
+  really_input_string ic len_magic_number
 
 type binary_annots =
   | Packed of Types.signature * string list
@@ -47,6 +45,8 @@ and binary_part =
 type cmt_infos = {
   cmt_modname : string;
   cmt_annots : binary_annots;
+  cmt_value_dependencies :
+    (Types.value_description * Types.value_description) list;
   cmt_comments : (string * Location.t) list;
   cmt_args : string array;
   cmt_sourcefile : string option;
@@ -54,7 +54,7 @@ type cmt_infos = {
   cmt_loadpath : string list;
   cmt_source_digest : Digest.t option;
   cmt_initial_env : Env.t;
-  cmt_imports : (string * Digest.t) list;
+  cmt_imports : (string * Digest.t option) list;
   cmt_interface_digest : Digest.t option;
   cmt_use_summaries : bool;
 }
@@ -75,8 +75,8 @@ module ClearEnv  = TypedtreeMap.MakeMap (struct
   let leave_pattern p = { p with pat_env = keep_only_summary p.pat_env }
   let leave_expression e =
     let exp_extra = List.map (function
-        (Texp_open (ovf, path, lloc, env), loc) ->
-          (Texp_open (ovf, path, lloc, keep_only_summary env), loc)
+        (Texp_open (ovf, path, lloc, env), loc, attrs) ->
+          (Texp_open (ovf, path, lloc, keep_only_summary env), loc, attrs)
       | exp_extra -> exp_extra) e.exp_extra in
     { e with
       exp_env = keep_only_summary e.exp_env;
@@ -185,14 +185,23 @@ let read_cmi filename =
     | Some cmi, _ -> cmi
 
 let saved_types = ref []
+let value_deps = ref []
+
+let clear () =
+  saved_types := [];
+  value_deps := []
 
 let add_saved_type b = saved_types := b :: !saved_types
 let get_saved_types () = !saved_types
 let set_saved_types l = saved_types := l
 
+let record_value_dependency vd1 vd2 =
+  if vd1.Types.val_loc <> vd2.Types.val_loc then
+    value_deps := (vd1, vd2) :: !value_deps
+
 let save_cmt filename modname binary_annots sourcefile initial_env sg =
   if !Clflags.binary_annotations && not !Clflags.print_types then begin
-    let imports = Env.imported_units () in
+    let imports = Env.imports () in
     let oc = open_out_bin filename in
     let this_crc =
       match sg with
@@ -211,6 +220,7 @@ let save_cmt filename modname binary_annots sourcefile initial_env sg =
     let cmt = {
       cmt_modname = modname;
       cmt_annots = clear_env binary_annots;
+      cmt_value_dependencies = !value_deps;
       cmt_comments = Lexer.comments ();
       cmt_args = Sys.argv;
       cmt_sourcefile = sourcefile;
@@ -225,6 +235,5 @@ let save_cmt filename modname binary_annots sourcefile initial_env sg =
     } in
     output_cmt oc cmt;
     close_out oc;
-    set_saved_types [];
   end;
-  set_saved_types  []
+  clear ()

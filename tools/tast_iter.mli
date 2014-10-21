@@ -14,8 +14,10 @@ open Asttypes
 open Typedtree
 
 class iter: object
-  method binding: (pattern * expression) -> unit
-  method bindings: (rec_flag * (pattern * expression) list) -> unit
+  method binding: value_binding -> unit
+  method bindings: (rec_flag * value_binding list) -> unit
+  method case: case -> unit
+  method cases: case list -> unit
   method class_description: class_description -> unit
   method class_expr: class_expr -> unit
   method class_field: class_field -> unit
@@ -24,11 +26,10 @@ class iter: object
   method class_type: class_type -> unit
   method class_type_declaration: class_type_declaration -> unit
   method class_type_field: class_type_field -> unit
-  method core_field_type: core_field_type -> unit
   method core_type: core_type -> unit
-  method exception_declaration: exception_declaration -> unit
   method expression: expression -> unit
-  method modtype_declaration: modtype_declaration -> unit
+  method extension_constructor: extension_constructor -> unit
+  method module_binding: module_binding -> unit
   method module_expr: module_expr -> unit
   method module_type: module_type -> unit
   method package_type: package_type -> unit
@@ -39,6 +40,7 @@ class iter: object
   method structure: structure -> unit
   method structure_item: structure_item -> unit
   method type_declaration: type_declaration -> unit
+  method type_extension: type_extension -> unit
   method value_description: value_description -> unit
   method with_constraint: with_constraint -> unit
 end
@@ -51,8 +53,8 @@ end
 (** The following functions apply the provided iterator to each
     sub-component of the argument. *)
 
-val binding: iter -> (pattern * expression) -> unit
-val bindings: iter -> (rec_flag * (pattern * expression) list) -> unit
+val binding: iter -> value_binding -> unit
+val bindings: iter -> (rec_flag * value_binding list) -> unit
 val class_description: iter -> class_description -> unit
 val class_expr: iter -> class_expr -> unit
 val class_field: iter -> class_field -> unit
@@ -61,11 +63,10 @@ val class_structure: iter -> class_structure -> unit
 val class_type: iter -> class_type -> unit
 val class_type_declaration: iter -> class_type_declaration -> unit
 val class_type_field: iter -> class_type_field -> unit
-val core_field_type: iter -> core_field_type -> unit
 val core_type: iter -> core_type -> unit
-val exception_declaration: iter -> exception_declaration -> unit
 val expression: iter -> expression -> unit
-val modtype_declaration: iter -> modtype_declaration -> unit
+val extension_constructor: iter -> extension_constructor -> unit
+val module_binding: iter -> module_binding -> unit
 val module_expr: iter -> module_expr -> unit
 val module_type: iter -> module_type -> unit
 val package_type: iter -> package_type -> unit
@@ -76,5 +77,6 @@ val signature_item: iter -> signature_item -> unit
 val structure: iter -> structure -> unit
 val structure_item: iter -> structure_item -> unit
 val type_declaration: iter -> type_declaration -> unit
+val type_extension: iter -> type_extension -> unit
 val value_description: iter -> value_description -> unit
 val with_constraint: iter -> with_constraint -> unit

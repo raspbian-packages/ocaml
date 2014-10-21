@@ -17,8 +17,14 @@
 
 PREFIX=C:/ocamlmgw
 
-### Remove this to disable compiling camlp4
-CAMLP4=camlp4
+### Remove this to disable compiling ocamldebug
+WITH_DEBUGGER=ocamldebugger
+
+### Remove this to disable compiling ocamlbuild
+WITH_OCAMLBUILD=ocamlbuild
+
+### Remove this to disable compiling ocamldoc
+WITH_OCAMLDOC=ocamldoc
 
 ### Where to install the binaries
 BINDIR=$(PREFIX)/bin
@@ -40,14 +46,16 @@ MANDIR=$(PREFIX)/man
 TOOLCHAIN=mingw
 
 ### Toolchain prefix
-TOOLPREF=i686-w64-mingw32-
+TARGET=i686-w64-mingw32
+HOST=i686-w64-mingw32
+
+TOOLPREF=$(TARGET)-
 
 CCOMPTYPE=cc
 O=o
 A=a
 S=s
 SO=s.o
-DO=d.o
 EXE=.exe
 EXT_DLL=.dll
 EXT_OBJ=.$(O)
@@ -69,7 +77,6 @@ ASPP=$(TOOLPREF)gcc -c
 ASPPPROFFLAGS=
 PROFILING=noprof
 DYNLINKOPTS=
-DEBUGGER=ocamldebugger
 CC_PROFILE=
 SYSTHREAD_SUPPORT=true
 EXTRALIBS=
@@ -77,6 +84,8 @@ NATDYNLINK=true
 CMXS=cmxs
 RUNTIMED=noruntimed
 ASM_CFI_SUPPORTED=false
+UNIXLIB=win32unix
+GRAPHLIB=win32graph
 
 ########## Configuration for the bytecode compiler
 
@@ -100,8 +109,8 @@ NATIVECCLIBS=-lws2_32
 CPP=$(BYTECC) -E
 
 ### Flexlink
-FLEXLINK=flexlink -chain mingw -stack 16777216
-FLEXDIR=$(shell $(FLEXLINK) -where)
+FLEXLINK=flexlink -chain mingw -stack 16777216 -link -static-libgcc
+FLEXDIR:=$(shell $(FLEXLINK) -where)
 IFLEXDIR=-I"$(FLEXDIR)"
 MKDLL=$(FLEXLINK)
 MKEXE=$(FLEXLINK) -exe
@@ -147,18 +156,11 @@ PACKLD=$(TOOLPREF)ld -r $(NATIVECCLINKOPTS) -o # must have a space after '-o'
 
 ############# Configuration for the contributed libraries
 
-OTHERLIBRARIES=win32unix str num win32graph dynlink bigarray systhreads labltk
+OTHERLIBRARIES=win32unix str num win32graph dynlink bigarray systhreads
 
 ### Name of the target architecture for the "num" library
 BNG_ARCH=ia32
 BNG_ASM_LEVEL=1
-
-### Configuration for LablTk
-# Set TK_ROOT to the directory where you installed TCL/TK 8.5
-# There must be no spaces or special characters in $(TK_ROOT)
-TK_ROOT=c:/tcl
-TK_DEFS=-I$(TK_ROOT)/include
-TK_LINK=$(TK_ROOT)/bin/tk85.dll $(TK_ROOT)/bin/tcl85.dll -lws2_32
 
 ############# Aliases for common commands
 

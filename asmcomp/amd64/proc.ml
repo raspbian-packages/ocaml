@@ -24,7 +24,7 @@ let fp = Config.with_frame_pointers
 
 let win64 =
   match Config.system with
-  | "win64" | "mingw64" -> true
+  | "win64" | "mingw64" | "cygwin" -> true
   | _                   -> false
 
 (* Which asm conventions to use *)
@@ -117,12 +117,12 @@ let rotate_registers = false
 (* Representation of hard registers by pseudo-registers *)
 
 let hard_int_reg =
-  let v = Array.create 13 Reg.dummy in
+  let v = Array.make 13 Reg.dummy in
   for i = 0 to 12 do v.(i) <- Reg.at_location Int (Reg i) done;
   v
 
 let hard_float_reg =
-  let v = Array.create 16 Reg.dummy in
+  let v = Array.make 16 Reg.dummy in
   for i = 0 to 15 do v.(i) <- Reg.at_location Float (Reg (100 + i)) done;
   v
 
@@ -149,7 +149,7 @@ let word_addressed = false
 
 let calling_conventions first_int last_int first_float last_float make_stack
                         arg =
-  let loc = Array.create (Array.length arg) Reg.dummy in
+  let loc = Array.make (Array.length arg) Reg.dummy in
   let int = ref first_int in
   let float = ref first_float in
   let ofs = ref 0 in
@@ -210,7 +210,7 @@ let win64_float_external_arguments =
   [| 100 (*xmm0*); 101 (*xmm1*); 102 (*xmm2*); 103 (*xmm3*) |]
 
 let win64_loc_external_arguments arg =
-  let loc = Array.create (Array.length arg) Reg.dummy in
+  let loc = Array.make (Array.length arg) Reg.dummy in
   let reg = ref 0
   and ofs = ref 32 in
   for i = 0 to Array.length arg - 1 do
@@ -239,6 +239,10 @@ let loc_external_arguments =
 
 let loc_exn_bucket = rax
 
+(* Volatile registers: none *)
+
+let regs_are_volatile rs = false
+
 (* Registers destroyed by operations *)
 
 let destroyed_at_c_call =
@@ -257,9 +261,10 @@ let destroyed_at_c_call =
 let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) -> all_phys_regs
   | Iop(Iextcall(_, false)) -> destroyed_at_c_call
-  | Iop(Iintop(Idiv | Imod)) -> [| rax; rdx |]
-  | Iop(Istore(Single, _)) -> [| rxmm15 |]
-  | Iop(Ialloc _ | Iintop(Icomp _) | Iintop_imm((Idiv|Imod|Icomp _), _))
+  | Iop(Iintop(Idiv | Imod)) | Iop(Iintop_imm((Idiv | Imod), _))
+        -> [| rax; rdx |]
+  | Iop(Istore(Single, _, _)) -> [| rxmm15 |]
+  | Iop(Ialloc _ | Iintop(Imulh | Icomp _) | Iintop_imm((Icomp _), _))
         -> [| rax |]
   | Iswitch(_, _) -> [| rax; rdx |]
   | _ ->
@@ -285,13 +290,24 @@ let max_register_pressure = function
         if fp then [| 7; 10 |]  else [| 8; 10 |]
         else
         if fp then [| 3; 0 |] else  [| 4; 0 |]
-  | Iintop(Idiv | Imod) ->
+  | Iintop(Idiv | Imod) | Iintop_imm((Idiv | Imod), _) ->
     if fp then [| 10; 16 |] else [| 11; 16 |]
-  | Ialloc _ | Iintop(Icomp _) | Iintop_imm((Idiv|Imod|Icomp _), _) ->
+  | Ialloc _ | Iintop(Icomp _) | Iintop_imm((Icomp _), _) ->
     if fp then [| 11; 16 |] else [| 12; 16 |]
-  | Istore(Single, _) ->
+  | Istore(Single, _, _) ->
     if fp then [| 12; 15 |] else [| 13; 15 |]
   | _ -> if fp then [| 12; 16 |] else [| 13; 16 |]
+
+(* Pure operations (without any side effect besides updating their result
+   registers). *)
+
+let op_is_pure = function
+  | Icall_ind | Icall_imm _ | Itailcall_ind | Itailcall_imm _
+  | Iextcall _ | Istackoffset _ | Istore _ | Ialloc _
+  | Iintop(Icheckbound) | Iintop_imm(Icheckbound, _) -> false
+  | Ispecific(Ilea _) -> true
+  | Ispecific _ -> false
+  | _ -> true
 
 (* Layout of the stack frame *)
 

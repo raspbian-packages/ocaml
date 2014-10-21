@@ -1,8 +1,10 @@
+tests/typing-extensions
 tests/typing-fstclassmod
 tests/typing-gadts
 tests/typing-implicit_unpack
 tests/typing-labels
 tests/typing-misc
+tests/typing-misc-bugs
 tests/typing-modules
 tests/typing-modules-bugs
 tests/typing-objects

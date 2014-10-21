@@ -21,11 +21,19 @@ type compile_time_constant =
   | Ostype_win32
   | Ostype_cygwin
 
+type loc_kind =
+  | Loc_FILE
+  | Loc_LINE
+  | Loc_MODULE
+  | Loc_LOC
+  | Loc_POS
+
 type primitive =
     Pidentity
   | Pignore
   | Prevapply of Location.t
   | Pdirapply of Location.t
+  | Ploc of loc_kind
     (* Globals *)
   | Pgetglobal of Ident.t
   | Psetglobal of Ident.t
@@ -41,7 +49,7 @@ type primitive =
   (* External call *)
   | Pccall of Primitive.description
   (* Exceptions *)
-  | Praise
+  | Praise of raise_kind
   (* Boolean operations *)
   | Psequand | Psequor | Pnot
   (* Integer operations *)
@@ -113,6 +121,8 @@ type primitive =
   (* byte swap *)
   | Pbswap16
   | Pbbswap of boxed_integer
+  (* Integer to external pointer *)
+  | Pint_as_pointer
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge
@@ -136,6 +146,11 @@ and bigarray_layout =
     Pbigarray_unknown_layout
   | Pbigarray_c_layout
   | Pbigarray_fortran_layout
+
+and raise_kind =
+  | Raise_regular
+  | Raise_reraise
+  | Raise_notrace
 
 type structured_constant =
     Const_base of constant
@@ -170,6 +185,9 @@ type lambda =
   | Lletrec of (Ident.t * lambda) list * lambda
   | Lprim of primitive * lambda list
   | Lswitch of lambda * lambda_switch
+(* switch on strings, clauses are sorted by string order,
+   strings are pairwise distinct *)
+  | Lstringswitch of lambda * (string * lambda) list * lambda option
   | Lstaticraise of int * lambda list
   | Lstaticcatch of lambda * (int * Ident.t list) * lambda
   | Ltrywith of lambda * Ident.t * lambda
@@ -199,10 +217,12 @@ and lambda_event_kind =
   | Lev_after of Types.type_expr
   | Lev_function
 
-val same: lambda -> lambda -> bool
+(* Sharing key *)
+val make_key: lambda -> lambda option
+
 val const_unit: structured_constant
 val lambda_unit: lambda
-val name_lambda: lambda -> (Ident.t -> lambda) -> lambda
+val name_lambda: let_kind -> lambda -> (Ident.t -> lambda) -> lambda
 val name_lambda_list: lambda list -> (lambda list -> lambda) -> lambda
 
 val iter: (lambda -> unit) -> lambda -> unit
@@ -210,7 +230,8 @@ module IdentSet: Set.S with type elt = Ident.t
 val free_variables: lambda -> IdentSet.t
 val free_methods: lambda -> IdentSet.t
 
-val transl_path: Path.t -> lambda
+val transl_normal_path: Path.t -> lambda   (* Path.t is already normal *)
+val transl_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
 val make_sequence: ('a -> lambda) -> 'a list -> lambda
 
 val subst_lambda: lambda Ident.tbl -> lambda -> lambda
@@ -225,10 +246,19 @@ val negate_comparison : comparison -> comparison
 
 (* Get a new static failure ident *)
 val next_raise_count : unit -> int
-
+val next_negative_raise_count : unit -> int
+  (* Negative raise counts are used to compile 'match ... with
+     exception x -> ...'.  This disabled some simplifications
+     performed by the Simplif module that assume that static raises
+     are in tail position in their handler. *)
 
 val staticfail : lambda (* Anticipated static failure *)
 
 (* Check anticipated failure, substitute its final value *)
 val is_guarded: lambda -> bool
 val patch_guarded : lambda -> lambda -> lambda
+
+val raise_kind: raise_kind -> string
+val lam_of_loc : loc_kind -> Location.t -> lambda
+
+val reset: unit -> unit

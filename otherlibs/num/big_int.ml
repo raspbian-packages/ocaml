@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Int_misc
 open Nat
 
@@ -419,19 +417,30 @@ let string_of_big_int bi =
   else string_of_nat bi.abs_value
 
 
-let sys_big_int_of_string_aux s ofs len sgn =
+let sys_big_int_of_string_aux s ofs len sgn base =
   if len < 1 then failwith "sys_big_int_of_string";
-  let n = sys_nat_of_string 10 s ofs len in
+  let n = sys_nat_of_string base s ofs len in
   if is_zero_nat n 0 (length_nat n) then zero_big_int
   else {sign = sgn; abs_value = n}
+;;
+
+let sys_big_int_of_string_base s ofs len sgn =
+  if len < 1 then failwith "sys_big_int_of_string";
+  if len < 2 then sys_big_int_of_string_aux s ofs len sgn 10
+  else
+    match (s.[ofs], s.[ofs+1]) with
+    | ('0', 'x') | ('0', 'X') -> sys_big_int_of_string_aux s (ofs+2) (len-2) sgn 16
+    | ('0', 'o') | ('0', 'O') -> sys_big_int_of_string_aux s (ofs+2) (len-2) sgn 8
+    | ('0', 'b') | ('0', 'B') -> sys_big_int_of_string_aux s (ofs+2) (len-2) sgn 2
+    | _ -> sys_big_int_of_string_aux s ofs len sgn 10
 ;;
 
 let sys_big_int_of_string s ofs len =
   if len < 1 then failwith "sys_big_int_of_string";
   match s.[ofs] with
-  | '-' -> sys_big_int_of_string_aux s (ofs+1) (len-1) (-1)
-  | '+' -> sys_big_int_of_string_aux s (ofs+1) (len-1) 1
-  | _ -> sys_big_int_of_string_aux s ofs len 1
+  | '-' -> sys_big_int_of_string_base s (ofs+1) (len-1) (-1)
+  | '+' -> sys_big_int_of_string_base s (ofs+1) (len-1) 1
+  | _ -> sys_big_int_of_string_base s ofs len 1
 ;;
 
 let big_int_of_string s =
@@ -616,15 +625,15 @@ let square_big_int bi =
    else s <- the round number and the result_int is false *)
 let round_futur_last_digit s off_set length =
  let l = pred (length + off_set) in
-  if Char.code(String.get s l) >= Char.code '5'
+  if Char.code(Bytes.get s l) >= Char.code '5'
     then
      let rec round_rec l =
        if l < off_set then true else begin
-         let current_char = String.get s l in
+         let current_char = Bytes.get s l in
          if current_char = '9' then
-           (String.set s l '0'; round_rec (pred l))
+           (Bytes.set s l '0'; round_rec (pred l))
          else
-           (String.set s l (Char.chr (succ (Char.code current_char)));
+           (Bytes.set s l (Char.chr (succ (Char.code current_char)));
             false)
        end
      in round_rec (pred l)
@@ -643,17 +652,19 @@ let approx_big_int prec bi =
                                       (big_int_of_string "963295986"))
                         (big_int_of_string "100000000")))) in
   let s =
-    string_of_big_int (div_big_int bi (power_int_positive_int 10 n)) in
+    Bytes.unsafe_of_string
+      (string_of_big_int (div_big_int bi (power_int_positive_int 10 n)))
+  in
   let (sign, off, len) =
-    if String.get s 0 = '-'
+    if Bytes.get s 0 = '-'
        then ("-", 1, succ prec)
        else ("", 0, prec) in
   if (round_futur_last_digit s off (succ prec))
        then (sign^"1."^(String.make prec '0')^"e"^
-             (string_of_int (n + 1 - off + String.length s)))
-       else (sign^(String.sub s off 1)^"."^
-             (String.sub s (succ off) (pred prec))
-             ^"e"^(string_of_int (n - succ off + String.length s)))
+             (string_of_int (n + 1 - off + Bytes.length s)))
+       else (sign^(Bytes.sub_string s off 1)^"."^
+             (Bytes.sub_string s (succ off) (pred prec))
+             ^"e"^(string_of_int (n - succ off + Bytes.length s)))
 
 (* Logical operations *)
 

@@ -15,6 +15,7 @@ open Odoc_info
 open Parameter
 open Value
 open Type
+open Extension
 open Exception
 open Class
 open Module
@@ -29,6 +30,8 @@ let new_buf () = Buffer.create 1024
 let bp = Printf.bprintf
 let bs = Buffer.add_string
 
+let linebreak = "\n.sp\n";;
+
 (** A class used to get a [text] for info structures. *)
 class virtual info =
   object (self)
@@ -40,170 +43,193 @@ class virtual info =
     (** Return man code for a [text]. *)
     method virtual man_of_text : Buffer.t -> Odoc_info.text -> unit
 
+    method str_man_of_text t =
+      let b = Buffer.create 256 in
+      self#man_of_text b t ;
+      Buffer.contents b
+
     (** Print groff string for an author list. *)
-    method man_of_author_list b l =
+    method str_man_of_author_list l =
       match l with
-        [] -> ()
+        [] -> ""
       | _ ->
+          let b = Buffer.create 256 in
           bs b ".B \"";
           bs b Odoc_messages.authors;
           bs b "\"\n:\n";
           bs b (String.concat ", " l);
-          bs b "\n.sp\n"
+          bs b "\n";
+          (*bs b "\n.sp\n"*)
+          Buffer.contents b
 
     (** Print groff string for the given optional version information.*)
-    method man_of_version_opt b v_opt =
+    method str_man_of_version_opt v_opt =
       match v_opt with
-        None -> ()
+        None -> ""
       | Some v ->
+          let b = Buffer.create 256 in
           bs b ".B \"";
           bs b Odoc_messages.version;
           bs b "\"\n:\n";
           bs b v;
-          bs b "\n.sp\n"
+          bs b "\n";
+          (*".sp\n"*)
+          Buffer.contents b
 
     (** Printf groff string for the \@before information. *)
-    method man_of_before b = function
-      [] -> ()
+    method str_man_of_before = function
+      [] -> ""
     | l ->
-        List.iter
-          (fun (v, text) ->
+        let b = Buffer.create 256 in
+        let rec iter = function
+          [] -> ()
+        | (v, text) :: q ->
              bp b ".B \"%s" Odoc_messages.before;
              bs b v;
              bs b "\"\n";
              self#man_of_text b text;
              bs b "\n";
-             bs b "\n.sp\n"
-          )
-          l
-
+             bs b "\n";
+             match q with
+               [] -> ()
+             | _ -> bs b linebreak ; iter q
+        in
+        iter l;
+        Buffer.contents b
 
     (** Print groff string for the given optional since information.*)
-    method man_of_since_opt b s_opt =
+    method str_man_of_since_opt s_opt =
       match s_opt with
-        None -> ()
+        None -> ""
       | Some s ->
+          let b = Buffer.create 256 in
           bs b ".B \"";
           bs b Odoc_messages.since;
           bs b "\"\n";
           bs b s;
-          bs b "\n.sp\n"
+          bs b "\n";(*".sp\n"*)
+          Buffer.contents b
 
     (** Print groff string for the given list of raised exceptions.*)
-    method man_of_raised_exceptions b l =
+    method str_man_of_raised_exceptions l =
       match l with
-        [] -> ()
-      | (s, t) :: [] ->
-          bs b ".B \"";
-          bs b Odoc_messages.raises;
-          bs b (" "^s^"\"\n");
-          self#man_of_text b t;
-          bs b "\n.sp\n"
+        [] -> ""
       | _ ->
-          bs b ".B \"";
-          bs b Odoc_messages.raises;
-          bs b "\"\n";
-          List.iter
-            (fun (ex, desc) ->
-              bs b ".sp\n.B \"";
-              bs b ex;
-              bs b "\"\n";
-              self#man_of_text b desc;
-              bs b "\n"
-            )
-            l;
-          bs b "\n.sp\n"
+          let b = Buffer.create 256 in
+          let rec iter = function
+            [] -> ()
+          | (s, t) :: q ->
+              bs b ".B \"";
+              bs b Odoc_messages.raises;
+              bs b (" "^s^"\"\n");
+              self#man_of_text b t;
+              bs b "\n";
+              match q with
+                [] -> ()
+              | _ -> bs b linebreak; iter q
+          in
+          iter l;
+          Buffer.contents b
 
     (** Print groff string for the given "see also" reference. *)
-    method man_of_see b (see_ref, t)  =
+    method str_man_of_see (see_ref, t)  =
       let t_ref =
         match see_ref with
           Odoc_info.See_url s -> [ Odoc_info.Link (s, t) ]
         | Odoc_info.See_file s -> (Odoc_info.Code s) :: (Odoc_info.Raw " ") :: t
         | Odoc_info.See_doc s -> (Odoc_info.Italic [Odoc_info.Raw s]) :: (Odoc_info.Raw " ") :: t
       in
-      self#man_of_text b t_ref
+      self#str_man_of_text t_ref
 
     (** Print groff string for the given list of "see also" references.*)
-    method man_of_sees b l =
+    method str_man_of_sees l =
       match l with
-        [] -> ()
-      | see :: [] ->
-          bs b ".B \"";
-          bs b Odoc_messages.see_also;
-          bs b "\"\n";
-          self#man_of_see b see;
-          bs b "\n.sp\n"
+        [] -> ""
       | _ ->
-          bs b ".B \"";
-          bs b Odoc_messages.see_also;
-          bs b "\"\n";
-          List.iter
-            (fun see ->
-              bs b ".sp\n";
-              self#man_of_see b see;
-              bs b "\n"
-            )
-            l;
-          bs b "\n.sp\n"
+          let b = Buffer.create 256 in
+          let rec iter = function
+            [] -> ()
+          | see :: q ->
+              bs b ".B \"";
+              bs b Odoc_messages.see_also;
+              bs b "\"\n";
+              bs b (self#str_man_of_see see);
+              bs b "\n";
+              match q with
+                [] -> ()
+              | _ -> bs b linebreak; iter q
+          in
+          iter l;
+          Buffer.contents b
 
     (** Print groff string for the given optional return information.*)
-    method man_of_return_opt b return_opt =
+    method str_man_of_return_opt return_opt =
       match return_opt with
-        None -> ()
+        None -> ""
       | Some s ->
+          let b = Buffer.create 256 in
           bs b ".B ";
           bs b Odoc_messages.returns;
           bs b "\n";
           self#man_of_text b s;
-          bs b "\n.sp\n"
+          bs b "\n";
+          Buffer.contents b
 
     (** Print man code for the given list of custom tagged texts. *)
-    method man_of_custom b l =
-      let buf = Buffer.create 50 in
-      List.iter
-        (fun (tag, text) ->
-          try
-            let f = List.assoc tag tag_functions in
-            Buffer.add_string buf (f text)
+    method str_man_of_custom l =
+      List.fold_left
+        (fun acc (tag, text) ->
+           try
+             let f = List.assoc tag tag_functions in
+             let buf = Buffer.create 50 in
+             Buffer.add_string buf (f text);
+             (Buffer.contents buf) :: acc
           with
             Not_found ->
-              Odoc_info.warning (Odoc_messages.tag_not_handled tag)
+              Odoc_info.warning (Odoc_messages.tag_not_handled tag);
+              acc
         )
-        l
+        [] l
 
     (** Print the groff string to display an optional info structure. *)
-    method man_of_info b info_opt =
+    method man_of_info ?(margin=0) b info_opt =
         match info_opt with
         None -> ()
       | Some info ->
           let module M = Odoc_info in
-          (
+          let l =
+            (
            match info.M.i_deprecated with
-             None -> ()
+             None -> []
            | Some d ->
+               let b = Buffer.create 256 in
                bs b ".B \"";
                bs b Odoc_messages.deprecated;
                bs b "\"\n";
                self#man_of_text b d;
-               bs b "\n.sp\n"
-          );
-          (
-           match info.M.i_desc with
-             None -> ()
-           | Some d when d = [Odoc_info.Raw ""] -> ()
-           | Some d ->
-               self#man_of_text b d;
-               bs b "\n.sp\n"
-          );
-          self#man_of_author_list b info.M.i_authors;
-          self#man_of_version_opt b info.M.i_version;
-          self#man_of_before b info.M.i_before;
-          self#man_of_since_opt b info.M.i_since;
-          self#man_of_raised_exceptions b info.M.i_raised_exceptions;
-          self#man_of_return_opt b info.M.i_return_value;
-          self#man_of_sees b info.M.i_sees;
-          self#man_of_custom b info.M.i_custom
+               bs b "\n";
+               [ Buffer.contents b ]
+            ) @
+              (
+               match info.M.i_desc with
+                 None -> []
+               | Some d when d = [Odoc_info.Raw ""] -> []
+               | Some d ->
+                   [ (self#str_man_of_text d)^"\n" ]
+              ) @
+              [
+                self#str_man_of_author_list info.M.i_authors;
+                self#str_man_of_version_opt info.M.i_version;
+                self#str_man_of_before info.M.i_before;
+                self#str_man_of_since_opt info.M.i_since;
+                self#str_man_of_raised_exceptions info.M.i_raised_exceptions;
+                self#str_man_of_return_opt info.M.i_return_value;
+                self#str_man_of_sees info.M.i_sees;
+              ] @
+                (self#str_man_of_custom info.M.i_custom)
+          in
+          let l = List.filter ((<>) "") l in
+          Buffer.add_string b (String.concat "\n.sp\n" l)
   end
 
 module Generator =
@@ -256,8 +282,8 @@ class man =
       Str.global_replace (Str.regexp "[ ]*\n[ ]*") " " s
 
     (** Print the groff string for a text element. *)
-    method man_of_text_element b te =
-      match te with
+    method man_of_text_element b txt =
+      match txt with
       | Odoc_info.Raw s -> bs b (self#escape s)
       | Odoc_info.Code s ->
           bs b "\n.B ";
@@ -396,6 +422,74 @@ class man =
       self#man_of_info b v.val_info;
       bs b "\n.sp\n"
 
+    (** Print groff string code for a type extension. *)
+    method man_of_type_extension b m_name te =
+      Odoc_info.reset_type_names () ;
+      bs b ".I type ";
+      (
+        match te.te_type_parameters with
+            [] -> ()
+          | l ->
+              let s = Odoc_str.string_of_type_extension_param_list te in
+              let s2 = Str.global_replace (Str.regexp "\n") "\n.B " s in
+                bs b "\n.B ";
+                bs b (self#relative_idents m_name s2);
+                bs b "\n";
+                bs b ".I "
+      );
+      bs b (self#relative_idents m_name te.te_type_name);
+      bs b " \n";
+      bs b "+=";
+      if te.te_private = Asttypes.Private then bs b " private";
+      bs b "\n ";
+      List.iter
+        (fun x ->
+           let father = Name.father x.xt_name in
+           bs b ("| "^(Name.simple x.xt_name));
+           (
+             match x.xt_args, x.xt_ret with
+               | [], None -> bs b "\n"
+               | l, None ->
+                   bs b "\n.B of ";
+                   self#man_of_type_expr_list ~par: false b father " * " l;
+               | [], Some r ->
+                   bs b "\n.B : ";
+                   self#man_of_type_expr b father r;
+               | l, Some r ->
+                   bs b "\n.B : ";
+                   self#man_of_type_expr_list ~par: false b father " * " l;
+                   bs b ".B -> ";
+                   self#man_of_type_expr b father r;
+           );
+           (
+             match x.xt_alias with
+                 None -> ()
+               | Some xa ->
+                   bs b ".B = ";
+                   bs b
+                     (
+                       match xa.xa_xt with
+                           None -> xa.xa_name
+                         | Some x -> x.xt_name
+                     );
+                   bs b "\n"
+           );
+           (
+             match x.xt_text with
+                 None ->
+                   bs b " "
+               | Some t ->
+                   bs b ".I \"  \"\n";
+                   bs b "(* ";
+                   self#man_of_info b (Some t);
+                   bs b " *)\n "
+           )
+        )
+        te.te_constructors;
+      bs b "\n.sp\n";
+      self#man_of_info b te.te_info;
+      bs b "\n.sp\n"
+
     (** Print groff string code for an exception. *)
     method man_of_exception b e =
       Odoc_info.reset_type_names () ;
@@ -403,13 +497,23 @@ class man =
       bs b (Name.simple e.ex_name);
       bs b " \n";
       (
-       match e.ex_args with
-         [] -> ()
-       | _ ->
+        match e.ex_args, e.ex_ret with
+        | [], None -> ()
+        | l, None ->
            bs b ".B of ";
            self#man_of_type_expr_list
              ~par: false
              b (Name.father e.ex_name) " * " e.ex_args
+        | [], Some r ->
+            bs b ".B : ";
+            self#man_of_type_expr b (Name.father e.ex_name) r
+        | l, Some r ->
+            bs b ".B : ";
+            self#man_of_type_expr_list
+                   ~par: false
+                   b (Name.father e.ex_name) " * " l;
+            bs b ".B -> ";
+            self#man_of_type_expr b (Name.father e.ex_name) r
       );
       (
        match e.ex_alias with
@@ -431,6 +535,13 @@ class man =
     method man_of_type b t =
       Odoc_info.reset_type_names () ;
       let father = Name.father t.ty_name in
+      let field_comment = function
+        | None -> ()
+        | Some t ->
+          bs b "  (* ";
+          self#man_of_info b (Some t);
+          bs b " *) "
+      in
       bs b ".I type ";
       self#man_of_type_expr_param_list b father t;
       (
@@ -444,7 +555,18 @@ class man =
       (
        match t.ty_manifest with
          None -> ()
-       | Some typ ->
+       | Some (Object_type l) ->
+          bs b "= ";
+          if priv then bs b "private ";
+          bs b "<";
+          List.iter (fun r ->
+            bs b (r.of_name^" : ");
+            self#man_of_type_expr b father r.of_type;
+            bs b ";";
+            field_comment r.of_text ;
+          ) l;
+          bs b "\n >\n"
+       | Some (Other typ) ->
            bs b "= ";
            if priv then bs b "private ";
            self#man_of_type_expr b father typ
@@ -453,80 +575,68 @@ class man =
        match t.ty_kind with
         Type_abstract -> ()
       | Type_variant l ->
-          bs b "=";
-          if priv then bs b " private";
-          bs b "\n ";
-          List.iter
-            (fun constr ->
-              bs b ("| "^constr.vc_name);
-              (
-               match constr.vc_args, constr.vc_text,constr.vc_ret with
-               | [], None, None -> bs b "\n "
-               | [], (Some t), None ->
-                   bs b "  (* ";
-                   self#man_of_text b t;
-                   bs b " *)\n "
-               | l, None, None ->
-                   bs b "\n.B of ";
-                   self#man_of_type_expr_list ~par: false b father " * " l;
-                   bs b " "
-               | l, (Some t), None ->
-                   bs b "\n.B of ";
-                   self#man_of_type_expr_list ~par: false b father " * " l;
-                   bs b ".I \"  \"\n";
-                   bs b "(* ";
-                   self#man_of_text b t;
-                   bs b " *)\n "
-               | [], None, Some r ->
-                   bs b "\n.B : ";
-                   self#man_of_type_expr b father r;
-                   bs b " "
-               | [], (Some t), Some r ->
-                   bs b "\n.B : ";
-                   self#man_of_type_expr b father r;
-                   bs b ".I \"  \"\n";
-                   bs b "(* ";
-                   self#man_of_text b t;
-                   bs b " *)\n "
-               | l, None, Some r ->
-                   bs b "\n.B : ";
-                   self#man_of_type_expr_list ~par: false b father " * " l;
-                   bs b ".B -> ";
-                   self#man_of_type_expr b father r;
-                   bs b " "
-               | l, (Some t), Some r ->
-                   bs b "\n.B of ";
-                   self#man_of_type_expr_list ~par: false b father " * " l;
-                   bs b ".B -> ";
-                   self#man_of_type_expr b father r;
-                   bs b ".I \"  \"\n";
-                   bs b "(* ";
-                   self#man_of_text b t;
-                   bs b " *)\n "
-              )
-            )
-            l
+         bs b "=";
+         if priv then bs b " private";
+         bs b "\n ";
+         List.iter (fun constr ->
+           bs b ("| "^constr.vc_name);
+           let print_text t =
+             bs b "  (* ";
+             self#man_of_info b (Some t);
+             bs b " *)\n "
+           in
+           match constr.vc_args, constr.vc_text,constr.vc_ret with
+           | [], None, None -> bs b "\n "
+           | [], (Some t), None ->
+             print_text t
+           | l, None, None ->
+             bs b "\n.B of ";
+             self#man_of_type_expr_list ~par: false b father " * " l;
+             bs b " "
+           | l, (Some t), None ->
+             bs b "\n.B of ";
+             self#man_of_type_expr_list ~par: false b father " * " l;
+             bs b ".I \"  \"\n";
+             print_text t
+           | [], None, Some r ->
+             bs b "\n.B : ";
+             self#man_of_type_expr b father r;
+             bs b " "
+           | [], (Some t), Some r ->
+             bs b "\n.B : ";
+             self#man_of_type_expr b father r;
+             bs b ".I \"  \"\n";
+             print_text t
+           | l, None, Some r ->
+             bs b "\n.B : ";
+             self#man_of_type_expr_list ~par: false b father " * " l;
+             bs b ".B -> ";
+             self#man_of_type_expr b father r;
+             bs b " "
+           | l, (Some t), Some r ->
+             bs b "\n.B of ";
+             self#man_of_type_expr_list ~par: false b father " * " l;
+             bs b ".B -> ";
+             self#man_of_type_expr b father r;
+             bs b ".I \"  \"\n";
+             print_text t
+         ) l
+
       | Type_record l ->
           bs b "= ";
           if priv then bs b "private ";
           bs b "{";
-          List.iter
-            (fun r ->
-              bs b (if r.rf_mutable then "\n\n.B mutable \n" else "\n ");
-              bs b (r.rf_name^" : ");
-              self#man_of_type_expr b father r.rf_type;
-              bs b ";";
-              (
-               match r.rf_text with
-                 None -> ()
-               | Some t ->
-                   bs b "  (* ";
-                   self#man_of_text b t;
-                   bs b " *) "
-              );
-            )
-            l;
+           List.iter (fun r ->
+             bs b (if r.rf_mutable then "\n\n.B mutable \n" else "\n ");
+             bs b (r.rf_name^" : ");
+             self#man_of_type_expr b father r.rf_type;
+             bs b ";";
+             field_comment r.rf_text ;
+           ) l;
           bs b "\n }\n"
+      | Type_open ->
+          bs b "= ..";
+          bs b "\n"
       );
       bs b "\n.sp\n";
       self#man_of_info b t.ty_info;
@@ -612,7 +722,7 @@ class man =
             (fun (p, desc_opt) ->
               bs b ".sp\n";
               bs b ("\""^p.mp_name^"\"\n");
-              self#man_of_module_type b m_name p.mp_type;
+              Misc.may (self#man_of_module_type b m_name) p.mp_type;
               bs b "\n";
               (
                match desc_opt with
@@ -698,6 +808,33 @@ class man =
       bs b "\n.PP\n";
       self#man_of_text b [Code ("=== "^(Odoc_misc.string_of_text text)^" ===")];
       bs b "\n.PP\n"
+
+    method man_of_recfield b modname f =
+      bs b ".I ";
+      if f.rf_mutable then bs b (Odoc_messages.mutab^" ");
+      bs b (f.rf_name^" : ");
+      self#man_of_type_expr b modname f.rf_type;
+      bs b "\n.sp\n";
+      self#man_of_info b f.rf_text;
+      bs b "\n.sp\n"
+
+    method man_of_const b modname c =
+      bs b ".I ";
+      bs b (c.vc_name^" ");
+      (match c.vc_args with
+         [] -> ()
+       | h::q ->
+         bs b "of ";
+         self#man_of_type_expr b modname h;
+         List.iter
+           (fun ty ->
+              bs b " * ";
+              self#man_of_type_expr b modname ty)
+            q
+      );
+      bs b "\n.sp\n";
+      self#man_of_info b c.vc_text;
+      bs b "\n.sp\n"
 
     (** Print groff string for an included module. *)
     method man_of_included_module b m_name im =
@@ -833,6 +970,42 @@ class man =
           incr Odoc_info.errors ;
           prerr_endline s
 
+    method man_of_module_type_body b mt =
+      self#man_of_info b mt.mt_info;
+      bs b "\n.sp\n";
+
+      (* parameters for functors *)
+      self#man_of_module_parameter_list b "" (Module.module_type_parameters mt);
+      (* a large blank *)
+      bs b "\n.sp\n.sp\n";
+
+      (* module elements *)
+      List.iter
+        (fun ele ->
+          match ele with
+            Element_module m ->
+              self#man_of_module b m
+          | Element_module_type mt ->
+              self#man_of_modtype b mt
+          | Element_included_module im ->
+              self#man_of_included_module b mt.mt_name im
+          | Element_class c ->
+              self#man_of_class b c
+          | Element_class_type ct ->
+              self#man_of_class_type b ct
+          | Element_value v ->
+              self#man_of_value b v
+          | Element_type_extension te ->
+              self#man_of_type_extension b mt.mt_name te
+          | Element_exception e ->
+              self#man_of_exception b e
+          | Element_type t ->
+              self#man_of_type b t
+          | Element_module_comment text ->
+              self#man_of_module_comment b text
+        )
+        (Module.module_type_elements mt);
+
     (** Generate the man file for the given module type.
        @raise Failure if an error occurs.*)
     method generate_for_module_type mt =
@@ -870,38 +1043,7 @@ class man =
              self#man_of_module_type b (Name.father mt.mt_name) t
         );
         bs b "\n.sp\n";
-        self#man_of_info b mt.mt_info;
-        bs b "\n.sp\n";
-
-        (* parameters for functors *)
-        self#man_of_module_parameter_list b "" (Module.module_type_parameters mt);
-        (* a large blank *)
-        bs b "\n.sp\n.sp\n";
-
-        (* module elements *)
-        List.iter
-          (fun ele ->
-            match ele with
-              Element_module m ->
-                self#man_of_module b m
-            | Element_module_type mt ->
-                self#man_of_modtype b mt
-            | Element_included_module im ->
-                self#man_of_included_module b mt.mt_name im
-            | Element_class c ->
-                self#man_of_class b c
-            | Element_class_type ct ->
-                self#man_of_class_type b ct
-            | Element_value v ->
-                self#man_of_value b v
-            | Element_exception e ->
-                self#man_of_exception b e
-            | Element_type t ->
-                self#man_of_type b t
-            | Element_module_comment text ->
-                self#man_of_module_comment b text
-          )
-          (Module.module_type_elements mt);
+        self#man_of_module_type_body b mt;
 
         Buffer.output_buffer chanout b;
         close_out chanout
@@ -910,6 +1052,42 @@ class man =
         Sys_error s ->
           incr Odoc_info.errors ;
           prerr_endline s
+
+    method man_of_module_body b m =
+      self#man_of_info b m.m_info;
+      bs b "\n.sp\n";
+
+      (* parameters for functors *)
+      self#man_of_module_parameter_list b "" (Module.module_parameters m);
+      (* a large blank *)
+      bs b "\n.sp\n.sp\n";
+
+      (* module elements *)
+      List.iter
+        (fun ele ->
+          match ele with
+            Element_module m ->
+              self#man_of_module b m
+          | Element_module_type mt ->
+              self#man_of_modtype b mt
+          | Element_included_module im ->
+              self#man_of_included_module b m.m_name im
+          | Element_class c ->
+              self#man_of_class b c
+          | Element_class_type ct ->
+              self#man_of_class_type b ct
+          | Element_value v ->
+              self#man_of_value b v
+          | Element_type_extension te ->
+              self#man_of_type_extension b m.m_name te
+          | Element_exception e ->
+              self#man_of_exception b e
+          | Element_type t ->
+              self#man_of_type b t
+          | Element_module_comment text ->
+              self#man_of_module_comment b text
+        )
+        (Module.module_elements m);
 
     (** Generate the man file for the given module.
        @raise Failure if an error occurs.*)
@@ -944,39 +1122,7 @@ class man =
         bs b " : ";
         self#man_of_module_type b (Name.father m.m_name) m.m_type;
         bs b "\n.sp\n";
-        self#man_of_info b m.m_info;
-        bs b "\n.sp\n";
-
-        (* parameters for functors *)
-        self#man_of_module_parameter_list b "" (Module.module_parameters m);
-        (* a large blank *)
-        bs b "\n.sp\n.sp\n";
-
-        (* module elements *)
-        List.iter
-          (fun ele ->
-            match ele with
-              Element_module m ->
-                self#man_of_module b m
-            | Element_module_type mt ->
-                self#man_of_modtype b mt
-            | Element_included_module im ->
-                self#man_of_included_module b m.m_name im
-            | Element_class c ->
-                self#man_of_class b c
-            | Element_class_type ct ->
-                self#man_of_class_type b ct
-            | Element_value v ->
-                self#man_of_value b v
-            | Element_exception e ->
-                self#man_of_exception b e
-            | Element_type t ->
-                self#man_of_type b t
-            | Element_module_comment text ->
-                self#man_of_module_comment b text
-          )
-          (Module.module_elements m);
-
+        self#man_of_module_body b m;
         Buffer.output_buffer chanout b;
         close_out chanout
 
@@ -985,7 +1131,7 @@ class man =
           raise (Failure s)
 
     (** Create the groups of elements to generate pages for. *)
-    method create_groups module_list =
+    method create_groups mini module_list =
       let name res_ele =
         match res_ele with
           Res_module m -> m.m_name
@@ -994,6 +1140,7 @@ class man =
         | Res_class_type ct -> ct.clt_name
         | Res_value v -> Name.simple v.val_name
         | Res_type t -> Name.simple t.ty_name
+        | Res_extension x -> Name.simple x.xt_name
         | Res_exception e -> Name.simple e.ex_name
         | Res_attribute a -> Name.simple a.att_value.val_name
         | Res_method m -> Name.simple m.met_value.val_name
@@ -1003,7 +1150,13 @@ class man =
       in
       let all_items_pre = Odoc_info.Search.search_by_name module_list (Str.regexp ".*")  in
       let all_items = List.filter
-          (fun r -> match r with Res_section _ -> false | _ -> true)
+          (fun r ->
+             match r with
+               Res_section _ -> false
+             | Res_module _ | Res_module_type _
+             | Res_class _ | Res_class_type _ -> true
+             | _ -> not mini
+          )
           all_items_pre
       in
       let sorted_items = List.sort (fun e1 -> fun e2 -> compare (name e1) (name e2)) all_items in
@@ -1037,6 +1190,7 @@ class man =
           | Res_class_type ct -> ct.clt_name
           | Res_value v -> v.val_name
           | Res_type t -> t.ty_name
+          | Res_extension x -> x.xt_name
           | Res_exception e -> e.ex_name
           | Res_attribute a -> a.att_value.val_name
           | Res_method m -> m.met_value.val_name
@@ -1066,6 +1220,9 @@ class man =
           | Res_type t ->
               bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father t.ty_name)^"\n");
               self#man_of_type b t
+          | Res_extension x ->
+              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father x.xt_name)^"\n");
+              self#man_of_type_extension b (Name.father x.xt_name) x.xt_type_extension
           | Res_exception e ->
               bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father e.ex_name)^"\n");
               self#man_of_exception b e
@@ -1081,7 +1238,45 @@ class man =
           | Res_class_type ct ->
               bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father ct.clt_name)^"\n");
               self#man_of_class_type b ct
-          | _ ->
+          | Res_recfield (ty,f) ->
+               bs b ("\n.SH Type "^(ty.ty_name)^"\n");
+              self#man_of_recfield b (Name.father ty.ty_name) f
+          | Res_const (ty,c) ->
+               bs b ("\n.SH Type "^(ty.ty_name)^"\n");
+              self#man_of_const b (Name.father ty.ty_name) c
+          | Res_module m ->
+              if Name.father m.m_name <> "" then
+                begin
+                  bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father m.m_name)^"\n");
+                  bs b (Odoc_messages.modul^"\n");
+                  bs b (".BI \""^(Name.simple m.m_name)^"\"\n");
+                  bs b " : ";
+                  self#man_of_module_type b (Name.father m.m_name) m.m_type;
+                end
+              else
+                begin
+                  bs b ("\n.SH "^Odoc_messages.modul^" "^m.m_name^"\n");
+                  bs b " : ";
+                  self#man_of_module_type b (Name.father m.m_name) m.m_type;
+                end;
+              bs b "\n.sp\n";
+              self#man_of_module_body b m
+
+          | Res_module_type mt ->
+              bs b ("\n.SH "^Odoc_messages.modul^" "^(Name.father mt.mt_name)^"\n");
+              bs b (Odoc_messages.module_type^"\n");
+              bs b (".BI \""^(Name.simple mt.mt_name)^"\"\n");
+              bs b " = ";
+              (
+               match mt.mt_type with
+                None -> ()
+              | Some t ->
+                 self#man_of_module_type b (Name.father mt.mt_name) t
+              );
+              bs b "\n.sp\n";
+              self#man_of_module_type_body b mt
+
+          | Res_section _ ->
               (* normalement on ne peut pas avoir de module ici. *)
               ()
         in
@@ -1095,8 +1290,8 @@ class man =
 
     (** Generate all the man pages from a module list. *)
     method generate module_list =
-      let sorted_module_list = Sort.list (fun m1 -> fun m2 -> m1.m_name < m2.m_name) module_list in
-      let groups = self#create_groups sorted_module_list in
+      let sorted_module_list = List.sort (fun m1 m2 -> compare m1.m_name m2.m_name) module_list in
+      let groups = self#create_groups !man_mini sorted_module_list in
       let f group =
         match group with
           [] ->
@@ -1105,11 +1300,7 @@ class man =
         | [Res_module_type mt] -> self#generate_for_module_type mt
         | [Res_class cl] -> self#generate_for_class cl
         | [Res_class_type ct] -> self#generate_for_class_type ct
-        | l ->
-            if !man_mini then
-              ()
-            else
-              self#generate_for_group l
+        | l -> self#generate_for_group l
       in
       List.iter f groups
   end

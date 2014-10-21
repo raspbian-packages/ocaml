@@ -27,24 +27,33 @@ open Cmx_format
 let bind name arg fn =
   match arg with
     Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _
-  | Cconst_pointer _ | Cconst_natpointer _ -> fn arg
+  | Cconst_pointer _ | Cconst_natpointer _
+  | Cconst_blockheader _ -> fn arg
   | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
 
 let bind_nonvar name arg fn =
   match arg with
     Cconst_int _ | Cconst_natint _ | Cconst_symbol _
-  | Cconst_pointer _ | Cconst_natpointer _ -> fn arg
+  | Cconst_pointer _ | Cconst_natpointer _
+  | Cconst_blockheader _ -> fn arg
   | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
+
+let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
+    (* cf. byterun/gc.h *)
 
 (* Block headers. Meaning of the tag field: see stdlib/obj.ml *)
 
-let float_tag = Cconst_int Obj.double_tag
 let floatarray_tag = Cconst_int Obj.double_array_tag
 
 let block_header tag sz =
   Nativeint.add (Nativeint.shift_left (Nativeint.of_int sz) 10)
                 (Nativeint.of_int tag)
-let closure_header sz = block_header Obj.closure_tag sz
+(* Static data corresponding to "value"s must be marked black in case we are
+   in no-naked-pointers mode.  See [caml_darken] and the code below that emits
+   structured constants and static module definitions. *)
+let black_block_header tag sz = Nativeint.logor (block_header tag sz) caml_black
+let white_closure_header sz = block_header Obj.closure_tag sz
+let black_closure_header sz = black_block_header Obj.closure_tag sz
 let infix_header ofs = block_header Obj.infix_tag ofs
 let float_header = block_header Obj.double_tag (size_float / size_addr)
 let floatarray_header len =
@@ -55,14 +64,14 @@ let boxedint32_header = block_header Obj.custom_tag 2
 let boxedint64_header = block_header Obj.custom_tag (1 + 8 / size_addr)
 let boxedintnat_header = block_header Obj.custom_tag 2
 
-let alloc_block_header tag sz = Cconst_natint(block_header tag sz)
-let alloc_float_header = Cconst_natint(float_header)
-let alloc_floatarray_header len = Cconst_natint(floatarray_header len)
-let alloc_closure_header sz = Cconst_natint(closure_header sz)
-let alloc_infix_header ofs = Cconst_natint(infix_header ofs)
-let alloc_boxedint32_header = Cconst_natint(boxedint32_header)
-let alloc_boxedint64_header = Cconst_natint(boxedint64_header)
-let alloc_boxedintnat_header = Cconst_natint(boxedintnat_header)
+let alloc_block_header tag sz = Cconst_blockheader(block_header tag sz)
+let alloc_float_header = Cconst_blockheader(float_header)
+let alloc_floatarray_header len = Cconst_blockheader(floatarray_header len)
+let alloc_closure_header sz = Cconst_blockheader(white_closure_header sz)
+let alloc_infix_header ofs = Cconst_blockheader(infix_header ofs)
+let alloc_boxedint32_header = Cconst_blockheader(boxedint32_header)
+let alloc_boxedint64_header = Cconst_blockheader(boxedint64_header)
+let alloc_boxedintnat_header = Cconst_blockheader(boxedintnat_header)
 
 (* Integers *)
 
@@ -75,10 +84,14 @@ let int_const n =
   else Cconst_natint
           (Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
 
-let add_const c n =
+let rec add_const c n =
   if n = 0 then c
   else match c with
   | Cconst_int x when no_overflow_add x n -> Cconst_int (x + n)
+  | Cop(Csubi, [Cconst_int x; c]) when no_overflow_add n x ->
+      Cop(Csubi, [Cconst_int (n + x); c])
+  | Cop(Csubi, [c; Cconst_int x]) when no_overflow_sub n x ->
+      add_const c (n - x)
   | c -> Cop(Caddi, [c; Cconst_int n])
 
 let incr_int = function
@@ -121,31 +134,16 @@ let sub_int c1 c2 =
 
 let mul_int c1 c2 =
   match (c1, c2) with
-    (Cconst_int 0, _) -> c1
-  | (Cconst_int 1, _) -> c2
-  | (_, Cconst_int 0) -> c2
-  | (_, Cconst_int 1) -> c1
-  | (_, _) -> Cop(Cmuli, [c1; c2])
-
-let tag_int = function
-    Cconst_int n -> int_const n
-  | c -> Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1])
-
-let force_tag_int = function
-    Cconst_int n -> int_const n
-  | c -> Cop(Cor, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1])
-
-let untag_int = function
-    Cconst_int n -> Cconst_int(n asr 1)
-  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1]) -> c
-  | Cop(Cor, [Cop(Casr, [c; Cconst_int n]); Cconst_int 1])
-    when n > 0 && n < size_int * 8 ->
-      Cop(Casr, [c; Cconst_int (n+1)])
-  | Cop(Cor, [Cop(Clsr, [c; Cconst_int n]); Cconst_int 1])
-    when n > 0 && n < size_int * 8 ->
-      Cop(Clsr, [c; Cconst_int (n+1)])
-  | Cop(Cor, [c; Cconst_int 1]) -> Cop(Casr, [c; Cconst_int 1])
-  | c -> Cop(Casr, [c; Cconst_int 1])
+    (c, Cconst_int 0) | (Cconst_int 0, c) ->
+      Cconst_int 0
+  | (c, Cconst_int 1) | (Cconst_int 1, c) ->
+      c
+  | (c, Cconst_int(-1)) | (Cconst_int(-1), c) ->
+      sub_int (Cconst_int 0) c
+  | (c, Cconst_int n) | (Cconst_int n, c) when n = 1 lsl Misc.log2 n->
+      Cop(Clsl, [c; Cconst_int(Misc.log2 n)])
+  | (c1, c2) ->
+      Cop(Cmuli, [c1; c2])
 
 let lsl_int c1 c2 =
   match (c1, c2) with
@@ -163,64 +161,251 @@ let ignore_low_bit_int = function
 
 let lsr_int c1 c2 =
   match c2 with
-    (Cconst_int n) when n > 0 ->
-    Cop(Clsr, [ignore_low_bit_int c1; c2])
+    Cconst_int 0 ->
+      c1
+  | Cconst_int n when n > 0 ->
+      Cop(Clsr, [ignore_low_bit_int c1; c2])
   | _ ->
-    Cop(Clsr, [c1; c2])
+      Cop(Clsr, [c1; c2])
 
 let asr_int c1 c2 =
   match c2 with
-    (Cconst_int n) when n > 0 ->
-    Cop(Casr, [ignore_low_bit_int c1; c2])
+    Cconst_int 0 ->
+      c1
+  | Cconst_int n when n > 0 ->
+      Cop(Casr, [ignore_low_bit_int c1; c2])
   | _ ->
-    Cop(Casr, [c1; c2])
+      Cop(Casr, [c1; c2])
 
-(* Division or modulo on tagged integers.  The overflow case min_int / -1
-   cannot occur, but we must guard against division by zero. *)
+let tag_int = function
+    Cconst_int n ->
+      int_const n
+  | Cop(Casr, [c; Cconst_int n]) when n > 0 ->
+      Cop(Cor, [asr_int c (Cconst_int (n - 1)); Cconst_int 1])
+  | c ->
+      incr_int (lsl_int c (Cconst_int 1))
+
+let force_tag_int = function
+    Cconst_int n ->
+      int_const n
+  | Cop(Casr, [c; Cconst_int n]) when n > 0 ->
+      Cop(Cor, [asr_int c (Cconst_int (n - 1)); Cconst_int 1])
+  | c ->
+      Cop(Cor, [lsl_int c (Cconst_int 1); Cconst_int 1])
+
+let untag_int = function
+    Cconst_int n -> Cconst_int(n asr 1)
+  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1]) -> c
+  | Cop(Cor, [Cop(Casr, [c; Cconst_int n]); Cconst_int 1])
+    when n > 0 && n < size_int * 8 ->
+      Cop(Casr, [c; Cconst_int (n+1)])
+  | Cop(Cor, [Cop(Clsr, [c; Cconst_int n]); Cconst_int 1])
+    when n > 0 && n < size_int * 8 ->
+      Cop(Clsr, [c; Cconst_int (n+1)])
+  | Cop(Cor, [c; Cconst_int 1]) -> Cop(Casr, [c; Cconst_int 1])
+  | c -> Cop(Casr, [c; Cconst_int 1])
+
+(* Turning integer divisions into multiply-high then shift.
+   The [division_parameters] function is used in module Emit for
+   those target platforms that support this optimization. *)
+
+(* Unsigned comparison between native integers. *)
+
+let ucompare x y = Nativeint.(compare (add x min_int) (add y min_int))
+
+(* Unsigned division and modulus at type nativeint.
+   Algorithm: Hacker's Delight section 9.3 *)
+
+let udivmod n d = Nativeint.(
+  if d < 0n then
+    if ucompare n d < 0 then (0n, n) else (1n, sub n d)
+  else begin
+    let q = shift_left (div (shift_right_logical n 1) d) 1 in
+    let r = sub n (mul q d) in
+    if ucompare r d >= 0 then (succ q, sub r d) else (q, r)
+  end)
+
+(* Compute division parameters.
+   Algorithm: Hacker's Delight chapter 10, fig 10-1. *)
+
+let divimm_parameters d = Nativeint.(
+  assert (d > 0n);
+  let twopsm1 = min_int in (* 2^31 for 32-bit archs, 2^63 for 64-bit archs *)
+  let nc = sub (pred twopsm1) (snd (udivmod twopsm1 d)) in
+  let rec loop p (q1, r1) (q2, r2) =
+    let p = p + 1 in
+    let q1 = shift_left q1 1 and r1 = shift_left r1 1 in
+    let (q1, r1) =
+      if ucompare r1 nc >= 0 then (succ q1, sub r1 nc) else (q1, r1) in
+    let q2 = shift_left q2 1 and r2 = shift_left r2 1 in
+    let (q2, r2) =
+      if ucompare r2 d >= 0 then (succ q2, sub r2 d) else (q2, r2) in
+    let delta = sub d r2 in
+    if ucompare q1 delta < 0 || (q1 = delta && r1 = 0n)
+    then loop p (q1, r1) (q2, r2)
+    else (succ q2, p - size)
+  in loop (size - 1) (udivmod twopsm1 nc) (udivmod twopsm1 d))
+
+(* The result [(m, p)] of [divimm_parameters d] satisfies the following
+   inequality:
+
+      2^(wordsize + p) < m * d <= 2^(wordsize + p) + 2^(p + 1)    (i)
+
+   from which it follows that
+
+      floor(n / d) = floor(n * m / 2^(wordsize+p))
+                              if 0 <= n < 2^(wordsize-1)
+      ceil(n / d) = floor(n * m / 2^(wordsize+p)) + 1
+                              if -2^(wordsize-1) <= n < 0
+
+   The correctness condition (i) above can be checked by the code below.
+   It was exhaustively tested for values of d from 2 to 10^9 in the
+   wordsize = 64 case.
+
+let add2 (xh, xl) (yh, yl) =
+  let zl = add xl yl and zh = add xh yh in
+  ((if ucompare zl xl < 0 then succ zh else zh), zl)
+
+let shl2 (xh, xl) n =
+  assert (0 < n && n < size + size);
+  if n < size
+  then (logor (shift_left xh n) (shift_right_logical xl (size - n)),
+        shift_left xl n)
+  else (shift_left xl (n - size), 0n)
+
+let mul2 x y =
+  let halfsize = size / 2 in
+  let halfmask = pred (shift_left 1n halfsize) in
+  let xl = logand x halfmask and xh = shift_right_logical x halfsize in
+  let yl = logand y halfmask and yh = shift_right_logical y halfsize in
+  add2 (mul xh yh, 0n)
+    (add2 (shl2 (0n, mul xl yh) halfsize)
+       (add2 (shl2 (0n, mul xh yl) halfsize)
+          (0n, mul xl yl)))
+
+let ucompare2 (xh, xl) (yh, yl) =
+  let c = ucompare xh yh in if c = 0 then ucompare xl yl else c
+
+let validate d m p =
+  let md = mul2 m d in
+  let one2 = (0n, 1n) in
+  let twoszp = shl2 one2 (size + p) in
+  let twop1 = shl2 one2 (p + 1) in
+  ucompare2 twoszp md < 0 && ucompare2 md (add2 twoszp twop1) <= 0
+*)
+
+let rec div_int c1 c2 dbg =
+  match (c1, c2) with
+    (c1, Cconst_int 0) ->
+      Csequence(c1, Cop(Craise (Raise_regular, dbg),
+                        [Cconst_symbol "caml_exn_Division_by_zero"]))
+  | (c1, Cconst_int 1) ->
+      c1
+  | (Cconst_int 0 as c1, c2) ->
+      Csequence(c2, c1)
+  | (Cconst_int n1, Cconst_int n2) ->
+      Cconst_int (n1 / n2)
+  | (c1, Cconst_int n) when n <> min_int ->
+      let l = Misc.log2 n in
+      if n = 1 lsl l then
+        (* Algorithm:
+              t = shift-right-signed(c1, l - 1)
+              t = shift-right(t, W - l)
+              t = c1 + t
+              res = shift-right-signed(c1 + t, l)
+        *)
+        Cop(Casr, [bind "dividend" c1 (fun c1 ->
+                     let t = asr_int c1 (Cconst_int (l - 1)) in
+                     let t = lsr_int t (Cconst_int (Nativeint.size - l)) in
+                     add_int c1 t);
+                   Cconst_int l])
+      else if n < 0 then
+        sub_int (Cconst_int 0) (div_int c1 (Cconst_int (-n)) dbg)
+      else begin
+        let (m, p) = divimm_parameters (Nativeint.of_int n) in
+        (* Algorithm:
+              t = multiply-high-signed(c1, m)
+              if m < 0, t = t + c1
+              if p > 0, t = shift-right-signed(t, p)
+              res = t + sign-bit(c1)
+        *)
+        bind "dividend" c1 (fun c1 ->
+          let t = Cop(Cmulhi, [c1; Cconst_natint m]) in
+          let t = if m < 0n then Cop(Caddi, [t; c1]) else t in
+          let t = if p > 0 then Cop(Casr, [t; Cconst_int p]) else t in
+          add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1))))
+      end
+  | (c1, c2) when !Clflags.fast ->
+      Cop(Cdivi, [c1; c2])
+  | (c1, c2) ->
+      bind "divisor" c2 (fun c2 ->
+        Cifthenelse(c2,
+                    Cop(Cdivi, [c1; c2]),
+                    Cop(Craise (Raise_regular, dbg),
+                        [Cconst_symbol "caml_exn_Division_by_zero"])))
+
+let mod_int c1 c2 dbg =
+  match (c1, c2) with
+    (c1, Cconst_int 0) ->
+      Csequence(c1, Cop(Craise (Raise_regular, dbg),
+                        [Cconst_symbol "caml_exn_Division_by_zero"]))
+  | (c1, Cconst_int 1) ->
+      c1
+  | (Cconst_int(0 | 1) as c1, c2) ->
+      Csequence(c2, c1)
+  | (Cconst_int n1, Cconst_int n2) ->
+      Cconst_int (n1 mod n2)
+  | (c1, (Cconst_int n as c2)) when n <> min_int ->
+      let l = Misc.log2 n in
+      if n = 1 lsl l then
+        (* Algorithm:
+              t = shift-right-signed(c1, l - 1)
+              t = shift-right(t, W - l)
+              t = c1 + t
+              t = bit-and(t, -n)
+              res = c1 - t
+         *)
+        bind "dividend" c1 (fun c1 ->
+          let t = asr_int c1 (Cconst_int (l - 1)) in
+          let t = lsr_int t (Cconst_int (Nativeint.size - l)) in
+          let t = add_int c1 t in
+          let t = Cop(Cand, [t; Cconst_int (-n)]) in
+          sub_int c1 t)
+      else
+        bind "dividend" c1 (fun c1 ->
+          sub_int c1 (mul_int (div_int c1 c2 dbg) c2))
+  | (c1, c2) when !Clflags.fast ->
+      Cop(Cmodi, [c1; c2])
+  | (c1, c2) ->
+      bind "divisor" c2 (fun c2 ->
+        Cifthenelse(c2,
+                    Cop(Cmodi, [c1; c2]),
+                    Cop(Craise (Raise_regular, dbg),
+                        [Cconst_symbol "caml_exn_Division_by_zero"])))
+
+(* Division or modulo on boxed integers.  The overflow case min_int / -1
+   can occur, in which case we force x / -1 = -x and x mod -1 = 0. (PR#5513). *)
 
 let is_different_from x = function
     Cconst_int n -> n <> x
   | Cconst_natint n -> n <> Nativeint.of_int x
   | _ -> false
 
-let safe_divmod op c1 c2 dbg =
-  if !Clflags.fast || is_different_from 0 c2 then
-    Cop(op, [c1; c2])
-  else
-    bind "divisor" c2 (fun c2 ->
-      Cifthenelse(c2,
-                  Cop(op, [c1; c2]),
-                  Cop(Craise dbg,
-                      [Cconst_symbol "caml_bucket_Division_by_zero"])))
-
-(* Division or modulo on boxed integers.  The overflow case min_int / -1
-   can occur, in which case we force x / -1 = -x and x mod -1 = 0. (PR#5513). *)
-
 let safe_divmod_bi mkop mkm1 c1 c2 bi dbg =
   bind "dividend" c1 (fun c1 ->
   bind "divisor" c2 (fun c2 ->
-    let c3 =
-      if Arch.division_crashes_on_overflow
-      && (size_int = 4 || bi <> Pint32)
-      && not (is_different_from (-1) c2)
-      then
-        Cifthenelse(Cop(Ccmpi Cne, [c2; Cconst_int(-1)]), mkop c1 c2, mkm1 c1)
-      else
-        mkop c1 c2 in
-    if !Clflags.fast || is_different_from 0 c2 then
-      c3
-    else
-      Cifthenelse(c2, c3,
-                  Cop(Craise dbg,
-                      [Cconst_symbol "caml_bucket_Division_by_zero"]))))
+    let c = mkop c1 c2 dbg in
+    if Arch.division_crashes_on_overflow
+    && (size_int = 4 || bi <> Pint32)
+    && not (is_different_from (-1) c2)
+    then Cifthenelse(Cop(Ccmpi Cne, [c2; Cconst_int(-1)]), c, mkm1 c1)
+    else c))
 
 let safe_div_bi =
-  safe_divmod_bi (fun c1 c2 -> Cop(Cdivi, [c1;c2]))
-                 (fun c1 -> Cop(Csubi, [Cconst_int 0; c1]))
+  safe_divmod_bi div_int (fun c1 -> Cop(Csubi, [Cconst_int 0; c1]))
 
 let safe_mod_bi =
-  safe_divmod_bi (fun c1 c2 -> Cop(Cmodi, [c1;c2]))
-                 (fun c1 -> Cconst_int 0)
+  safe_divmod_bi mod_int (fun c1 -> Cconst_int 0)
 
 (* Bool *)
 
@@ -360,13 +545,15 @@ let float_array_set arr ofs newval =
 
 (* String length *)
 
+(* Length of string block *)
+
 let string_length exp =
   bind "str" exp (fun str ->
     let tmp_var = Ident.create "tmp" in
     Clet(tmp_var,
          Cop(Csubi,
              [Cop(Clsl,
-                   [Cop(Clsr, [header str; Cconst_int 10]);
+                   [get_size str;
                      Cconst_int log2_size_addr]);
               Cconst_int 1]),
          Cop(Csubi,
@@ -398,7 +585,7 @@ let call_cached_method obj tag cache pos args dbg =
 
 let make_alloc_generic set_fn tag wordsize args =
   if wordsize <= Config.max_young_wosize then
-    Cop(Calloc, Cconst_natint(block_header tag wordsize) :: args)
+    Cop(Calloc, Cconst_blockheader(block_header tag wordsize) :: args)
   else begin
     let id = Ident.create "alloc" in
     let rec fill_fields idx = function
@@ -484,32 +671,20 @@ let transl_comparison = function
 
 (* Translate structured constants *)
 
-(* Fabrice: moved to compilenv.ml ----
-let const_label = ref 0
-
-let new_const_label () =
-  incr const_label;
-  !const_label
-
-let new_const_symbol () =
-  incr const_label;
-  Compilenv.make_symbol (Some (string_of_int !const_label))
-
-let structured_constants = ref ([] : (string * structured_constant) list)
-*)
-
 let transl_constant = function
-    Const_base(Const_int n) ->
+  | Uconst_int n ->
       int_const n
-  | Const_base(Const_char c) ->
-      Cconst_int(((Char.code c) lsl 1) + 1)
-  | Const_pointer n ->
+  | Uconst_ptr n ->
       if n <= max_repr_int && n >= min_repr_int
       then Cconst_pointer((n lsl 1) + 1)
       else Cconst_natpointer
               (Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
-  | cst ->
-      Cconst_symbol (Compilenv.new_structured_constant cst false)
+  | Uconst_ref (label, _) ->
+      Cconst_symbol label
+
+let transl_structured_constant cst =
+  let label = Compilenv.new_structured_constant cst ~shared:true in
+  Cconst_symbol label
 
 (* Translate constant closures *)
 
@@ -520,9 +695,9 @@ let constant_closures =
 
 let box_int_constant bi n =
   match bi with
-    Pnativeint -> Const_base(Const_nativeint n)
-  | Pint32 -> Const_base(Const_int32 (Nativeint.to_int32 n))
-  | Pint64 -> Const_base(Const_int64 (Int64.of_nativeint n))
+    Pnativeint -> Uconst_nativeint n
+  | Pint32 -> Uconst_int32 (Nativeint.to_int32 n)
+  | Pint64 -> Uconst_int64 (Int64.of_nativeint n)
 
 let operations_boxed_int bi =
   match bi with
@@ -539,9 +714,9 @@ let alloc_header_boxed_int bi =
 let box_int bi arg =
   match arg with
     Cconst_int n ->
-      transl_constant (box_int_constant bi (Nativeint.of_int n))
+      transl_structured_constant (box_int_constant bi (Nativeint.of_int n))
   | Cconst_natint n ->
-      transl_constant (box_int_constant bi n)
+      transl_structured_constant (box_int_constant bi n)
   | _ ->
       let arg' =
         if bi = Pint32 && size_int = 8 && big_endian
@@ -824,8 +999,22 @@ let unaligned_set_64 ptr idx newval =
                 Cop(Cstore Byte_unsigned,
                     [add_int (add_int ptr idx) (Cconst_int 7); b8]))))
 
+let max_or_zero a =
+  bind "size" a (fun a ->
+    (* equivalent to
+       Cifthenelse(Cop(Ccmpi Cle, [a; Cconst_int 0]), Cconst_int 0, a)
+
+       if a is positive, sign is 0 hence sign_negation is full of 1
+                         so sign_negation&a = a
+       if a is negative, sign is full of 1 hence sign_negation is 0
+                         so sign_negation&a = 0 *)
+    let sign = Cop(Casr, [a; Cconst_int (size_int * 8 - 1)]) in
+    let sign_negation = Cop(Cxor, [sign; Cconst_int (-1)]) in
+    Cop(Cand, [sign_negation; a]))
+
 let check_bound unsafe dbg a1 a2 k =
-  if unsafe then k else Csequence(make_checkbound dbg [a1;a2], k)
+  if unsafe then k
+  else Csequence(make_checkbound dbg [max_or_zero a1;a2], k)
 
 (* Simplification of some primitives into C calls *)
 
@@ -888,28 +1077,9 @@ let simplif_primitive p =
 
 (* Build switchers both for constants and blocks *)
 
-(* constants first *)
-
 let transl_isout h arg = tag_int (Cop(Ccmpa Clt, [h ; arg]))
 
-let make_switch_gen arg cases acts =
-  let lcases = Array.length cases in
-  let new_cases = Array.create lcases 0 in
-  let store = Switch.mk_store (=) in
-
-  for i = 0 to Array.length cases-1 do
-    let act = cases.(i) in
-    let new_act = store.Switch.act_store act in
-    new_cases.(i) <- new_act
-  done ;
-  Cswitch
-    (arg, new_cases,
-     Array.map
-       (fun n -> acts.(n))
-       (store.Switch.act_get ()))
-
-
-(* Then for blocks *)
+(* Build an actual switch (ie jump table) *)
 
 module SArgBlocks =
 struct
@@ -925,18 +1095,96 @@ struct
   type act = expression
 
   let default = Cexit (0,[])
+  let make_const i =  Cconst_int i
   let make_prim p args = Cop (p,args)
   let make_offset arg n = add_const arg n
   let make_isout h arg =  Cop (Ccmpa Clt, [h ; arg])
   let make_isin h arg =  Cop (Ccmpa Cge, [h ; arg])
   let make_if cond ifso ifnot = Cifthenelse (cond, ifso, ifnot)
-  let make_switch arg cases actions =
-    make_switch_gen arg cases actions
+  let make_switch arg cases actions = Cswitch (arg,cases,actions)
   let bind arg body = bind "switcher" arg body
+
+  let make_catch handler = match handler with
+  | Cexit (i,[]) -> i,fun e -> e
+  | _ ->
+      let i = next_raise_count () in
+(*
+      Printf.eprintf  "SHARE CMM: %i\n" i ;
+      Printcmm.expression Format.str_formatter handler ;
+      Printf.eprintf "%s\n" (Format.flush_str_formatter ()) ;
+*)
+      i,
+      (fun body -> match body with
+      | Cexit (j,_) ->
+          if i=j then handler
+          else body
+      | _ ->  Ccatch (i,[],body,handler))
+
+  let make_exit i = Cexit (i,[])
 
 end
 
+(* cmm store, as sharing as normally been detected in previous
+   phases, we only share exits *)
+module StoreExp =
+  Switch.Store
+    (struct
+      type t = expression
+      type key = int
+      let make_key = function
+        | Cexit (i,[]) -> Some i
+        | _ -> None
+    end)
+
 module SwitcherBlocks = Switch.Make(SArgBlocks)
+
+(* Int switcher, arg in [low..high],
+   cases is list of individual cases, and is sorted by first component *)
+
+let transl_int_switch arg low high cases default = match cases with
+| [] -> assert false
+| _::_ ->
+    let store = StoreExp.mk_store () in
+    assert (store.Switch.act_store default = 0) ;
+    let cases =
+      List.map
+        (fun (i,act) -> i,store.Switch.act_store act)
+        cases in
+    let rec inters plow phigh pact = function
+      | [] ->
+          if phigh = high then [plow,phigh,pact]
+          else [(plow,phigh,pact); (phigh+1,high,0) ]
+      | (i,act)::rem ->
+          if i = phigh+1 then
+            if pact = act then
+              inters plow i pact rem
+            else
+              (plow,phigh,pact)::inters i i act rem
+          else (* insert default *)
+            if pact = 0 then
+              if act = 0 then
+                inters plow i 0 rem
+              else
+                (plow,i-1,pact)::
+                inters i i act rem
+            else (* pact <> 0 *)
+              (plow,phigh,pact)::
+              begin
+                if act = 0 then inters (phigh+1) i 0 rem
+                else (phigh+1,i-1,0)::inters i i act rem
+              end in
+    let inters = match cases with
+    | [] -> assert false
+    | (k0,act0)::rem ->
+        if k0 = low then inters k0 k0 act0 rem
+        else inters low (k0-1) 0 cases in
+    bind "switcher" arg
+      (fun a ->
+        SwitcherBlocks.zyva
+          (low,high)
+          a
+          (Array.of_list inters) store)
+
 
 (* Auxiliary functions for optimizing "let" of boxed numbers (floats and
    boxed integers *)
@@ -946,8 +1194,8 @@ type unboxed_number_kind =
   | Boxed_float
   | Boxed_integer of boxed_integer
 
-let is_unboxed_number = function
-    Uconst(Const_base(Const_float f), _) ->
+let rec is_unboxed_number = function
+    Uconst(Uconst_ref(_, Uconst_float _)) ->
       Boxed_float
   | Uprim(p, _, _) ->
       begin match simplif_primitive p with
@@ -988,9 +1236,10 @@ let is_unboxed_number = function
         | Pbbswap bi -> Boxed_integer bi
         | _ -> No_unboxing
       end
+  | Ulet (_, _, e) | Usequence (_, e) -> is_unboxed_number e
   | _ -> No_unboxing
 
-let subst_boxed_number unbox_fn boxed_id unboxed_id exp =
+let subst_boxed_number unbox_fn boxed_id unboxed_id box_chunk box_offset exp =
   let need_boxed = ref false in
   let assigned = ref false in
   let rec subst = function
@@ -1004,10 +1253,14 @@ let subst_boxed_number unbox_fn boxed_id unboxed_id exp =
         end else
           Cassign(id, subst arg)
     | Ctuple argv -> Ctuple(List.map subst argv)
-    | Cop(Cload _, [Cvar id]) as e ->
-        if Ident.same id boxed_id then Cvar unboxed_id else e
-    | Cop(Cload _, [Cop(Cadda, [Cvar id; _])]) as e ->
-        if Ident.same id boxed_id then Cvar unboxed_id else e
+    | Cop(Cload chunk, [Cvar id]) as e ->
+        if Ident.same id boxed_id && chunk = box_chunk && box_offset = 0
+        then Cvar unboxed_id
+        else e
+    | Cop(Cload chunk, [Cop(Cadda, [Cvar id; Cconst_int ofs])]) as e ->
+        if Ident.same id boxed_id && chunk = box_chunk && ofs = box_offset
+        then Cvar unboxed_id
+        else e
     | Cop(op, argv) -> Cop(op, List.map subst argv)
     | Csequence(e1, e2) -> Csequence(subst e1, subst e2)
     | Cifthenelse(e1, e2, e3) -> Cifthenelse(subst e1, subst e2, subst e3)
@@ -1025,12 +1278,19 @@ let subst_boxed_number unbox_fn boxed_id unboxed_id exp =
 
 let functions = (Queue.create() : ufunction Queue.t)
 
+let strmatch_compile =
+  let module S =
+    Strmatch.Make
+      (struct
+        let string_block_length = get_size
+        let transl_switch = transl_int_switch
+      end) in
+  S.compile
+
 let rec transl = function
     Uvar id ->
       Cvar id
-  | Uconst (sc, Some const_label) ->
-      Cconst_symbol const_label
-  | Uconst (sc, None) ->
+  | Uconst sc ->
       transl_constant sc
   | Uclosure(fundecls, []) ->
       let lbl = Compilenv.new_const_symbol() in
@@ -1098,9 +1358,12 @@ let rec transl = function
           Clet(id, transl exp, transl body)
       | Boxed_float ->
           transl_unbox_let box_float unbox_float transl_unbox_float
+                           Double_u 0
                            id exp body
       | Boxed_integer bi ->
           transl_unbox_let (box_int bi) (unbox_int bi) (transl_unbox_int bi)
+                           (if bi = Pint32 then Thirtytwo_signed else Word)
+                           size_addr
                            id exp body
       end
   | Uletrec(bindings, body) ->
@@ -1112,7 +1375,7 @@ let rec transl = function
         (Pgetglobal id, []) ->
           Cconst_symbol (Ident.name id)
       | (Pmakeblock(tag, mut), []) ->
-          transl_constant(Const_block(tag, []))
+          assert false
       | (Pmakeblock(tag, mut), args) ->
           make_alloc tag (List.map transl args)
       | (Pccall prim, args) ->
@@ -1125,7 +1388,7 @@ let rec transl = function
                          dbg),
                 List.map transl args)
       | (Pmakearray kind, []) ->
-          transl_constant(Const_block(0, []))
+          transl_structured_constant (Uconst_block(0, []))
       | (Pmakearray kind, args) ->
           begin match kind with
             Pgenarray ->
@@ -1197,6 +1460,11 @@ let rec transl = function
             (untag_int arg) s.us_index_consts s.us_actions_consts,
           transl_switch
             (get_tag arg) s.us_index_blocks s.us_actions_blocks))
+  | Ustringswitch(arg,sw,d) ->
+      bind "switch" (transl arg)
+        (fun arg ->
+          strmatch_compile arg (Misc.may_map transl d)
+            (List.map (fun (s,act) -> s,transl act) sw))
   | Ustaticfail (nfail, args) ->
       Cexit (nfail, List.map transl args)
   | Ucatch(nfail, [], body, handler) ->
@@ -1289,9 +1557,11 @@ and transl_prim_1 p arg dbg =
         Cop(Cload Double_u,
             [if n = 0 then ptr
                        else Cop(Cadda, [ptr; Cconst_int(n * size_float)])]))
+  | Pint_as_pointer ->
+     Cop(Cadda, [transl arg; Cconst_int (-1)])
   (* Exceptions *)
-  | Praise ->
-      Cop(Craise dbg, [transl arg])
+  | Praise k ->
+      Cop(Craise (k, dbg), [transl arg])
   (* Integer operations *)
   | Pnegint ->
       Cop(Csubi, [Cconst_int 2; transl arg])
@@ -1309,7 +1579,7 @@ and transl_prim_1 p arg dbg =
       if no_overflow_lsl n then
         add_const (transl arg) (n lsl 1)
       else
-        transl_prim_2 Paddint arg (Uconst (Const_base(Const_int n), None))
+        transl_prim_2 Paddint arg (Uconst (Uconst_int n))
                       Debuginfo.none
   | Poffsetref n ->
       return_unit
@@ -1408,13 +1678,11 @@ and transl_prim_2 p arg1 arg2 dbg =
   | Psubint ->
       incr_int(sub_int (transl arg1) (transl arg2))
   | Pmulint ->
-      incr_int(Cop(Cmuli, [decr_int(transl arg1); untag_int(transl arg2)]))
+      incr_int(mul_int (decr_int(transl arg1)) (untag_int(transl arg2)))
   | Pdivint ->
-      tag_int(safe_divmod Cdivi (untag_int(transl arg1))
-                          (untag_int(transl arg2)) dbg)
+      tag_int(div_int (untag_int(transl arg1)) (untag_int(transl arg2)) dbg)
   | Pmodint ->
-      tag_int(safe_divmod Cmodi (untag_int(transl arg1))
-                          (untag_int(transl arg2)) dbg)
+      tag_int(mod_int (untag_int(transl arg1)) (untag_int(transl arg2)) dbg)
   | Pandint ->
       Cop(Cand, [transl arg1; transl arg2])
   | Porint ->
@@ -1741,25 +2009,26 @@ and transl_prim_3 p arg1 arg2 arg3 dbg =
     fatal_error "Cmmgen.transl_prim_3"
 
 and transl_unbox_float = function
-    Uconst(Const_base(Const_float f), _) -> Cconst_float f
+    Uconst(Uconst_ref(_, Uconst_float f)) -> Cconst_float f
   | exp -> unbox_float(transl exp)
 
 and transl_unbox_int bi = function
-    Uconst(Const_base(Const_int32 n), _) ->
+    Uconst(Uconst_ref(_, Uconst_int32 n)) ->
       Cconst_natint (Nativeint.of_int32 n)
-  | Uconst(Const_base(Const_nativeint n), _) ->
+  | Uconst(Uconst_ref(_, Uconst_nativeint n)) ->
       Cconst_natint n
-  | Uconst(Const_base(Const_int64 n), _) ->
+  | Uconst(Uconst_ref(_, Uconst_int64 n)) ->
       assert (size_int = 8); Cconst_natint (Int64.to_nativeint n)
-  | Uprim(Pbintofint bi',[Uconst(Const_base(Const_int i),_)],_) when bi = bi' ->
+  | Uprim(Pbintofint bi',[Uconst(Uconst_int i)],_) when bi = bi' ->
       Cconst_int i
   | exp -> unbox_int bi (transl exp)
 
-and transl_unbox_let box_fn unbox_fn transl_unbox_fn id exp body =
+and transl_unbox_let box_fn unbox_fn transl_unbox_fn box_chunk box_offset
+                     id exp body =
   let unboxed_id = Ident.create (Ident.name id) in
   let trbody1 = transl body in
   let (trbody2, need_boxed, is_assigned) =
-    subst_boxed_number unbox_fn id unboxed_id trbody1 in
+    subst_boxed_number unbox_fn id unboxed_id box_chunk box_offset trbody1 in
   if need_boxed && is_assigned then
     Clet(id, transl exp, trbody1)
   else
@@ -1784,8 +2053,8 @@ and make_catch2 mk_body handler = match handler with
 
 and exit_if_true cond nfail otherwise =
   match cond with
-  | Uconst (Const_pointer 0, _) -> otherwise
-  | Uconst (Const_pointer 1, _) -> Cexit (nfail,[])
+  | Uconst (Uconst_ptr 0) -> otherwise
+  | Uconst (Uconst_ptr 1) -> Cexit (nfail,[])
   | Uprim(Psequor, [arg1; arg2], _) ->
       exit_if_true arg1 nfail (exit_if_true arg2 nfail otherwise)
   | Uprim(Psequand, _, _) ->
@@ -1814,8 +2083,8 @@ and exit_if_true cond nfail otherwise =
 
 and exit_if_false cond otherwise nfail =
   match cond with
-  | Uconst (Const_pointer 0, _) -> Cexit (nfail,[])
-  | Uconst (Const_pointer 1, _) -> otherwise
+  | Uconst (Uconst_ptr 0) -> Cexit (nfail,[])
+  | Uconst (Uconst_ptr 1) -> otherwise
   | Uprim(Psequand, [arg1; arg2], _) ->
       exit_if_false arg1 (exit_if_false arg2 otherwise nfail) nfail
   | Uprim(Psequor, _, _) ->
@@ -1846,9 +2115,13 @@ and transl_switch arg index cases = match Array.length cases with
 | 0 -> fatal_error "Cmmgen.transl_switch"
 | 1 -> transl cases.(0)
 | _ ->
+    let cases = Array.map transl cases in
+    let store = StoreExp.mk_store () in
+    let index =
+      Array.map
+        (fun j -> store.Switch.act_store cases.(j))
+        index in
     let n_index = Array.length index in
-    let actions = Array.map transl cases in
-
     let inters = ref []
     and this_high = ref (n_index-1)
     and this_low = ref (n_index-1)
@@ -1865,13 +2138,15 @@ and transl_switch arg index cases = match Array.length cases with
       end
     done ;
     inters := (0, !this_high, !this_act) :: !inters ;
-    bind "switcher" arg
-      (fun a ->
-        SwitcherBlocks.zyva
-          (0,n_index-1)
-          (fun i -> Cconst_int i)
-          a
-          (Array.of_list !inters) actions)
+    match !inters with
+    | [_] -> cases.(0)
+    | inters ->
+        bind "switcher" arg
+          (fun a ->
+            SwitcherBlocks.zyva
+              (0,n_index-1)
+              a
+              (Array.of_list inters) store)
 
 and transl_letrec bindings cont =
   let bsz =
@@ -1935,99 +2210,42 @@ let rec transl_all_functions already_translated cont =
 
 (* Emit structured constants *)
 
-let immstrings = Hashtbl.create 17
-
-let rec emit_constant symb cst cont =
+let rec emit_structured_constant symb cst cont =
+  let emit_block white_header symb cont =
+    (* Headers for structured constants must be marked black in case we
+       are in no-naked-pointers mode.  See [caml_darken]. *)
+    let black_header = Nativeint.logor white_header caml_black in
+    Cint black_header :: Cdefine_symbol symb :: cont
+  in
   match cst with
-    Const_base(Const_float s) ->
-      Cint(float_header) :: Cdefine_symbol symb :: Cdouble s :: cont
-  | Const_base(Const_string s) | Const_immstring s ->
-      Cint(string_header (String.length s)) ::
-      Cdefine_symbol symb ::
-      emit_string_constant s cont
-  | Const_base(Const_int32 n) ->
-      Cint(boxedint32_header) :: Cdefine_symbol symb ::
-      emit_boxed_int32_constant n cont
-  | Const_base(Const_int64 n) ->
-      Cint(boxedint64_header) :: Cdefine_symbol symb ::
-      emit_boxed_int64_constant n cont
-  | Const_base(Const_nativeint n) ->
-      Cint(boxedintnat_header) :: Cdefine_symbol symb ::
-      emit_boxed_nativeint_constant n cont
-  | Const_block(tag, fields) ->
-      let (emit_fields, cont1) = emit_constant_fields fields cont in
-      Cint(block_header tag (List.length fields)) ::
-      Cdefine_symbol symb ::
-      emit_fields @ cont1
-  | Const_float_array(fields) ->
-      Cint(floatarray_header (List.length fields)) ::
-      Cdefine_symbol symb ::
-      Misc.map_end (fun f -> Cdouble f) fields cont
-  | _ -> fatal_error "gencmm.emit_constant"
+  | Uconst_float s->
+      emit_block float_header symb (Cdouble s :: cont)
+  | Uconst_string s ->
+      emit_block (string_header (String.length s)) symb
+        (emit_string_constant s cont)
+  | Uconst_int32 n ->
+      emit_block boxedint32_header symb
+        (emit_boxed_int32_constant n cont)
+  | Uconst_int64 n ->
+      emit_block boxedint64_header symb
+        (emit_boxed_int64_constant n cont)
+  | Uconst_nativeint n ->
+      emit_block boxedintnat_header symb
+        (emit_boxed_nativeint_constant n cont)
+  | Uconst_block (tag, csts) ->
+      let cont = List.fold_right emit_constant csts cont in
+      emit_block (block_header tag (List.length csts)) symb cont
+  | Uconst_float_array fields ->
+      emit_block (floatarray_header (List.length fields)) symb
+        (Misc.map_end (fun f -> Cdouble f) fields cont)
 
-and emit_constant_fields fields cont =
-  match fields with
-    [] -> ([], cont)
-  | f1 :: fl ->
-      let (data1, cont1) = emit_constant_field f1 cont in
-      let (datal, contl) = emit_constant_fields fl cont1 in
-      (data1 :: datal, contl)
-
-and emit_constant_field field cont =
-  match field with
-    Const_base(Const_int n) ->
-      (Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n),
-       cont)
-  | Const_base(Const_char c) ->
-      (Cint(Nativeint.of_int(((Char.code c) lsl 1) + 1)), cont)
-  | Const_base(Const_float s) ->
-      let lbl = Compilenv.new_const_label() in
-      (Clabel_address lbl,
-       Cint(float_header) :: Cdefine_label lbl :: Cdouble s :: cont)
-  | Const_base(Const_string s) ->
-      let lbl = Compilenv.new_const_label() in
-      (Clabel_address lbl,
-       Cint(string_header (String.length s)) :: Cdefine_label lbl ::
-       emit_string_constant s cont)
-  | Const_immstring s ->
-      begin try
-        (Clabel_address (Hashtbl.find immstrings s), cont)
-      with Not_found ->
-        let lbl = Compilenv.new_const_label() in
-        Hashtbl.add immstrings s lbl;
-        (Clabel_address lbl,
-         Cint(string_header (String.length s)) :: Cdefine_label lbl ::
-         emit_string_constant s cont)
-      end
-  | Const_base(Const_int32 n) ->
-      let lbl = Compilenv.new_const_label() in
-      (Clabel_address lbl,
-       Cint(boxedint32_header) :: Cdefine_label lbl ::
-       emit_boxed_int32_constant n cont)
-  | Const_base(Const_int64 n) ->
-      let lbl = Compilenv.new_const_label() in
-      (Clabel_address lbl,
-       Cint(boxedint64_header) :: Cdefine_label lbl ::
-       emit_boxed_int64_constant n cont)
-  | Const_base(Const_nativeint n) ->
-      let lbl = Compilenv.new_const_label() in
-      (Clabel_address lbl,
-       Cint(boxedintnat_header) :: Cdefine_label lbl ::
-       emit_boxed_nativeint_constant n cont)
-  | Const_pointer n ->
-      (Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n),
-       cont)
-  | Const_block(tag, fields) ->
-      let lbl = Compilenv.new_const_label() in
-      let (emit_fields, cont1) = emit_constant_fields fields cont in
-      (Clabel_address lbl,
-       Cint(block_header tag (List.length fields)) :: Cdefine_label lbl ::
-       emit_fields @ cont1)
-  | Const_float_array(fields) ->
-      let lbl = Compilenv.new_const_label() in
-      (Clabel_address lbl,
-       Cint(floatarray_header (List.length fields)) :: Cdefine_label lbl ::
-       Misc.map_end (fun f -> Cdouble f) fields cont)
+and emit_constant cst cont =
+  match cst with
+  | Uconst_int n | Uconst_ptr n ->
+      Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
+      :: cont
+  | Uconst_ref (label, _) ->
+      Csymbol_address label :: cont
 
 and emit_string_constant s cont =
   let n = size_int - 1 - (String.length s) mod size_int in
@@ -2075,7 +2293,7 @@ let emit_constant_closure symb fundecls cont =
             Cint(Nativeint.of_int (f2.arity lsl 1 + 1)) ::
             Csymbol_address f2.label ::
             emit_others (pos + 4) rem in
-      Cint(closure_header (fundecls_size fundecls)) ::
+      Cint(black_closure_header (fundecls_size fundecls)) ::
       Cdefine_symbol symb ::
       if f1.arity = 1 then
         Csymbol_address f1.label ::
@@ -2093,14 +2311,12 @@ let emit_all_constants cont =
   let c = ref cont in
   List.iter
     (fun (lbl, global, cst) ->
-       let cst = emit_constant lbl cst [] in
+       let cst = emit_structured_constant lbl cst [] in
        let cst = if global then
          Cglobal_symbol lbl :: cst
        else cst in
          c:= Cdata(cst):: !c)
     (Compilenv.structured_constants());
-(*  structured_constants := []; done in Compilenv.reset() *)
-  Hashtbl.clear immstrings;   (* PR#3979 *)
   List.iter
     (fun (symb, fundecls) ->
         c := Cdata(emit_constant_closure symb fundecls []) :: !c)
@@ -2119,10 +2335,18 @@ let compunit size ulam =
                        fun_dbg  = Debuginfo.none }] in
   let c2 = transl_all_functions StringSet.empty c1 in
   let c3 = emit_all_constants c2 in
-  Cdata [Cint(block_header 0 size);
+  let space =
+    (* These words will be registered as roots and as such must contain
+       valid values, in case we are in no-naked-pointers mode.  Likewise
+       the block header must be black, below (see [caml_darken]), since
+       the overall record may be referenced. *)
+    Array.to_list
+      (Array.init size (fun _index ->
+        Cint (Nativeint.of_int 1 (* Val_unit *))))
+  in
+  Cdata ([Cint(black_block_header 0 size);
          Cglobal_symbol glob;
-         Cdefine_symbol glob;
-         Cskip(size * size_addr)] :: c3
+         Cdefine_symbol glob] @ space) :: c3
 
 (*
 CAMLprim value caml_cache_public_method (value meths, value tag, value *cache)
@@ -2186,7 +2410,7 @@ let cache_public_method meths tag cache =
 *)
 
 let apply_function_body arity =
-  let arg = Array.create arity (Ident.create "arg") in
+  let arg = Array.make arity (Ident.create "arg") in
   for i = 1 to arity - 1 do arg.(i) <- Ident.create "arg" done;
   let clos = Ident.create "clos" in
   let rec app_fun clos n =
@@ -2466,8 +2690,8 @@ let reference_symbols namelist =
 
 let global_data name v =
   Cdata(Cglobal_symbol name ::
-          emit_constant name
-          (Const_base (Const_string (Marshal.to_string v []))) [])
+          emit_structured_constant name
+          (Uconst_string (Marshal.to_string v [])) [])
 
 let globals_map v = global_data "caml_globals_map" v
 
@@ -2502,15 +2726,18 @@ let code_segment_table namelist =
 
 (* Initialize a predefined exception *)
 
-let predef_exception name =
-  let bucketname = "caml_bucket_" ^ name in
+let predef_exception i name =
   let symname = "caml_exn_" ^ name in
+  let cst = Uconst_string name in
+  let label = Compilenv.new_const_symbol () in
+  let cont = emit_structured_constant label cst [] in
   Cdata(Cglobal_symbol symname ::
-        emit_constant symname (Const_block(0,[Const_base(Const_string name)]))
-        [ Cglobal_symbol bucketname;
-          Cint(block_header 0 1);
-          Cdefine_symbol bucketname;
-          Csymbol_address symname ])
+        emit_structured_constant symname
+          (Uconst_block(Obj.object_tag,
+                       [
+                         Uconst_ref(label, cst);
+                         Uconst_int (-i-1);
+                       ])) cont)
 
 (* Header for a plugin *)
 

@@ -92,6 +92,7 @@ let print_out_value = Oprint.out_value
 let print_out_type = Oprint.out_type
 let print_out_class_type = Oprint.out_class_type
 let print_out_module_type = Oprint.out_module_type
+let print_out_type_extension = Oprint.out_type_extension
 let print_out_sig_item = Oprint.out_sig_item
 let print_out_signature = Oprint.out_signature
 let print_out_phrase = Oprint.out_phrase
@@ -171,8 +172,8 @@ let rec pr_item env = function
   | Sig_type(id, decl, rs) :: rem ->
       let tree = Printtyp.tree_of_type_declaration id decl rs in
       Some (tree, None, rem)
-  | Sig_exception(id, decl) :: rem ->
-      let tree = Printtyp.tree_of_exception_declaration id decl in
+  | Sig_typext(id, ext, es) :: rem ->
+      let tree = Printtyp.tree_of_extension_constructor id ext es in
       Some (tree, None, rem)
   | Sig_module(id, mty, rs) :: rem ->
       let tree = Printtyp.tree_of_module id mty rs in
@@ -325,7 +326,7 @@ let use_file ppf name =
         with
         | Exit -> false
         | Sys.Break -> fprintf ppf "Interrupted.@."; false
-        | x -> Opterrors.report_error ppf x; false) in
+        | x -> Location.report_exception ppf x; false) in
     if must_close then close_in ic;
     success
   with Not_found -> fprintf ppf "Cannot find file %s.@." name; false
@@ -389,7 +390,8 @@ let _ =
   ()
 
 let load_ocamlinit ppf =
-  match !Clflags.init_file with
+  if !Clflags.noinit then ()
+  else match !Clflags.init_file with
   | Some f -> if Sys.file_exists f then ignore (use_silently ppf f)
               else fprintf ppf "Init file not found: \"%s\".@." f
   | None ->
@@ -438,7 +440,7 @@ let loop ppf =
     | End_of_file -> exit 0
     | Sys.Break -> fprintf ppf "Interrupted.@."; Btype.backtrack snap
     | PPerror -> ()
-    | x -> Opterrors.report_error ppf x; Btype.backtrack snap
+    | x -> Location.report_exception ppf x; Btype.backtrack snap
   done
 
 (* Execute a script *)

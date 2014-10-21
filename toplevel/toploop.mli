@@ -53,6 +53,9 @@ val execute_phrase : bool -> formatter -> Parsetree.toplevel_phrase -> bool
            phrase executed with no errors and [false] otherwise.
            First bool says whether the values and types of the results
            should be printed. Uncaught exceptions are always printed. *)
+val preprocess_phrase : formatter -> Parsetree.toplevel_phrase ->  Parsetree.toplevel_phrase
+        (* Preprocess the given toplevel phrase using regular and ppx
+           preprocessors. Return the updated phrase. *)
 val use_file : formatter -> string -> bool
 val use_silently : formatter -> string -> bool
 val mod_use_file : formatter -> string -> bool
@@ -60,7 +63,7 @@ val mod_use_file : formatter -> string -> bool
            [use_file] prints the types and values of the results.
            [use_silently] does not print them.
            [mod_use_file] wrap the file contents into a module. *)
-val eval_path: Path.t -> Obj.t
+val eval_path: Env.t -> Path.t -> Obj.t
         (* Return the toplevel object referred to by the given path *)
 
 (* Printing of values *)
@@ -92,6 +95,8 @@ val print_out_class_type :
   (formatter -> Outcometree.out_class_type -> unit) ref
 val print_out_module_type :
   (formatter -> Outcometree.out_module_type -> unit) ref
+val print_out_type_extension :
+  (formatter -> Outcometree.out_type_extension -> unit) ref
 val print_out_sig_item :
   (formatter -> Outcometree.out_sig_item -> unit) ref
 val print_out_signature :
@@ -101,7 +106,7 @@ val print_out_phrase :
 
 (* Hooks for external line editor *)
 
-val read_interactive_input : (string -> string -> int -> int * bool) ref
+val read_interactive_input : (string -> bytes -> int -> int * bool) ref
 
 (* Hooks for initialization *)
 

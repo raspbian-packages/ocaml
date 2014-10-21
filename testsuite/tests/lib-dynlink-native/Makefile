@@ -19,7 +19,11 @@ LD_PATH=$(TOPDIR)/otherlibs/$(UNIXLIBVAR)unix:$(TOPDIR)/otherlibs/systhreads:$(T
 
 .PHONY: default
 default:
-	@if $(BYTECODE_ONLY); then : ; else \
+	@if ! $(SUPPORTS_SHARED_LIBRARIES); then \
+	  echo 'skipped (shared libraries not available)'; \
+	elif $(BYTECODE_ONLY); then \
+	  echo 'skipped (native compiler not available)' ; \
+	else \
 	   $(SET_LD_PATH) $(MAKE) all; \
 	fi
 
@@ -45,7 +49,7 @@ run:
 
 main$(EXE): api.cmx main.cmx
 	@$(OCAMLOPT) -thread -o main$(EXE) -linkall unix.cmxa threads.cmxa \
-	             dynlink.cmxa api.cmx main.cmx $(PTHREAD_LINK)
+	             dynlink.cmxa api.cmx main.cmx
 
 main_ext$(EXE): api.cmx main.cmx factorial.$(O)
 	@$(OCAMLOPT) -o main_ext$(EXE) dynlink.cmxa api.cmx main.cmx \

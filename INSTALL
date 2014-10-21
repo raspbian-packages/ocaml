@@ -15,11 +15,11 @@ PREREQUISITES
   are all *required*.  The vendor-provided compiler, assembler and make
   have major problems.
 
-* GNU make is needed to build ocamlbuild and camlp4.  If your system's
-  default make is not GNU make, you need to define the GNUMAKE environment
+* GNU make is needed to build ocamlbuild.  If your system's default
+  make is not GNU make, you need to define the GNUMAKE environment
   variable to the name of GNU make, typically with this command:
 
-    export GNUMAKE=gnumake
+    export GNUMAKE=gmake
 
 INSTALLATION INSTRUCTIONS
 
@@ -65,28 +65,19 @@ The "configure" script accepts the following options:
         hand. The installation instructions for gcc or emacs contain a
         complete list of configuration names.
 
+-target <targettype>            (default: same as -host)
+        The type of the target machine, in GNU's "configuration name"
+        format (CPU-COMPANY-SYSTEM or CPU-COMPANY-KERNEL-SYSTEM).
+        Setting this will setup OCaml as a cross-compiler which runs on
+        $host and produces code for $target. This requires a C toolchain
+        which also produces code for $target and a native OCaml
+        compiler of the exact same version (if you want a cross 4.00.1,
+        you need a native 4.00.1).
+
 -x11include <include_dir>       (default: determined automatically)
 -x11lib     <lib_dir>           (default: determined automatically)
         Location of the X11 include directory (e.g. /usr/X11R6/include)
         and the X11 library directory (e.g. /usr/X11R6/lib).
-
--tkdefs <cpp flags>             (default: none)
--tklibs <flags and libraries>   (default: determined automatically)
-        These options specify where to find the Tcl/Tk libraries for
-        LablTk. "-tkdefs" helps to find the headers, and "-tklibs"
-        the C libraries. "-tklibs" may contain either only -L/path and
-        -Wl,... flags, in which case the library names are determined
-        automatically, or the actual libraries, which are used as given.
-        Example: for a Japanese tcl/tk whose headers are in specific
-        directories and libraries in /usr/local/lib, you can use
-        ./configure -tklibs "-L/usr/local/lib -ltk8.0jp -ltcl8.0jp"
-          -tkdefs "-I/usr/local/include/tcl8.0jp -I/usr/local/include/tk8.0jp"
-
--tk-no-x11
-        Build LablTk without using X11. This option is needed on Cygwin.
-
--no-tk
-        Do not attempt to build LablTk.
 
 -no-pthread
         Do not attempt to use POSIX threads.
@@ -120,8 +111,14 @@ The "configure" script accepts the following options:
         Verbose output of the configuration tests. Use it if the outcome
         of configure is not what you were expecting.
 
--no-camlp4
-        Do not compile Camlp4.
+-no-debugger
+        Do not build ocamldebug.
+
+-no-ocamldoc
+        Do not build ocamldoc.
+
+-no-ocamlbuild
+        Do not build ocamlbuild.
 
 -no-graph
         Do not compile the Graphics library.
@@ -156,8 +153,9 @@ Examples:
   to build a 64-bit version of OCaml:
     ./configure -cc "gcc -m64"
 
-  On a MacOSX 10.6/Intel Core 2, to build a 32-bit version of OCaml:
-    ./configure -cc "gcc -m32" -as "as -arch i386" -aspp "gcc -m32 -c"
+  On Intel Mac OS X, to build a 32-bit version of OCaml:
+    ./configure -host "i386-apple-darwin13.2.0" -cc "gcc -arch i386 -m32" \
+      -as "as -arch i386" -aspp "gcc -arch i386 -m32 -c"
 
   For Sun Solaris with the "acc" compiler:
     ./configure -cc "acc -fast" -libs "-lucb"
@@ -319,6 +317,9 @@ Fix: do not pass the -j option to make, and be patient.
 
 * The Makefiles use the "include" directive, which is not supported by
 all versions of make. Use GNU make if this is a problem.
+
+* Solaris make mishandles a space in our Makefiles, so you have to use GNU
+make to build on Solaris.
 
 * The Makefiles assume that make executes commands by calling /bin/sh. They
 won't work if /bin/csh is called instead. You may have to unset the SHELL

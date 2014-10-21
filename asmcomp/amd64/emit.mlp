@@ -22,6 +22,7 @@ open Emitaux
 
 let macosx = (Config.system = "macosx")
 let mingw64 = (Config.system = "mingw64")
+let cygwin = (Config.system = "cygwin")
 
 let fp = Config.with_frame_pointers
 
@@ -61,17 +62,17 @@ let emit_symbol s =
     Emitaux.emit_symbol '$' s
 
 let emit_call s =
-  if !Clflags.dlcode && not macosx && not mingw64
+  if !Clflags.dlcode && not macosx && not mingw64 && not cygwin
   then `call	{emit_symbol s}@PLT`
   else `call	{emit_symbol s}`
 
 let emit_jump s =
-  if !Clflags.dlcode && not macosx && not mingw64
+  if !Clflags.dlcode && not macosx && not mingw64 && not cygwin
   then `jmp	{emit_symbol s}@PLT`
   else `jmp	{emit_symbol s}`
 
 let load_symbol_addr s =
-  if !Clflags.dlcode && not mingw64
+  if !Clflags.dlcode && not mingw64 && not cygwin
   then `movq	{emit_symbol s}@GOTPCREL(%rip)`
   else if !pic_code
   then `leaq	{emit_symbol s}(%rip)`
@@ -334,15 +335,16 @@ let output_epilogue f =
 
 (* Floating-point constants *)
 
-let float_constants = ref ([] : (string * int) list)
+let float_constants = ref ([] : (int64 * int) list)
 
 let add_float_constant cst =
+  let repr = Int64.bits_of_float cst in
   try
-    List.assoc cst !float_constants
+    List.assoc repr !float_constants
   with
     Not_found ->
       let lbl = new_label() in
-      float_constants := (cst, lbl) :: !float_constants;
+      float_constants := (repr, lbl) :: !float_constants;
       lbl
 
 let emit_float_constant (cst, lbl) =
@@ -372,7 +374,7 @@ let emit_instr fallthrough i =
           | _ ->
               `	movq	{emit_reg src}, {emit_reg dst}\n`
         end
-    | Lop(Iconst_int n) ->
+    | Lop(Iconst_int n | Iconst_blockheader n) ->
         if n = 0n then begin
           match i.res.(0).loc with
             Reg n -> `	xorq	{emit_reg i.res.(0)}, {emit_reg i.res.(0)}\n`
@@ -381,12 +383,12 @@ let emit_instr fallthrough i =
           `	movq	${emit_nativeint n}, {emit_reg i.res.(0)}\n`
         else
           `	movabsq	${emit_nativeint n}, {emit_reg i.res.(0)}\n`
-    | Lop(Iconst_float s) ->
-        begin match Int64.bits_of_float (float_of_string s) with
+    | Lop(Iconst_float f) ->
+        begin match Int64.bits_of_float f with
         | 0x0000_0000_0000_0000L ->       (* +0.0 *)
           `	xorpd	{emit_reg i.res.(0)}, {emit_reg i.res.(0)}\n`
         | _ ->
-          let lbl = add_float_constant s in
+          let lbl = add_float_constant f in
           `	movsd	{emit_label lbl}(%rip), {emit_reg i.res.(0)}\n`
         end
     | Lop(Iconst_symbol s) ->
@@ -447,7 +449,7 @@ let emit_instr fallthrough i =
           | Double | Double_u ->
             `	movsd	{emit_addressing addr i.arg 0}, {emit_reg dest}\n`
         end
-    | Lop(Istore(chunk, addr)) ->
+    | Lop(Istore(chunk, addr, _)) ->
         begin match chunk with
           | Word ->
             `	movq	{emit_reg i.arg.(0)}, {emit_addressing addr i.arg 1}\n`
@@ -514,6 +516,8 @@ let emit_instr fallthrough i =
     | Lop(Iintop(Ilsl | Ilsr | Iasr as op)) ->
         (* We have i.arg.(0) = i.res.(0) and i.arg.(1) = %rcx *)
         `	{emit_string(instr_for_intop op)}	%cl, {emit_reg i.res.(0)}\n`
+    | Lop(Iintop Imulh) ->
+        `	imulq	{emit_reg i.arg.(1)}\n`
     | Lop(Iintop op) ->
         (* We have i.arg.(0) = i.res.(0) *)
         `	{emit_string(instr_for_intop op)}	{emit_reg i.arg.(1)}, {emit_reg i.res.(0)}\n`
@@ -523,22 +527,6 @@ let emit_instr fallthrough i =
         `	incq	{emit_reg i.res.(0)}\n`
     | Lop(Iintop_imm(Iadd, -1) | Iintop_imm(Isub, 1)) ->
         `	decq	{emit_reg i.res.(0)}\n`
-    | Lop(Iintop_imm(Idiv, n)) ->
-        (* Note: i.arg.(0) = i.res.(0) = rdx  (cf. selection.ml) *)
-        let l = Misc.log2 n in
-        `	movq	{emit_reg i.arg.(0)}, %rax\n`;
-        `	addq	${emit_int(n-1)}, {emit_reg i.arg.(0)}\n`;
-        `	testq	%rax, %rax\n`;
-        `	cmovns	%rax, {emit_reg i.arg.(0)}\n`;
-        `	sarq	${emit_int l}, {emit_reg i.res.(0)}\n`
-    | Lop(Iintop_imm(Imod, n)) ->
-        (* Note: i.arg.(0) = i.res.(0) = rdx  (cf. selection.ml) *)
-        `	movq	{emit_reg i.arg.(0)}, %rax\n`;
-        `	testq	%rax, %rax\n`;
-        `	leaq	{emit_int(n-1)}(%rax), %rax\n`;
-        `	cmovns	{emit_reg i.arg.(0)}, %rax\n`;
-        `	andq	${emit_int (-n)}, %rax\n`;
-        `	subq	%rax, {emit_reg i.res.(0)}\n`
     | Lop(Iintop_imm(op, n)) ->
         (* We have i.arg.(0) = i.res.(0) *)
         `	{emit_string(instr_for_intop op)}	${emit_int n}, {emit_reg i.res.(0)}\n`
@@ -554,9 +542,9 @@ let emit_instr fallthrough i =
         `	cvttsd2siq	{emit_reg i.arg.(0)}, {emit_reg i.res.(0)}\n`
     | Lop(Ispecific(Ilea addr)) ->
         `	leaq	{emit_addressing addr i.arg 0}, {emit_reg i.res.(0)}\n`
-    | Lop(Ispecific(Istore_int(n, addr))) ->
+    | Lop(Ispecific(Istore_int(n, addr, _))) ->
         `	movq	${emit_nativeint n}, {emit_addressing addr i.arg 0}\n`
-    | Lop(Ispecific(Istore_symbol(s, addr))) ->
+    | Lop(Ispecific(Istore_symbol(s, addr, _))) ->
         assert (not !pic_code && not !Clflags.dlcode);
         `	movq	${emit_symbol s}, {emit_addressing addr i.arg 0}\n`
     | Lop(Ispecific(Ioffset_loc(n, addr))) ->
@@ -650,7 +638,7 @@ let emit_instr fallthrough i =
         `	jmp	*{emit_reg tmp1}\n`;
         if macosx then
           `	.const\n`
-        else if mingw64 then
+        else if mingw64 || cygwin then
           `	.section .rdata,\"dr\"\n`
         else
           `	.section .rodata\n`;
@@ -674,11 +662,16 @@ let emit_instr fallthrough i =
         `	addq	$8, %rsp\n`;
         cfi_adjust_cfa_offset (-8);
         stack_offset := !stack_offset - 16
-    | Lraise ->
-        if !Clflags.debug then begin
+    | Lraise k ->
+        begin match !Clflags.debug, k with
+        | true, Lambda.Raise_regular ->
           `	{emit_call "caml_raise_exn"}\n`;
           record_frame Reg.Set.empty i.dbg
-        end else begin
+        | true, Lambda.Raise_reraise ->
+          `	{emit_call "caml_reraise_exn"}\n`;
+          record_frame Reg.Set.empty i.dbg
+        | false, _
+        | true, Lambda.Raise_notrace ->
           `	movq	%r14, %rsp\n`;
           `	popq	%r14\n`;
           `	ret\n`
@@ -772,9 +765,9 @@ let emit_item = function
   | Cint n ->
       `	.quad	{emit_nativeint n}\n`
   | Csingle f ->
-      emit_float32_directive ".long" f
+      emit_float32_directive ".long" (Int32.bits_of_float f)
   | Cdouble f ->
-      emit_float64_directive ".quad" f
+      emit_float64_directive ".quad" (Int64.bits_of_float f)
   | Csymbol_address s ->
       `	.quad	{emit_symbol s}\n`
   | Clabel_address lbl ->
@@ -799,7 +792,7 @@ let begin_assembly() =
     (* from amd64.S; could emit these constants on demand *)
     if macosx then
       `	.literal16\n`
-    else if mingw64 then
+    else if mingw64 || cygwin then
       `	.section .rdata,\"dr\"\n`
     else
       `	.section .rodata.cst8,\"a\",@progbits\n`;
@@ -822,7 +815,7 @@ let end_assembly() =
   if !float_constants <> [] then begin
     if macosx then
       `	.literal8\n`
-    else if mingw64 then
+    else if mingw64 || cygwin then
       `	.section .rdata,\"dr\"\n`
     else
       `	.section .rodata.cst8,\"a\",@progbits\n`;

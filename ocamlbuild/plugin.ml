@@ -202,7 +202,7 @@ module Make(U:sig end) =
            precisely those that will be used during the compilation of
            the plugin, and no more.
         *)
-        Param_tags.partial_init plugin_tags;
+        Param_tags.partial_init Const.Source.plugin_tag plugin_tags;
 
         let cmd =
           (* The argument order is important: we carefully put the
@@ -248,6 +248,9 @@ module Make(U:sig end) =
           let rc = sys_command (Command.string_of_command_spec spec) in
           raise (Exit_silently_with_code rc);
         end
+      else if not (sys_file_exists plugin_file) && !Options.plugin_tags <> [] then
+        eprintf "Warning: option -plugin-tag(s) has no effect \
+                 in absence of plugin file %S" plugin_file
       else
         ()
   end

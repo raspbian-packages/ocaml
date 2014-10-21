@@ -228,14 +228,19 @@ val nondep_type_decl:
         Env.t -> Ident.t -> Ident.t -> bool -> type_declaration ->
         type_declaration
         (* Same for type declarations. *)
+val nondep_extension_constructor:
+        Env.t -> Ident.t -> extension_constructor ->
+        extension_constructor
+          (* Same for extension constructor *)
 val nondep_class_declaration:
         Env.t -> Ident.t -> class_declaration -> class_declaration
         (* Same for class declarations. *)
 val nondep_cltype_declaration:
         Env.t -> Ident.t -> class_type_declaration -> class_type_declaration
         (* Same for class type declarations. *)
-val correct_abbrev: Env.t -> Path.t -> type_expr list -> type_expr -> unit
+(*val correct_abbrev: Env.t -> Path.t -> type_expr list -> type_expr -> unit*)
 val cyclic_abbrev: Env.t -> Ident.t -> type_expr -> bool
+val is_contractive: Env.t -> type_expr -> bool
 val normalize_type: Env.t -> type_expr -> unit
 
 val closed_schema: type_expr -> bool
@@ -245,6 +250,7 @@ val closed_schema: type_expr -> bool
 val free_variables: ?env:Env.t -> type_expr -> type_expr list
         (* If env present, then check for incomplete definitions too *)
 val closed_type_decl: type_declaration -> type_expr option
+val closed_extension_constructor: extension_constructor -> type_expr option
 type closed_class_failure =
     CC_Method of type_expr * bool * string * type_expr
   | CC_Value of type_expr * bool * string * type_expr
@@ -263,3 +269,9 @@ val collapse_conj_params: Env.t -> type_expr list -> unit
         (* Collapse conjunctive types in class parameters *)
 
 val get_current_level: unit -> int
+val wrap_trace_gadt_instances: Env.t -> ('a -> 'b) -> 'a -> 'b
+
+(* Stubs *)
+val package_subtype :
+    (Env.t -> Path.t -> Longident.t list -> type_expr list ->
+      Path.t -> Longident.t list -> type_expr list -> bool) ref

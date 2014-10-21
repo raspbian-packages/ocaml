@@ -30,7 +30,7 @@ let subst_regs rv sub =
     None -> rv
   | Some s ->
       let n = Array.length rv in
-      let nv = Array.create n Reg.dummy in
+      let nv = Array.make n Reg.dummy in
       for i = 0 to n-1 do nv.(i) <- subst_reg rv.(i) s done;
       nv
 
@@ -184,8 +184,8 @@ let rec rename i sub =
         rename i.next (merge_substs sub_body sub_handler i.next) in
       (instr_cons (Itrywith(new_body, new_handler)) [||] [||] new_next,
        sub_next)
-  | Iraise ->
-      (instr_cons_debug Iraise (subst_regs i.arg sub) [||] i.dbg i.next,
+  | Iraise k ->
+      (instr_cons_debug (Iraise k) (subst_regs i.arg sub) [||] i.dbg i.next,
        None)
 
 (* Second pass: replace registers by their final representatives *)
@@ -195,8 +195,13 @@ let set_repres i =
 
 (* Entry point *)
 
-let fundecl f =
+let reset () =
   equiv_classes := Reg.Map.empty;
+  exit_subst := []
+
+let fundecl f =
+  reset ();
+
   let new_args = Array.copy f.fun_args in
   let (new_body, sub_body) = rename f.fun_body (Some Reg.Map.empty) in
   repres_regs new_args;
