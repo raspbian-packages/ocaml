@@ -1,3 +1,9 @@
+ocaml (4.02.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Stéphane Glondu <glondu@debian.org>  Tue, 21 Oct 2014 11:41:18 +0200
+
 ocaml (4.01.0-4) unstable; urgency=medium
 
   * debian/patches:
