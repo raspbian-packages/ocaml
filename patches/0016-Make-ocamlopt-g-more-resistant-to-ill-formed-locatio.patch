@@ -1,0 +1,27 @@
+From: Xavier Leroy <xavier.leroy@inria.fr>
+Date: Thu, 28 Nov 2013 14:31:42 +0000
+Subject: Make "ocamlopt -g" more resistant to ill-formed locations
+
+Origin: upstream SVN, r1432
+Bug: http://caml.inria.fr/mantis/view.php?id=6243
+---
+ asmcomp/emitaux.ml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/asmcomp/emitaux.ml b/asmcomp/emitaux.ml
+index 3ad467c..ccfa977 100644
+--- a/asmcomp/emitaux.ml
++++ b/asmcomp/emitaux.ml
+@@ -221,9 +221,9 @@ let reset_debug_info () =
+ let emit_debug_info dbg =
+   if is_cfi_enabled () &&
+     (!Clflags.debug || Config.with_frame_pointers)
+-     && not (Debuginfo.is_none dbg) then begin
++     && dbg.Debuginfo.dinfo_line > 0 (* PR#6243 *)
++  then begin
+     let line = dbg.Debuginfo.dinfo_line in
+-    assert (line <> 0); (* clang errors out on zero line numbers *)
+     let file_name = dbg.Debuginfo.dinfo_file in
+     let file_num =
+       try List.assoc file_name !file_pos_nums
+-- 
