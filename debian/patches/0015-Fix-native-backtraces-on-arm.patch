@@ -1,0 +1,59 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Wed, 13 Nov 2013 14:28:20 +0100
+Subject: Fix native backtraces on arm*
+
+Author: Jacques-Henri Jourdan
+Bug: http://caml.inria.fr/mantis/view.php?id=6233
+Signed-off-by: Stephane Glondu <steph@glondu.net>
+---
+ asmcomp/linearize.ml  | 6 ++++++
+ asmcomp/linearize.mli | 3 +++
+ asmcomp/schedgen.ml   | 3 ++-
+ 3 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/asmcomp/linearize.ml b/asmcomp/linearize.ml
+index 963ffe9..5095c3a 100644
+--- a/asmcomp/linearize.ml
++++ b/asmcomp/linearize.ml
+@@ -86,6 +86,12 @@ let instr_cons d a r n =
+   { desc = d; next = n; arg = a; res = r;
+     dbg = Debuginfo.none; live = Reg.Set.empty }
+ 
++(* Cons an instruction (live empty) *)
++
++let instr_cons_debug d a r dbg n =
++ { desc = d; next = n; arg = a; res = r;
++ dbg = dbg; live = Reg.Set.empty }
++
+ (* Cons a simple instruction (arg, res, live empty) *)
+ 
+ let cons_instr d n =
+diff --git a/asmcomp/linearize.mli b/asmcomp/linearize.mli
+index ad5dc3a..ca203a7 100644
+--- a/asmcomp/linearize.mli
++++ b/asmcomp/linearize.mli
+@@ -42,6 +42,9 @@ val has_fallthrough :  instruction_desc -> bool
+ val end_instr: instruction
+ val instr_cons:
+   instruction_desc -> Reg.t array -> Reg.t array -> instruction -> instruction
++val instr_cons_debug:
++ instruction_desc -> Reg.t array -> Reg.t array -> Debuginfo.t ->
++ instruction -> instruction
+ val invert_test: Mach.test -> Mach.test
+ 
+ type fundecl =
+diff --git a/asmcomp/schedgen.ml b/asmcomp/schedgen.ml
+index 885c945..a04ab27 100644
+--- a/asmcomp/schedgen.ml
++++ b/asmcomp/schedgen.ml
+@@ -336,7 +336,8 @@ method private reschedule ready_queue date cont =
+             if son.emitted_ancestors = son.ancestors then
+               new_queue := son :: !new_queue)
+           node.sons;
+-        instr_cons node.instr.desc node.instr.arg node.instr.res
++        instr_cons_debug node.instr.desc node.instr.arg node.instr.res
++        node.instr.dbg
+           (self#reschedule !new_queue (date + issue_cycles) cont)
+   end
+ 
+-- 
