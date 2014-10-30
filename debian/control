@@ -270,7 +270,7 @@ Description: OCaml interpreter and standard libraries
 Package: ocaml-mode
 Architecture: all
 Depends:
- emacs | emacsen, emacsen-common (>= 2.0.8)
+ emacs | emacsen, emacsen-common (>= 2.0.8),
  ${shlibs:Depends},
  ${misc:Depends}
 Suggests: ocaml
