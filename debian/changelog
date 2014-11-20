@@ -1,3 +1,10 @@
+ocaml (4.02.1-3) UNRELEASED; urgency=medium
+
+  * Fix asmcomp tests on sparc
+  * Disable prim-bswap test (it fails on arm64)
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 20 Nov 2014 16:49:38 +0100
+
 ocaml (4.02.1-2) experimental; urgency=medium
 
   * Disable endianness-dependent tests
