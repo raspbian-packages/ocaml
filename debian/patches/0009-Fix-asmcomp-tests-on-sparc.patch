@@ -1,0 +1,23 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Thu, 20 Nov 2014 16:48:12 +0100
+Subject: Fix asmcomp tests on sparc
+
+Bug: http://caml.inria.fr/mantis/view.php?id=6665
+---
+ testsuite/tests/asmcomp/sparc.S | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/testsuite/tests/asmcomp/sparc.S b/testsuite/tests/asmcomp/sparc.S
+index ea02957..f2b9ce2 100644
+--- a/testsuite/tests/asmcomp/sparc.S
++++ b/testsuite/tests/asmcomp/sparc.S
+@@ -10,7 +10,7 @@
+ /*                                                                     */
+ /***********************************************************************/
+ 
+-#if defined(SYS_solaris) || defined(SYS_elf)
++#if defined(SYS_solaris) || defined(SYS_linux)
+ #define Call_gen_code call_gen_code
+ #define Caml_c_call caml_c_call
+ #else
+-- 
