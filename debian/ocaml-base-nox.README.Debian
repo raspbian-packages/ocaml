@@ -9,7 +9,7 @@ OCaml for Debian
   o ocaml-base-nox: contains the runtime stuff (ocamlrun + dlls - Tk)
 
   o ocaml-native-compilers: contains the native built part of the OCaml suite
-    (ocamlc.opt, ocamlopt.opt, ocamllex.opt, camlp4o.opt and camlp4r.opt)
+    (ocamlc.opt, ocamlopt.opt, ocamllex.opt)
   o ocaml-compiler-libs: contains several modules used internally by
     the OCaml compilers.  They are not needed for normal OCaml
     development, but may be helpful in the development of certain
@@ -40,7 +40,7 @@ OCaml for Debian
   /usr/local/lib/ocaml/<ocaml_version>/stublibs which is searched before
   /usr/lib/ocaml/<ocaml_version>/stublibs.
 
- -- Jerome Marant <jerome@debian.org>, Sat Aug 20 11:51:32 2005
+ -- Stéphane Glondu <glondu@debian.org>, Mon, 16 Feb 2015 11:33:25 +0100
 
 ocamldoc's LaTeX output
 -----------------------

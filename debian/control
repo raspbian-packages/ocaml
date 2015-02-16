@@ -159,11 +159,11 @@ Description: Native code compilers of the OCaml suite (the .opt ones)
  the Caml Light dialect extended with a complete class-based object system
  and a powerful module system in the style of Standard ML.
  .
- This package contains the native code version of the compilers and lexer
- (ocamlc.opt, ocamllex.opt, ocamlopt.opt, camlp4o.opt and camlp4r.opt).
- The normal version of these programs are found in the 'ocaml' package.
- For big source codes, these packages can be two to three times faster, but
- for most normal sized sources, the difference won't be noticeable.
+ This package contains the native code version of the compilers
+ (ocamlc.opt, ocamllex.opt, ocamlopt.opt. The normal version of these
+ programs are found in the 'ocaml' package. For big source codes,
+ these packages can be two to three times faster, but for most normal
+ sized sources, the difference won't be noticeable.
 
 Package: ocaml-source
 Architecture: all

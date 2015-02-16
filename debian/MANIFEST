@@ -11,7 +11,6 @@ debian/copyright
 debian/gbp.conf
 debian/gen_modules.pl
 debian/ld.conf.in
-debian/man/camlp4.1
 debian/man/ocamldumpobj.1
 debian/man/ocamlmklib.1
 debian/man/ocamlobjinfo.1

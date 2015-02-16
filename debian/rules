@@ -194,8 +194,7 @@ ifeq (,$(DEB_TEST_BUILD_PREFIX))
 # Remove uninstalled files
 	rm -f \
 	  $(INSTDIR)/share/man/man1/ocamlopt.opt.1 \
-	  $(INSTDIR)/share/man/man1/ocamlc.opt.1 \
-	  $(INSTDIR)/bin/camlp4boot
+	  $(INSTDIR)/share/man/man1/ocamlc.opt.1
 ifeq ($(OCAML_HAVE_OCAMLOPT),no)
 # Remove files that make no sense without ocamlopt
 	rm -f \
@@ -221,9 +220,6 @@ endif
 	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
 	  fi \
 	done
-	for mli in `find camlp4 -name '*.mli'` ; do \
-	  cp --parents $$mli debian/camlp4$(OCAML_STDLIB_DIR); \
-	done
 	for pkg in ocaml ocaml-nox ocaml-base; do ( \
 	  cd debian/$$pkg/usr/share/doc/$$pkg && \
 	  ln -sf ../ocaml-base-nox/README.gz . && \
@@ -246,8 +242,8 @@ endif
 # Create .md5sums files and compute dependencies. Use $(OCAML_ABI)
 # because we know that OCaml ABI represents best dependencies for
 # OCaml package.
-	dh_ocaml -Xcompiler-libs -Xcamlp4-extra \
-	 --runtime-map ocaml-nox:ocaml-base-nox,ocaml:ocaml-base,camlp4 \
+	dh_ocaml -Xcompiler-libs \
+	 --runtime-map ocaml-nox:ocaml-base-nox,ocaml:ocaml-base \
 	 --checksum $(OCAML_ABI)
 	dh_gencontrol
 # Check that OCAML_ABI is correct
