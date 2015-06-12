@@ -7,11 +7,11 @@ Subject: Don't use rpath
  1 file changed, 5 insertions(+)
 
 diff --git a/tools/ocamlmklib.ml b/tools/ocamlmklib.ml
-index 77ae57b..4fdb391 100644
+index 23a273e..a5e0d34 100644
 --- a/tools/ocamlmklib.ml
 +++ b/tools/ocamlmklib.ml
-@@ -37,6 +37,11 @@ and output_c = ref ""       (* Output name for C part of library *)
- and rpath = ref []          (* rpath options *)
+@@ -40,6 +40,11 @@ and rpath = ref []          (* rpath options *)
+ and debug = ref false       (* -g option *)
  and verbose = ref false
  
 +(* Debian specific: inhibit rpath *)

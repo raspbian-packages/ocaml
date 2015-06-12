@@ -19,10 +19,10 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
  3 files changed, 21 insertions(+), 6 deletions(-)
 
 diff --git a/bytecomp/bytelink.ml b/bytecomp/bytelink.ml
-index c0f8f6a..778df01 100644
+index 2f5c0ec..7792b46 100644
 --- a/bytecomp/bytelink.ml
 +++ b/bytecomp/bytelink.ml
-@@ -431,6 +431,19 @@ let output_cds_file outfile =
+@@ -439,6 +439,19 @@ let output_cds_file outfile =
      remove_file outfile;
      raise x
  
@@ -42,7 +42,7 @@ index c0f8f6a..778df01 100644
  (* Output a bytecode executable as a C file *)
  
  let link_bytecode_as_c ppf tolink outfile =
-@@ -473,7 +486,7 @@ let link_bytecode_as_c ppf tolink outfile =
+@@ -481,7 +494,7 @@ let link_bytecode_as_c ppf tolink outfile =
        (Marshal.to_string sections []);
      output_string outchan "\n};\n\n";
      (* The table of primitives *)
@@ -51,7 +51,7 @@ index c0f8f6a..778df01 100644
      (* The entry point *)
      output_string outchan "\
  \nvoid caml_startup(char ** argv)\
-@@ -554,7 +567,7 @@ let link ppf objfiles output_name =
+@@ -562,7 +575,7 @@ let link ppf objfiles output_name =
          #else\n\
          typedef long value;\n\
          #endif\n";
@@ -61,10 +61,10 @@ index c0f8f6a..778df01 100644
          #ifdef __cplusplus\n\
          }\n\
 diff --git a/bytecomp/symtable.ml b/bytecomp/symtable.ml
-index 1cc3a53..397fc25 100644
+index a0ce273..d94863d 100644
 --- a/bytecomp/symtable.ml
 +++ b/bytecomp/symtable.ml
-@@ -113,15 +113,17 @@ let output_primitive_names outchan =
+@@ -115,15 +115,17 @@ let output_primitive_names outchan =
  
  open Printf
  

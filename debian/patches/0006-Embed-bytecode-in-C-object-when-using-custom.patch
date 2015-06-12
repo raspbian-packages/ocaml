@@ -22,10 +22,10 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
  7 files changed, 57 insertions(+), 4 deletions(-)
 
 diff --git a/bytecomp/bytelink.ml b/bytecomp/bytelink.ml
-index 778df01..5fcbcfe 100644
+index 7792b46..534433b 100644
 --- a/bytecomp/bytelink.ml
 +++ b/bytecomp/bytelink.ml
-@@ -446,7 +446,7 @@ let mlvalues_primitives = [
+@@ -454,7 +454,7 @@ let mlvalues_primitives = [
  
  (* Output a bytecode executable as a C file *)
  
@@ -34,7 +34,7 @@ index 778df01..5fcbcfe 100644
    let outchan = open_out outfile in
    begin try
      (* The bytecode *)
-@@ -488,14 +488,27 @@ let link_bytecode_as_c ppf tolink outfile =
+@@ -496,14 +496,27 @@ let link_bytecode_as_c ppf tolink outfile =
      (* The table of primitives *)
      Symtable.output_primitive_table outchan mlvalues_primitives;
      (* The entry point *)
@@ -64,7 +64,7 @@ index 778df01..5fcbcfe 100644
  \n#ifdef __cplusplus\
  \n}\
  \n#endif\n";
-@@ -534,6 +547,17 @@ let fix_exec_name name =
+@@ -542,6 +555,17 @@ let fix_exec_name name =
        if String.contains name '.' then name else name ^ ".exe"
    | _ -> name
  
@@ -82,7 +82,7 @@ index 778df01..5fcbcfe 100644
  (* Main entry point (build a custom runtime if needed) *)
  
  let link ppf objfiles output_name =
-@@ -548,6 +572,16 @@ let link ppf objfiles output_name =
+@@ -556,6 +580,16 @@ let link ppf objfiles output_name =
    Clflags.dllibs := !lib_dllibs @ !Clflags.dllibs; (* put user's DLLs first *)
    if not !Clflags.custom_runtime then
      link_bytecode ppf tolink output_name true
@@ -99,7 +99,7 @@ index 778df01..5fcbcfe 100644
    else if not !Clflags.output_c_object then begin
      let bytecode_name = Filename.temp_file "camlcode" "" in
      let prim_name = Filename.temp_file "camlprim" ".c" in
-@@ -590,7 +624,7 @@ let link ppf objfiles output_name =
+@@ -605,7 +639,7 @@ let link ppf objfiles output_name =
      if Sys.file_exists c_file then raise(Error(File_exists c_file));
      let temps = ref [] in
      try
@@ -122,7 +122,7 @@ index 3cf4a15..d1ad48c 100644
  include $(BASEDIR)/makefiles/Makefile.one
  include $(BASEDIR)/makefiles/Makefile.common
 diff --git a/testsuite/tests/callback/Makefile b/testsuite/tests/callback/Makefile
-index 58b5ed8..48d8796 100644
+index d89c532..5e640ac 100644
 --- a/testsuite/tests/callback/Makefile
 +++ b/testsuite/tests/callback/Makefile
 @@ -16,6 +16,9 @@ CC=$(NATIVECC) -I $(CTOPDIR)/byterun
@@ -136,7 +136,7 @@ index 58b5ed8..48d8796 100644
  default:
  	@case " $(OTHERLIBRARIES) " in \
 diff --git a/testsuite/tests/embedded/Makefile b/testsuite/tests/embedded/Makefile
-index a8de4dc..b72581f 100644
+index 088b021..f0c3d28 100644
 --- a/testsuite/tests/embedded/Makefile
 +++ b/testsuite/tests/embedded/Makefile
 @@ -13,6 +13,10 @@
@@ -164,7 +164,7 @@ index a108953..9c1ff43 100644
  include $(BASEDIR)/makefiles/Makefile.one
  include $(BASEDIR)/makefiles/Makefile.common
 diff --git a/testsuite/tests/lib-dynlink-bytecode/Makefile b/testsuite/tests/lib-dynlink-bytecode/Makefile
-index 832e367..4653631 100644
+index f9b1c6f..1e8377d 100644
 --- a/testsuite/tests/lib-dynlink-bytecode/Makefile
 +++ b/testsuite/tests/lib-dynlink-bytecode/Makefile
 @@ -15,6 +15,9 @@ BASEDIR=../..

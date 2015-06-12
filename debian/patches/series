@@ -6,4 +6,3 @@
 0006-Embed-bytecode-in-C-object-when-using-custom.patch
 0007-Tune-resource-usage-of-some-tests.patch
 0008-Native-backtraces-don-t-work-on-powerpc-and-sparc.patch
-0009-Fix-asmcomp-tests-on-sparc.patch
