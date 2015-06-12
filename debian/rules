@@ -272,10 +272,6 @@ ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
 	rm -rf testsuite/tests/tool-debugger/basic/
 	rm -rf testsuite/tests/tool-debugger/find-artifacts/
 	rm -rf testsuite/tests/tool-debugger/no_debug_event/
-	: # FIXME: see http://caml.inria.fr/mantis/view.php?id=6630
-	rm -rf testsuite/tests/prim-bigstring
-	: # FIXME: see http://caml.inria.fr/mantis/view.php?id=6667
-	rm -rf testsuite/tests/prim-bswap
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
