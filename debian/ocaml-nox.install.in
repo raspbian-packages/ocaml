@@ -33,8 +33,11 @@ DYN: @OCamlStdlibDir@/dynlink.a
      @OCamlStdlibDir@/vmthreads
      @OCamlStdlibDir@/libbigarray.a
 OPT: @OCamlStdlibDir@/libasmrun.a
+OPT: @OCamlStdlibDir@/libasmrun_pic.a
+OPT: @OCamlStdlibDir@/libasmrun_shared.so
 OPT: @OCamlStdlibDir@/libasmrunp.a
      @OCamlStdlibDir@/libcamlrun.a
+     @OCamlStdlibDir@/libcamlrun_pic.a
      @OCamlStdlibDir@/libcamlrun_shared.so
      @OCamlStdlibDir@/libnums.a
      @OCamlStdlibDir@/libcamlstr.a
@@ -61,6 +64,7 @@ OPT: @OCamlStdlibDir@/libthreadsnat.a
      usr/share/man/man3/Char.3o
      usr/share/man/man3/Complex.3o
      usr/share/man/man3/Digest.3o
+     usr/share/man/man3/Docstrings.3o
      usr/share/man/man3/Filename.3o
      usr/share/man/man3/Format.3o
      usr/share/man/man3/Gc.3o
