@@ -32,7 +32,7 @@ MD5SUMSDIR = /var/lib/ocaml/md5sums
 INSTDIR = $(CURDIR)/debian/tmp/usr
 DISTDIR = $(PACKAGE)-$(OCAML_ABI)
 UPSTREAM_VERSION = $(shell dpkg-parsechangelog | awk '/^Version:/{print $$2}' | { read u; echo $${u%-*}; })
-UPSTREAM_TARBALL = ../$(PACKAGE)_$(UPSTREAM_VERSION).orig.tar.gz
+UPSTREAM_TARBALL = $(wildcard ../$(PACKAGE)_$(UPSTREAM_VERSION).orig.tar.*)
 SRCTARBALL = $(PACKAGE)-source-$(OCAML_ABI).tar
 
 TESTDIR := debian/test-build
