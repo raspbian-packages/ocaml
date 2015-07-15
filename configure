@@ -815,6 +815,8 @@ if test $with_sharedlibs = "yes"; then
       shared_libraries_supported=true;;
   esac
 fi
+mksharedlib="$mksharedlib $CCLINKFLAGS"
+mkexe="$mkexe $CCLINKFLAGS"
 
 if test -z "$mkmaindll"; then
   mkmaindll=$mksharedlib
