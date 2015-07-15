@@ -1353,6 +1353,10 @@ AS_CASE([$host],
     [oc_ldflags="$oc_ldflags -Wl,-z,nobtcfi"
      natdynlinkopts="$natdynlinkopts -Wl,-z,nobtcfi"])
 
+# Use CCLINKFLAGS for linking all executables and shared libraries
+
+mksharedlib="$mksharedlib $CCLINKFLAGS"
+mkexe="$mkexe $CCLINKFLAGS"
 
 # Configure native dynlink
 
