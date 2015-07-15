@@ -984,6 +984,9 @@ AS_IF([test x"$enable_shared" != "xno"],
       natdynlinkopts="-Wl,-E"
       shared_libraries_supported=true])])
 
+mksharedlib="$mksharedlib $CCLINKFLAGS"
+mkexe="$mkexe $CCLINKFLAGS"
+
 AS_IF([test -z "$mkmaindll"], [mkmaindll=$mksharedlib])
 
 # Configure native dynlink
