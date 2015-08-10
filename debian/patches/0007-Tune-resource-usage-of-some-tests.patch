@@ -231,4 +231,3 @@ index c3548fb..177b32a 100644
    let iter = try int_of_string Sys.argv.(2) with _ -> 1000 in
    let ins = Array.make nprocs Unix.stdin in
    let outs = Array.make nprocs Unix.stdout in
--- 

@@ -22,4 +22,3 @@ index 23a273e..a5e0d34 100644
  let starts_with s pref =
    String.length s >= String.length pref &&
    String.sub s 0 (String.length pref) = pref
--- 

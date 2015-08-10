@@ -22,4 +22,3 @@ index 46149a7..dfcb849 100755
    | sed -e 's/ $/\\ /' >> Makefile
  echo "DLLCCCOMPOPTS=$dllccompopts" >> Makefile
  echo "IFLEXDIR=$iflexdir" >> Makefile
--- 

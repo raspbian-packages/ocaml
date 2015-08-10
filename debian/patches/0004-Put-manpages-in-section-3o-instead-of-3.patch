@@ -19,4 +19,3 @@ index 7c6d988..7700434 100644
  	$(STDLIB_MLIS)
  
  stdlib_html/Pervasives.html: $(STDLIB_MLIS)
--- 
