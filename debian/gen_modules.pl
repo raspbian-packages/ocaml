@@ -55,6 +55,7 @@ while (<>) {
                 print_if_existing("${prefix}.o");
                 print_if_existing("${prefix}.p.cmx");
                 print_if_existing("${prefix}.p.o");
+                print_if_existing("${prefix}.p.cmt");
             }
         } elsif ($ext eq "cmxa") {
             if ($opt_arch) {
@@ -63,6 +64,10 @@ while (<>) {
                 print_if_existing("${prefix}.p.cmxa");
                 print_if_existing("${prefix}.p.a");
             }
+        } elsif ($ext eq "ml") {
+          print "${prefix}.ml\n";
+          print_if_existing("${prefix}.cmt");
+          print_if_existing("${prefix}.cmti");
         } else {
             print "${prefix}.${ext}\n";
         }
