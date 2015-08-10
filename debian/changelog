@@ -1,8 +1,8 @@
-ocaml (4.02.2-1) UNRELEASED; urgency=medium
+ocaml (4.02.3-1) UNRELEASED; urgency=medium
 
   * New upstream release
 
- -- Stéphane Glondu <glondu@debian.org>  Fri, 19 Jun 2015 17:59:30 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 10 Aug 2015 11:17:21 +0200
 
 ocaml (4.02.1-3) experimental; urgency=medium
 
