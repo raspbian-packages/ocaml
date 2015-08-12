@@ -38,6 +38,8 @@ SRCTARBALL = $(PACKAGE)-source-$(OCAML_ABI).tar
 TESTDIR := debian/test-build
 TESTRULES := debian/rules DEB_TEST_BUILD_PREFIX=$(CURDIR)/$(TESTDIR)
 
+BUILD_DATE := $(shell dpkg-parsechangelog --show-field=Date)
+
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 ifneq (,$(findstring ocaml-source,$(ALL_PACKAGES)))
   TARBALL_TARGET = debian/$(SRCTARBALL)
@@ -110,7 +112,11 @@ $(TARBALL_TARGET): $(UPSTREAM_TARBALL)
 # Copy debian/patches
 	cp -a debian/patches debian/$(DISTDIR)/debian-patches
 # Create the tarball and cleanup
-	tar -C debian -cf $@ $(DISTDIR)
+	cd debian && find $(DISTDIR) -not -type d -print0 | \
+		LC_ALL=C sort --zero-terminated | \
+		tar --create --null --files-from=- \
+			--file=$(abspath $@) --mtime="$(BUILD_DATE)" \
+			--owner=root --group=root --numeric-owner
 	rm -Rf debian/$(DISTDIR)
 endif
 
