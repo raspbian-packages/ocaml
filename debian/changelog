@@ -1,8 +1,14 @@
-ocaml (4.02.3-1) UNRELEASED; urgency=medium
+ocaml (4.02.3-1) experimental; urgency=medium
 
   * New upstream release
+    - build and install libasmrun_shared.so (Closes: #461125)
+  * Make the ocaml-source binary package reproducible (patch by Chris
+    Lamb) (Closes: #779086)
+  * Enable ocamldoc to build reproducible manpages (patch by Valentin
+    Lorentz) (Closes: #794586)
+  * Bump Standards-Version to 3.9.6
 
- -- Stéphane Glondu <glondu@debian.org>  Mon, 10 Aug 2015 11:17:21 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 13 Aug 2015 18:53:50 +0200
 
 ocaml (4.02.1-3) experimental; urgency=medium
 
