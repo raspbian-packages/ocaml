@@ -887,6 +887,7 @@ let data l =
 let begin_assembly() =
   defined_functions := StringSet.empty;
   external_functions := StringSet.empty;
+  `	.file \"{emit_string (String.escaped !Location.input_name)}\"\n`;
   (* Emit the beginning of the segments *)
   let lbl_begin = Compilenv.make_symbol (Some "data_begin") in
   emit_string data_space;
