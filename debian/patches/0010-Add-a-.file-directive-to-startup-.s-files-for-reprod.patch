@@ -1,0 +1,25 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Sun, 16 Aug 2015 20:59:14 +0200
+Subject: Add a .file directive to startup .s files for reproducibility
+
+When no .file directive is given, gcc records the filename of the
+startup .o file, which is random, in the final executable, making it
+non-reproducible.
+
+Bug-Debian: https://bugs.debian.org/795784
+---
+ asmcomp/asmlink.ml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/asmcomp/asmlink.ml b/asmcomp/asmlink.ml
+index cea7b56..cad7d8c 100644
+--- a/asmcomp/asmlink.ml
++++ b/asmcomp/asmlink.ml
+@@ -201,6 +201,7 @@ let scan_file obj_name tolink = match read_file obj_name with
+ let make_startup_file ppf filename units_list =
+   let compile_phrase p = Asmgen.compile_phrase ppf p in
+   let oc = open_out filename in
++  Printf.fprintf oc "\t.file \"startup.s\"\n";
+   Emitaux.output_channel := oc;
+   Location.input_name := "caml_startup"; (* set name of "current" input *)
+   Compilenv.reset "_startup"; (* set the name of the "current" compunit *)

@@ -7,3 +7,4 @@
 0007-Tune-resource-usage-of-some-tests.patch
 0008-Native-backtraces-don-t-work-on-powerpc-and-sparc.patch
 0010-Enable-ocamldoc-to-build-reproducible-manpages.patch
+0010-Add-a-.file-directive-to-startup-.s-files-for-reprod.patch
