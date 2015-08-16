@@ -986,6 +986,7 @@ let data l =
 let begin_assembly() =
   reset_debug_info();                   (* PR#5603 *)
   float_constants := [];
+  `	.file \"{emit_string (String.escaped !Location.input_name)}\"\n`;
   let lbl_begin = Compilenv.make_symbol (Some "data_begin") in
   `	.data\n`;
   `	.globl	{emit_symbol lbl_begin}\n`;
