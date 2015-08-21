@@ -1,7 +1,9 @@
 ocaml (4.02.3-2) UNRELEASED; urgency=medium
 
-  * ocamlopt: add a .file directive to startup .s files (for
-    reproducibility) (Closes: #795784)
+  * Reproducibility changes:
+    - ocamlopt: add a .file directive to startup .s files
+      (Closes: #795784)
+    - set permissions of patches in ocaml-source
 
  -- Stéphane Glondu <glondu@debian.org>  Sun, 16 Aug 2015 21:10:16 +0200
 
