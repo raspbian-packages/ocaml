@@ -1,8 +1,9 @@
 ocaml (4.02.3-2) UNRELEASED; urgency=medium
 
   * Reproducibility changes:
-    - ocamlopt: add a .file directive to startup .s files
-      (Closes: #795784)
+    - ocamlopt: add a .file directive to generated .s files
+      + startup files are now deterministic (Closes: #795784)
+      + native packed libraries are now deterministic (Closes: #796336)
     - set permissions of patches in ocaml-source
 
  -- Stéphane Glondu <glondu@debian.org>  Sun, 16 Aug 2015 21:10:16 +0200
