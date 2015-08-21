@@ -95,7 +95,7 @@ index e97db4b..2170fc9 100644
          bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
          bs b ".SH NAME\n";
 diff --git a/ocamldoc/odoc_misc.ml b/ocamldoc/odoc_misc.ml
-index e938dbe..79bb713 100644
+index e938dbe..273a0ba 100644
 --- a/ocamldoc/odoc_misc.ml
 +++ b/ocamldoc/odoc_misc.ml
 @@ -223,9 +223,9 @@ let apply_opt f v_opt =
