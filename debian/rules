@@ -111,6 +111,9 @@ $(TARBALL_TARGET): $(UPSTREAM_TARBALL)
 	cp $< debian/$(DISTDIR)
 # Copy debian/patches
 	cp -a debian/patches debian/$(DISTDIR)/debian-patches
+# Set permissions (workaround for #796257)
+	chmod 755 debian/$(DISTDIR)/debian-patches
+	chmod 644 debian/$(DISTDIR)/debian-patches/*
 # Create the tarball and cleanup
 	cd debian && find $(DISTDIR) -not -type d -print0 | \
 		LC_ALL=C sort --zero-terminated | \
