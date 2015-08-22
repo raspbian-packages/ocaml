@@ -1,4 +1,4 @@
-ocaml (4.02.3-2) UNRELEASED; urgency=medium
+ocaml (4.02.3-2) experimental; urgency=medium
 
   * Reproducibility changes:
     - ocamlopt: add a .file directive to generated .s files
@@ -6,7 +6,7 @@ ocaml (4.02.3-2) UNRELEASED; urgency=medium
       + native packed libraries are now deterministic (Closes: #796336)
     - set permissions of patches in ocaml-source
 
- -- Stéphane Glondu <glondu@debian.org>  Sun, 16 Aug 2015 21:10:16 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Sat, 22 Aug 2015 09:46:49 +0200
 
 ocaml (4.02.3-1) experimental; urgency=medium
 
