@@ -13,16 +13,16 @@ mlvalues.h), but this is a small and (not too) intrusive patch.
 Bug: http://caml.inria.fr/mantis/view.php?id=5254
 Signed-off-by: Stephane Glondu <steph@glondu.net>
 ---
- bytecomp/bytelink.ml  | 17 +++++++++++++++--
+ bytecomp/bytelink.ml  | 18 ++++++++++++++++--
  bytecomp/symtable.ml  |  8 +++++---
  bytecomp/symtable.mli |  2 +-
- 3 files changed, 21 insertions(+), 6 deletions(-)
+ 3 files changed, 22 insertions(+), 6 deletions(-)
 
 diff --git a/bytecomp/bytelink.ml b/bytecomp/bytelink.ml
-index 2f5c0ec..7792b46 100644
+index 2f5c0ec..9c972a7 100644
 --- a/bytecomp/bytelink.ml
 +++ b/bytecomp/bytelink.ml
-@@ -439,6 +439,19 @@ let output_cds_file outfile =
+@@ -439,6 +439,20 @@ let output_cds_file outfile =
      remove_file outfile;
      raise x
  
@@ -37,12 +37,13 @@ index 2f5c0ec..7792b46 100644
 +  "caml_Store_double_val";
 +  "caml_Int64_val";
 +  "caml_atom_table";
++  "caml_set_oo_id";
 +]
 +
  (* Output a bytecode executable as a C file *)
  
  let link_bytecode_as_c ppf tolink outfile =
-@@ -481,7 +494,7 @@ let link_bytecode_as_c ppf tolink outfile =
+@@ -481,7 +495,7 @@ let link_bytecode_as_c ppf tolink outfile =
        (Marshal.to_string sections []);
      output_string outchan "\n};\n\n";
      (* The table of primitives *)
@@ -51,7 +52,7 @@ index 2f5c0ec..7792b46 100644
      (* The entry point *)
      output_string outchan "\
  \nvoid caml_startup(char ** argv)\
-@@ -562,7 +575,7 @@ let link ppf objfiles output_name =
+@@ -562,7 +576,7 @@ let link ppf objfiles output_name =
          #else\n\
          typedef long value;\n\
          #endif\n";
