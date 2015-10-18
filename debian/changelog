@@ -1,9 +1,9 @@
-ocaml (4.02.3-4) UNRELEASED; urgency=medium
+ocaml (4.02.3-4) unstable; urgency=medium
 
   * Avoid multiple declarations of caml_set_oo_id in generated .c files
     - Update 0005-Avoid-multiple-declarations-in-generated-.c-files-in.patch
 
- -- Mehdi Dogguy <mehdi@debian.org>  Mon, 19 Oct 2015 00:57:23 +0200
+ -- Mehdi Dogguy <mehdi@debian.org>  Mon, 19 Oct 2015 01:01:53 +0200
 
 ocaml (4.02.3-3) unstable; urgency=medium
 
