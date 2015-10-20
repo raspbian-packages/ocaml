@@ -22,10 +22,10 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
  7 files changed, 57 insertions(+), 4 deletions(-)
 
 diff --git a/bytecomp/bytelink.ml b/bytecomp/bytelink.ml
-index 7792b46..534433b 100644
+index 9c972a7..fcb96cf 100644
 --- a/bytecomp/bytelink.ml
 +++ b/bytecomp/bytelink.ml
-@@ -454,7 +454,7 @@ let mlvalues_primitives = [
+@@ -455,7 +455,7 @@ let mlvalues_primitives = [
  
  (* Output a bytecode executable as a C file *)
  
@@ -34,7 +34,7 @@ index 7792b46..534433b 100644
    let outchan = open_out outfile in
    begin try
      (* The bytecode *)
-@@ -496,14 +496,27 @@ let link_bytecode_as_c ppf tolink outfile =
+@@ -497,14 +497,27 @@ let link_bytecode_as_c ppf tolink outfile =
      (* The table of primitives *)
      Symtable.output_primitive_table outchan mlvalues_primitives;
      (* The entry point *)
@@ -64,7 +64,7 @@ index 7792b46..534433b 100644
  \n#ifdef __cplusplus\
  \n}\
  \n#endif\n";
-@@ -542,6 +555,17 @@ let fix_exec_name name =
+@@ -543,6 +556,17 @@ let fix_exec_name name =
        if String.contains name '.' then name else name ^ ".exe"
    | _ -> name
  
@@ -82,7 +82,7 @@ index 7792b46..534433b 100644
  (* Main entry point (build a custom runtime if needed) *)
  
  let link ppf objfiles output_name =
-@@ -556,6 +580,16 @@ let link ppf objfiles output_name =
+@@ -557,6 +581,16 @@ let link ppf objfiles output_name =
    Clflags.dllibs := !lib_dllibs @ !Clflags.dllibs; (* put user's DLLs first *)
    if not !Clflags.custom_runtime then
      link_bytecode ppf tolink output_name true
@@ -99,7 +99,7 @@ index 7792b46..534433b 100644
    else if not !Clflags.output_c_object then begin
      let bytecode_name = Filename.temp_file "camlcode" "" in
      let prim_name = Filename.temp_file "camlprim" ".c" in
-@@ -605,7 +639,7 @@ let link ppf objfiles output_name =
+@@ -606,7 +640,7 @@ let link ppf objfiles output_name =
      if Sys.file_exists c_file then raise(Error(File_exists c_file));
      let temps = ref [] in
      try
