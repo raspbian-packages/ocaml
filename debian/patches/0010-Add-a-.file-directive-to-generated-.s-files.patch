@@ -7,8 +7,9 @@ of the .o file, which is sometimes random, making generated objects
 non-deterministic.
 
 We use Location.input_name for adding .file directives to assembly
-files. When the file is preprocessed, this reference used to hold the
-name of the temporary file. With this patch, it is no longer the case.
+files. Note: when the file is preprocessed, this reference holds the
+name of the temporary file. Hence, files compiled with -pp are still
+not deterministic.
 
 Bug-Debian: https://bugs.debian.org/795784
 Bug-Debian: https://bugs.debian.org/796336
@@ -19,8 +20,7 @@ Bug-Debian: https://bugs.debian.org/796336
  asmcomp/i386/emit.mlp  | 1 +
  asmcomp/power/emit.mlp | 1 +
  asmcomp/sparc/emit.mlp | 1 +
- driver/pparse.ml       | 1 -
- 7 files changed, 6 insertions(+), 1 deletion(-)
+ 6 files changed, 6 insertions(+)
 
 diff --git a/asmcomp/amd64/emit.mlp b/asmcomp/amd64/emit.mlp
 index d56d0f5..4d7aa30 100644
@@ -94,15 +94,3 @@ index 877a3d5..7b041e9 100644
    let lbl_begin = Compilenv.make_symbol (Some "data_begin") in
    `	.data\n`;
    `	.global	{emit_symbol lbl_begin}\n`;
-diff --git a/driver/pparse.ml b/driver/pparse.ml
-index b67c180..f985c53 100644
---- a/driver/pparse.ml
-+++ b/driver/pparse.ml
-@@ -156,7 +156,6 @@ let file ppf ~tool_name inputfile parse_fun ast_magic =
-         input_value ic
-       end else begin
-         seek_in ic 0;
--        Location.input_name := inputfile;
-         let lexbuf = Lexing.from_channel ic in
-         Location.init lexbuf inputfile;
-         parse_fun lexbuf
