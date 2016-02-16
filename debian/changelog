@@ -1,3 +1,9 @@
+ocaml (4.02.3-6) unstable; urgency=medium
+
+  * Add x32 support (Closes: #773409)
+
+ -- Stéphane Glondu <glondu@debian.org>  Tue, 16 Feb 2016 11:34:16 +0100
+
 ocaml (4.02.3-5) unstable; urgency=medium
 
   * Fix ocamldoc with -pp (Closes: #802347)
