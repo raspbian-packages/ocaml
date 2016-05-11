@@ -1,0 +1,3 @@
+@OCamlStdlibDir@/compiler-libs/parsing
+@OCamlStdlibDir@/compiler-libs/typing
+@OCamlStdlibDir@/compiler-libs/utils
