@@ -28,19 +28,19 @@ OCaml for Debian
 
   3) User-installed stuff should not go under /usr/lib/ocaml/<ocaml_version>,
   but rather under /usr/local/lib/ocaml/<ocaml_version>.
-  We will take no responsability for people who break this rule and mess things
+  We will take no responsibility for people who break this rule and mess things
   up.
 
   4) Starting from OCaml 3.05, all dll.so files are now put into a common
   stublibs directory, so the ocaml-ldconf tool for handling the ld.conf
-  file is not needed anymore, but we will still keep it aroung until all
+  file is not needed anymore, but we will still keep it around until all
   libraries are ported. As of OCaml 3.08, ocaml-ldconf is now deprecated
   and not available anymore.
   Notice that user-installed dll.so files should go into
   /usr/local/lib/ocaml/<ocaml_version>/stublibs which is searched before
   /usr/lib/ocaml/<ocaml_version>/stublibs.
 
- -- Stéphane Glondu <glondu@debian.org>, Mon, 16 Feb 2015 11:33:25 +0100
+ -- Ralf Treinen <treinen@debian.org>, Fri, 15 Jul 2016 22:08:59 +0200
 
 ocamldoc's LaTeX output
 -----------------------
