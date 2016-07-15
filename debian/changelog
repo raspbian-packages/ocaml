@@ -6,8 +6,9 @@ ocaml (4.02.3-7) unstable; urgency=medium
     ocamlbuild.1 manpage which is no longer shipped by upstream. Thanks
     to Andreas Beckmann for the hint (Closes: #801447).
   * d/ocaml-base-nox.README.Debian: fix two spelling errors.
+  * standards-version 3.9.8 (no change)
 
- -- Ralf Treinen <treinen@debian.org>  Fri, 15 Jul 2016 22:09:37 +0200
+ -- Ralf Treinen <treinen@debian.org>  Fri, 15 Jul 2016 22:19:44 +0200
 
 ocaml (4.02.3-6) unstable; urgency=medium
 
