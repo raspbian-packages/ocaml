@@ -38,7 +38,6 @@ debian/ocaml-native-compilers.install
 debian/ocaml-native-compilers.links
 debian/ocaml-nox.dirs.in
 debian/ocaml-nox.install.in
-debian/ocaml-nox.links.in
 debian/ocaml-nox.lintian-overrides.in
 debian/ocaml-nox.manpages.in
 debian/ocaml-nox.postinst.in

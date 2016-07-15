@@ -1,9 +1,12 @@
 ocaml (4.02.3-7) unstable; urgency=medium
 
-  * d/rules: split install-stamp target into -arch and -indep
-    (Closes: #806087).
+  * d/rules: split install-stamp target into -arch and -indep, to allow
+    for building with option -A (Closes: #806087).
+  * drop d/ocaml-nox.links.in since it contains only links to the
+    ocamlbuild.1 manpage which is no longer shipped by upstream. Thanks
+    to Andreas Beckmann for the hint (Closes: #801447).
 
- -- Ralf Treinen <treinen@debian.org>  Fri, 15 Jul 2016 20:25:37 +0200
+ -- Ralf Treinen <treinen@debian.org>  Fri, 15 Jul 2016 21:16:41 +0200
 
 ocaml (4.02.3-6) unstable; urgency=medium
 
