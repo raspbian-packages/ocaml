@@ -1,3 +1,10 @@
+ocaml (4.02.3-7) unstable; urgency=medium
+
+  * d/rules: split install-stamp target into -arch and -indep
+    (Closes: #806087).
+
+ -- Ralf Treinen <treinen@debian.org>  Fri, 15 Jul 2016 20:25:37 +0200
+
 ocaml (4.02.3-6) unstable; urgency=medium
 
   * Add x32 support (Closes: #773409)
