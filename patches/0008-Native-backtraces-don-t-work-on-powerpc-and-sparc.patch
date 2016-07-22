@@ -1,0 +1,24 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Wed, 13 Nov 2013 14:28:16 +0100
+Subject: Native backtraces don't work on powerpc and sparc
+
+---
+ testsuite/tests/backtrace/Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/testsuite/tests/backtrace/Makefile b/testsuite/tests/backtrace/Makefile
+index 33ca1ed..5725f8d 100644
+--- a/testsuite/tests/backtrace/Makefile
++++ b/testsuite/tests/backtrace/Makefile
+@@ -20,7 +20,10 @@ OTHERFILESNOINLINING=backtraces_and_finalizers.ml
+ 
+ default:
+ 	$(MAKE) byte
+-	@if $(BYTECODE_ONLY); then : ; else $(MAKE) native; fi
++	@case `dpkg-architecture -qDEB_BUILD_ARCH` in \
++	  sparc|powerpc*) : ;; \
++	  *) if $(BYTECODE_ONLY) ; then : ; else $(MAKE) native; fi ;; \
++	esac
+ 
+ .PHONY: byte
+ byte:

@@ -1,0 +1,233 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Fri, 8 Nov 2013 22:27:23 +0100
+Subject: Tune resource usage of some tests
+
+The original tests trigger some limits and fail on kfreebsd-i386 with
+uncaught exception Sys_error("Thread.create: Resource temporarily
+unavailable").
+---
+ testsuite/tests/lib-threads/sieve.ml            |  2 +-
+ testsuite/tests/lib-threads/sieve.reference     | 80 -------------------------
+ testsuite/tests/lib-threads/testsieve.ml        |  2 +-
+ testsuite/tests/lib-threads/testsieve.reference | 70 ----------------------
+ testsuite/tests/lib-threads/token1.ml           |  2 +-
+ testsuite/tests/lib-threads/token2.ml           |  2 +-
+ 6 files changed, 4 insertions(+), 154 deletions(-)
+
+diff --git a/testsuite/tests/lib-threads/sieve.ml b/testsuite/tests/lib-threads/sieve.ml
+index ac3a9d2..86f0e5e 100644
+--- a/testsuite/tests/lib-threads/sieve.ml
++++ b/testsuite/tests/lib-threads/sieve.ml
+@@ -40,6 +40,6 @@ let go max =
+   in Thread.create (integers 2) ch;
+      print_primes ch max;;
+ 
+-let _ = go 500
++let _ = go 50
+ 
+ ;;
+diff --git a/testsuite/tests/lib-threads/sieve.reference b/testsuite/tests/lib-threads/sieve.reference
+index 3e7998d..6beaeaa 100644
+--- a/testsuite/tests/lib-threads/sieve.reference
++++ b/testsuite/tests/lib-threads/sieve.reference
+@@ -13,83 +13,3 @@
+ 41
+ 43
+ 47
+-53
+-59
+-61
+-67
+-71
+-73
+-79
+-83
+-89
+-97
+-101
+-103
+-107
+-109
+-113
+-127
+-131
+-137
+-139
+-149
+-151
+-157
+-163
+-167
+-173
+-179
+-181
+-191
+-193
+-197
+-199
+-211
+-223
+-227
+-229
+-233
+-239
+-241
+-251
+-257
+-263
+-269
+-271
+-277
+-281
+-283
+-293
+-307
+-311
+-313
+-317
+-331
+-337
+-347
+-349
+-353
+-359
+-367
+-373
+-379
+-383
+-389
+-397
+-401
+-409
+-419
+-421
+-431
+-433
+-439
+-443
+-449
+-457
+-461
+-463
+-467
+-479
+-487
+-491
+-499
+diff --git a/testsuite/tests/lib-threads/testsieve.ml b/testsuite/tests/lib-threads/testsieve.ml
+index 6979f80..2f11272 100644
+--- a/testsuite/tests/lib-threads/testsieve.ml
++++ b/testsuite/tests/lib-threads/testsieve.ml
+@@ -41,7 +41,7 @@ let premiers = Event.new_channel ()
+ let main _ =
+   Thread.create sieve premiers;
+   while true do
+-    for i = 1 to 100 do
++    for i = 1 to 30 do
+       let n = Event.sync (Event.receive premiers) in
+       print_int n; print_newline()
+     done;
+diff --git a/testsuite/tests/lib-threads/testsieve.reference b/testsuite/tests/lib-threads/testsieve.reference
+index b6b8c06..6e97d2c 100644
+--- a/testsuite/tests/lib-threads/testsieve.reference
++++ b/testsuite/tests/lib-threads/testsieve.reference
+@@ -28,73 +28,3 @@
+ 101
+ 103
+ 107
+-109
+-113
+-127
+-131
+-137
+-139
+-149
+-151
+-157
+-163
+-167
+-173
+-179
+-181
+-191
+-193
+-197
+-199
+-211
+-223
+-227
+-229
+-233
+-239
+-241
+-251
+-257
+-263
+-269
+-271
+-277
+-281
+-283
+-293
+-307
+-311
+-313
+-317
+-331
+-337
+-347
+-349
+-353
+-359
+-367
+-373
+-379
+-383
+-389
+-397
+-401
+-409
+-419
+-421
+-431
+-433
+-439
+-443
+-449
+-457
+-461
+-463
+-467
+-479
+-487
+-491
+-499
+-503
+-509
+-521
+diff --git a/testsuite/tests/lib-threads/token1.ml b/testsuite/tests/lib-threads/token1.ml
+index d0a7528..692efba 100644
+--- a/testsuite/tests/lib-threads/token1.ml
++++ b/testsuite/tests/lib-threads/token1.ml
+@@ -37,7 +37,7 @@ let process (n, conds, nprocs) =
+   done
+ 
+ let main() =
+-  let nprocs = try int_of_string Sys.argv.(1) with _ -> 100 in
++  let nprocs = try int_of_string Sys.argv.(1) with _ -> 30 in
+   let iter = try int_of_string Sys.argv.(2) with _ -> 1000 in
+   let conds = Array.make nprocs (Condition.create()) in
+   for i = 1 to nprocs - 1 do conds.(i) <- Condition.create() done;
+diff --git a/testsuite/tests/lib-threads/token2.ml b/testsuite/tests/lib-threads/token2.ml
+index c3548fb..177b32a 100644
+--- a/testsuite/tests/lib-threads/token2.ml
++++ b/testsuite/tests/lib-threads/token2.ml
+@@ -33,7 +33,7 @@ let process (n, ins, outs, nprocs) =
+   done
+ 
+ let main() =
+-  let nprocs = try int_of_string Sys.argv.(1) with _ -> 100 in
++  let nprocs = try int_of_string Sys.argv.(1) with _ -> 30 in
+   let iter = try int_of_string Sys.argv.(2) with _ -> 1000 in
+   let ins = Array.make nprocs Unix.stdin in
+   let outs = Array.make nprocs Unix.stdout in

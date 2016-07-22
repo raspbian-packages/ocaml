@@ -1,0 +1,192 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Sat, 21 Jul 2012 15:40:52 +0200
+Subject: Embed bytecode in C object when using -custom
+
+This patch fixes non-strippability of bytecode executables linked with
+custom runtime. The new behaviour is enabled when OCAML_CUSTOM_EMBED
+is set to "y", or when DEB_HOST_ARCH is non-empty.
+
+Forwarded: not-needed
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=256900
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=627761
+Bug-Debian: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=678577
+Signed-off-by: Stephane Glondu <steph@glondu.net>
+---
+ bytecomp/bytelink.ml                          | 42 ++++++++++++++++++++++++---
+ testsuite/tests/basic-manyargs/Makefile       |  3 ++
+ testsuite/tests/callback/Makefile             |  3 ++
+ testsuite/tests/embedded/Makefile             |  4 +++
+ testsuite/tests/gc-roots/Makefile             |  3 ++
+ testsuite/tests/lib-dynlink-bytecode/Makefile |  3 ++
+ testsuite/tests/lib-marshal/Makefile          |  3 ++
+ 7 files changed, 57 insertions(+), 4 deletions(-)
+
+diff --git a/bytecomp/bytelink.ml b/bytecomp/bytelink.ml
+index 9c972a7..fcb96cf 100644
+--- a/bytecomp/bytelink.ml
++++ b/bytecomp/bytelink.ml
+@@ -455,7 +455,7 @@ let mlvalues_primitives = [
+ 
+ (* Output a bytecode executable as a C file *)
+ 
+-let link_bytecode_as_c ppf tolink outfile =
++let link_bytecode_as_c ppf tolink outfile with_main =
+   let outchan = open_out outfile in
+   begin try
+     (* The bytecode *)
+@@ -497,14 +497,27 @@ let link_bytecode_as_c ppf tolink outfile =
+     (* The table of primitives *)
+     Symtable.output_primitive_table outchan mlvalues_primitives;
+     (* The entry point *)
+-    output_string outchan "\
++    if with_main then begin
++      output_string outchan "\
++\nint main(int argc, char **argv)\
++\n{\
++\n  caml_startup_code(caml_code, sizeof(caml_code),\
++\n                    caml_data, sizeof(caml_data),\
++\n                    caml_sections, sizeof(caml_sections),\
++\n                    argv);\
++\n  return 0; /* not reached */\
++\n}\n"
++    end else begin
++      output_string outchan "\
+ \nvoid caml_startup(char ** argv)\
+ \n{\
+ \n  caml_startup_code(caml_code, sizeof(caml_code),\
+ \n                    caml_data, sizeof(caml_data),\
+ \n                    caml_sections, sizeof(caml_sections),\
+ \n                    argv);\
+-\n}\
++\n}\n"
++    end;
++    output_string outchan "\
+ \n#ifdef __cplusplus\
+ \n}\
+ \n#endif\n";
+@@ -543,6 +556,17 @@ let fix_exec_name name =
+       if String.contains name '.' then name else name ^ ".exe"
+   | _ -> name
+ 
++(* Debian-specific -custom behaviour:
++   - if DEB_HOST_ARCH is non-empty, it is activated by default
++   - can be enabled/disabled by setting OCAML_CUSTOM_EMBED to y/n
++*)
++
++let custom_embed =
++  try Sys.getenv "OCAML_CUSTOM_EMBED" = "y"
++  with Not_found ->
++    try Sys.getenv "DEB_HOST_ARCH" <> ""
++    with Not_found -> false
++
+ (* Main entry point (build a custom runtime if needed) *)
+ 
+ let link ppf objfiles output_name =
+@@ -557,6 +581,16 @@ let link ppf objfiles output_name =
+   Clflags.dllibs := !lib_dllibs @ !Clflags.dllibs; (* put user's DLLs first *)
+   if not !Clflags.custom_runtime then
+     link_bytecode ppf tolink output_name true
++  else if custom_embed && not !Clflags.output_c_object && not !Clflags.make_runtime then
++    let c_file = Filename.temp_file "camlobj" ".c" in
++    try
++      link_bytecode_as_c ppf tolink c_file true;
++      let exec_name = fix_exec_name output_name in
++      if not (build_custom_runtime c_file exec_name)
++      then raise(Error Custom_runtime);
++    with x ->
++      remove_file c_file;
++      raise x
+   else if not !Clflags.output_c_object then begin
+     let bytecode_name = Filename.temp_file "camlcode" "" in
+     let prim_name = Filename.temp_file "camlprim" ".c" in
+@@ -606,7 +640,7 @@ let link ppf objfiles output_name =
+     if Sys.file_exists c_file then raise(Error(File_exists c_file));
+     let temps = ref [] in
+     try
+-      link_bytecode_as_c ppf tolink c_file;
++      link_bytecode_as_c ppf tolink c_file false;
+       if not (Filename.check_suffix output_name ".c") then begin
+         temps := c_file :: !temps;
+         if Ccomp.compile_file c_file <> 0 then raise(Error Custom_runtime);
+diff --git a/testsuite/tests/basic-manyargs/Makefile b/testsuite/tests/basic-manyargs/Makefile
+index 3cf4a15..d1ad48c 100644
+--- a/testsuite/tests/basic-manyargs/Makefile
++++ b/testsuite/tests/basic-manyargs/Makefile
+@@ -15,5 +15,8 @@ BASEDIR=../..
+ MAIN_MODULE=manyargs
+ C_FILES=manyargsprim
+ 
++# This test relies on the upstream behaviour of -custom
++export OCAML_CUSTOM_EMBED=n
++
+ include $(BASEDIR)/makefiles/Makefile.one
+ include $(BASEDIR)/makefiles/Makefile.common
+diff --git a/testsuite/tests/callback/Makefile b/testsuite/tests/callback/Makefile
+index d89c532..5e640ac 100644
+--- a/testsuite/tests/callback/Makefile
++++ b/testsuite/tests/callback/Makefile
+@@ -16,6 +16,9 @@ CC=$(NATIVECC) -I $(CTOPDIR)/byterun
+ COMPFLAGS=-I $(OTOPDIR)/otherlibs/unix
+ LD_PATH=$(TOPDIR)/otherlibs/unix
+ 
++# This test relies on the upstream behaviour of -custom
++export OCAML_CUSTOM_EMBED=n
++
+ .PHONY: default
+ default:
+ 	@case " $(OTHERLIBRARIES) " in \
+diff --git a/testsuite/tests/embedded/Makefile b/testsuite/tests/embedded/Makefile
+index 088b021..f0c3d28 100644
+--- a/testsuite/tests/embedded/Makefile
++++ b/testsuite/tests/embedded/Makefile
+@@ -13,6 +13,10 @@
+ BASEDIR=../..
+ 
+ .PHONY: default
++
++# This test relies on the upstream behaviour of -custom
++export OCAML_CUSTOM_EMBED=n
++
+ default:
+ 	$(MAKE) compile
+ 	$(MAKE) run
+diff --git a/testsuite/tests/gc-roots/Makefile b/testsuite/tests/gc-roots/Makefile
+index a108953..9c1ff43 100644
+--- a/testsuite/tests/gc-roots/Makefile
++++ b/testsuite/tests/gc-roots/Makefile
+@@ -16,5 +16,8 @@ MAIN_MODULE=globroots
+ C_FILES=globrootsprim
+ ADD_COMPFLAGS=-w a
+ 
++# This test relies on the upstream behaviour of -custom
++export OCAML_CUSTOM_EMBED=n
++
+ include $(BASEDIR)/makefiles/Makefile.one
+ include $(BASEDIR)/makefiles/Makefile.common
+diff --git a/testsuite/tests/lib-dynlink-bytecode/Makefile b/testsuite/tests/lib-dynlink-bytecode/Makefile
+index f9b1c6f..1e8377d 100644
+--- a/testsuite/tests/lib-dynlink-bytecode/Makefile
++++ b/testsuite/tests/lib-dynlink-bytecode/Makefile
+@@ -15,6 +15,9 @@ BASEDIR=../..
+ COMPFLAGS=-I $(OTOPDIR)/otherlibs/dynlink
+ LD_PATH=.:$(TOPDIR)/otherlibs/dynlink
+ 
++# This test relies on the upstream behaviour of -custom
++export OCAML_CUSTOM_EMBED=n
++
+ .PHONY: default
+ default:
+ 	@if ! $(SUPPORTS_SHARED_LIBRARIES); then \
+diff --git a/testsuite/tests/lib-marshal/Makefile b/testsuite/tests/lib-marshal/Makefile
+index 34b67dc..e8928e6 100644
+--- a/testsuite/tests/lib-marshal/Makefile
++++ b/testsuite/tests/lib-marshal/Makefile
+@@ -15,5 +15,8 @@ BASEDIR=../..
+ MAIN_MODULE=intext
+ C_FILES=intextaux
+ 
++# This test relies on the upstream behaviour of -custom
++export OCAML_CUSTOM_EMBED=n
++
+ include $(BASEDIR)/makefiles/Makefile.one
+ include $(BASEDIR)/makefiles/Makefile.common
