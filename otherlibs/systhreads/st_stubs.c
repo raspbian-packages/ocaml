@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*         Xavier Leroy and Damien Doligez, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1995 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*          Xavier Leroy and Damien Doligez, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1995 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include "caml/alloc.h"
 #include "caml/backtrace.h"
@@ -80,7 +82,7 @@ struct caml_thread_struct {
   struct longjmp_buffer * external_raise; /* Saved external_raise */
 #endif
   int backtrace_pos;            /* Saved backtrace_pos */
-  code_t * backtrace_buffer;    /* Saved backtrace_buffer */
+  backtrace_slot * backtrace_buffer;    /* Saved backtrace_buffer */
   value backtrace_last_exn;     /* Saved backtrace_last_exn (root) */
 };
 
@@ -95,10 +97,10 @@ static caml_thread_t curr_thread = NULL;
 /* The master lock protecting the OCaml runtime system */
 static st_masterlock caml_master_lock;
 
-/* Whether the ``tick'' thread is already running */
+/* Whether the "tick" thread is already running */
 static int caml_tick_thread_running = 0;
 
-/* The thread identifier of the ``tick'' thread */
+/* The thread identifier of the "tick" thread */
 static st_thread_id caml_tick_thread_id;
 
 /* The key used for storing the thread descriptor in the specific data
@@ -150,12 +152,10 @@ static void caml_thread_scan_roots(scanning_action action)
   if (prev_scan_roots_hook != NULL) (*prev_scan_roots_hook)(action);
 }
 
-/* Hooks for enter_blocking_section and leave_blocking_section */
+/* Saving and restoring runtime state in curr_thread */
 
-static void caml_thread_enter_blocking_section(void)
+static inline void caml_thread_save_runtime_state(void)
 {
-  /* Save the stack-related global variables in the thread descriptor
-     of the current thread */
 #ifdef NATIVE_CODE
   curr_thread->bottom_of_stack = caml_bottom_of_stack;
   curr_thread->last_retaddr = caml_last_return_address;
@@ -174,18 +174,10 @@ static void caml_thread_enter_blocking_section(void)
   curr_thread->backtrace_pos = backtrace_pos;
   curr_thread->backtrace_buffer = backtrace_buffer;
   curr_thread->backtrace_last_exn = backtrace_last_exn;
-  /* Tell other threads that the runtime is free */
-  st_masterlock_release(&caml_master_lock);
 }
 
-static void caml_thread_leave_blocking_section(void)
+static inline void caml_thread_restore_runtime_state(void)
 {
-  /* Wait until the runtime is free */
-  st_masterlock_acquire(&caml_master_lock);
-  /* Update curr_thread to point to the thread descriptor corresponding
-     to the thread currently executing */
-  curr_thread = st_tls_get(thread_descriptor_key);
-  /* Restore the stack-related global variables */
 #ifdef NATIVE_CODE
   caml_bottom_of_stack= curr_thread->bottom_of_stack;
   caml_last_return_address = curr_thread->last_retaddr;
@@ -204,6 +196,29 @@ static void caml_thread_leave_blocking_section(void)
   backtrace_pos = curr_thread->backtrace_pos;
   backtrace_buffer = curr_thread->backtrace_buffer;
   backtrace_last_exn = curr_thread->backtrace_last_exn;
+}
+
+/* Hooks for enter_blocking_section and leave_blocking_section */
+
+
+static void caml_thread_enter_blocking_section(void)
+{
+  /* Save the current runtime state in the thread descriptor
+     of the current thread */
+  caml_thread_save_runtime_state();
+  /* Tell other threads that the runtime is free */
+  st_masterlock_release(&caml_master_lock);
+}
+
+static void caml_thread_leave_blocking_section(void)
+{
+  /* Wait until the runtime is free */
+  st_masterlock_acquire(&caml_master_lock);
+  /* Update curr_thread to point to the thread descriptor corresponding
+     to the thread currently executing */
+  curr_thread = st_tls_get(thread_descriptor_key);
+  /* Restore the runtime state from the curr_thread descriptor */
+  caml_thread_restore_runtime_state();
 }
 
 static int caml_thread_try_leave_blocking_section(void)
@@ -228,7 +243,7 @@ static void caml_io_mutex_lock(struct channel *chan)
   st_mutex mutex = chan->mutex;
 
   if (mutex == NULL) {
-    st_mutex_create(&mutex);
+    st_check_error(st_mutex_create(&mutex), "channel locking"); /*PR#7038*/
     chan->mutex = mutex;
   }
   /* PR#4351: first try to acquire mutex without releasing the master lock */
@@ -291,7 +306,6 @@ static uintnat caml_thread_stack_usage(void)
 static caml_thread_t caml_thread_new_info(void)
 {
   caml_thread_t th;
-
   th = (caml_thread_t) malloc(sizeof(struct caml_thread_struct));
   if (th == NULL) return NULL;
   th->descr = Val_unit;         /* filled later */
@@ -444,7 +458,12 @@ CAMLprim value caml_thread_initialize(value unit)   /* ML */
 
 CAMLprim value caml_thread_cleanup(value unit)   /* ML */
 {
-  if (caml_tick_thread_running) st_thread_kill(caml_tick_thread_id);
+  if (caml_tick_thread_running){
+    caml_tick_thread_stop = 1;
+    st_thread_join(caml_tick_thread_id);
+    caml_tick_thread_stop = 0;
+    caml_tick_thread_running = 0;
+  }
   return Val_unit;
 }
 
@@ -452,11 +471,11 @@ CAMLprim value caml_thread_cleanup(value unit)   /* ML */
 
 static void caml_thread_stop(void)
 {
-#ifndef NATIVE_CODE
-  /* PR#5188: update curr_thread->stack_low because the stack may have
-     been reallocated since the last time we entered a blocking section */
-  curr_thread->stack_low = stack_low;
-#endif
+  /* PR#5188, PR#7220: some of the global runtime state may have
+     changed as the thread was running, so we save it in the
+     curr_thread data to make sure that the cleanup logic
+     below uses accurate information. */
+  caml_thread_save_runtime_state();
   /* Signal that the thread has terminated */
   caml_threadstatus_terminate(Terminated(curr_thread->descr));
   /* Remove th from the doubly-linked list of threads and free its info block */
