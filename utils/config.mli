@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* System configuration *)
 
@@ -87,6 +90,11 @@ val max_young_wosize: int
 val stack_threshold: int
         (* Size in words of safe area at bottom of VM stack,
            see byterun/config.h *)
+val stack_safety_margin: int
+        (* Size in words of the safety margin between the bottom of
+           the stack and the stack pointer. This margin can be used by
+           intermediate computations of some instructions, or the event
+           handler. *)
 
 val architecture: string
         (* Name of processor type for the native-code compiler *)
@@ -127,3 +135,6 @@ val target : string
         (* Whether the compiler is a cross-compiler *)
 
 val print_config : out_channel -> unit;;
+
+val flambda : bool
+        (* Whether the compiler was configured for flambda *)

@@ -1,15 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the GNU Library General Public License, with    *)
-(*  the special exception on linking described in file ../LICENSE.     *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Byte sequence operations *)
 
@@ -21,14 +23,14 @@ external create : int -> bytes = "caml_create_string"
 external unsafe_get : bytes -> int -> char = "%string_unsafe_get"
 external unsafe_set : bytes -> int -> char -> unit = "%string_unsafe_set"
 external unsafe_fill : bytes -> int -> int -> char -> unit
-                     = "caml_fill_string" "noalloc"
+                     = "caml_fill_string" [@@noalloc]
 external unsafe_to_string : bytes -> string = "%identity"
 external unsafe_of_string : string -> bytes = "%identity"
 
 external unsafe_blit : bytes -> int -> bytes -> int -> int -> unit
-                     = "caml_blit_string" "noalloc"
+                     = "caml_blit_string" [@@noalloc]
 external unsafe_blit_string : string -> int -> bytes -> int -> int -> unit
-                     = "caml_blit_string" "noalloc"
+                     = "caml_blit_string" [@@noalloc]
 
 let make n c =
   let s = create n in
@@ -42,7 +44,7 @@ let init n f =
   done;
   s
 
-let empty = create 0;;
+let empty = create 0
 
 let copy s =
   let len = length s in
@@ -120,9 +122,8 @@ let cat s1 s2 =
   unsafe_blit s1 0 r 0 l1;
   unsafe_blit s2 0 r l1 l2;
   r
-;;
 
-external is_printable: char -> bool = "caml_is_printable"
+
 external char_code: char -> int = "%identity"
 external char_chr: int -> char = "%identity"
 
@@ -150,15 +151,16 @@ let escaped s =
   for i = 0 to length s - 1 do
     n := !n +
       (match unsafe_get s i with
-       | '"' | '\\' | '\n' | '\t' | '\r' | '\b' -> 2
-       | c -> if is_printable c then 1 else 4)
+       | '\"' | '\\' | '\n' | '\t' | '\r' | '\b' -> 2
+       | ' ' .. '~' -> 1
+       | _ -> 4)
   done;
   if !n = length s then copy s else begin
     let s' = create !n in
     n := 0;
     for i = 0 to length s - 1 do
       begin match unsafe_get s i with
-      | ('"' | '\\') as c ->
+      | ('\"' | '\\') as c ->
           unsafe_set s' !n '\\'; incr n; unsafe_set s' !n c
       | '\n' ->
           unsafe_set s' !n '\\'; incr n; unsafe_set s' !n 'n'
@@ -168,19 +170,16 @@ let escaped s =
           unsafe_set s' !n '\\'; incr n; unsafe_set s' !n 'r'
       | '\b' ->
           unsafe_set s' !n '\\'; incr n; unsafe_set s' !n 'b'
+      | (' ' .. '~') as c -> unsafe_set s' !n c
       | c ->
-          if is_printable c then
-            unsafe_set s' !n c
-          else begin
-            let a = char_code c in
-            unsafe_set s' !n '\\';
-            incr n;
-            unsafe_set s' !n (char_chr (48 + a / 100));
-            incr n;
-            unsafe_set s' !n (char_chr (48 + (a / 10) mod 10));
-            incr n;
-            unsafe_set s' !n (char_chr (48 + a mod 10))
-          end
+          let a = char_code c in
+          unsafe_set s' !n '\\';
+          incr n;
+          unsafe_set s' !n (char_chr (48 + a / 100));
+          incr n;
+          unsafe_set s' !n (char_chr (48 + (a / 10) mod 10));
+          incr n;
+          unsafe_set s' !n (char_chr (48 + a mod 10));
       end;
       incr n
     done;
@@ -203,8 +202,8 @@ let mapi f s =
     r
   end
 
-let uppercase s = map Char.uppercase s
-let lowercase s = map Char.lowercase s
+let uppercase_ascii s = map Char.uppercase_ascii s
+let lowercase_ascii s = map Char.lowercase_ascii s
 
 let apply1 f s =
   if length s = 0 then s else begin
@@ -213,32 +212,32 @@ let apply1 f s =
     r
   end
 
-let capitalize s = apply1 Char.uppercase s
-let uncapitalize s = apply1 Char.lowercase s
+let capitalize_ascii s = apply1 Char.uppercase_ascii s
+let uncapitalize_ascii s = apply1 Char.lowercase_ascii s
 
 let rec index_rec s lim i c =
   if i >= lim then raise Not_found else
-  if unsafe_get s i = c then i else index_rec s lim (i + 1) c;;
+  if unsafe_get s i = c then i else index_rec s lim (i + 1) c
 
-let index s c = index_rec s (length s) 0 c;;
+let index s c = index_rec s (length s) 0 c
 
 let index_from s i c =
   let l = length s in
   if i < 0 || i > l then invalid_arg "String.index_from / Bytes.index_from" else
-  index_rec s l i c;;
+  index_rec s l i c
 
 let rec rindex_rec s i c =
   if i < 0 then raise Not_found else
-  if unsafe_get s i = c then i else rindex_rec s (i - 1) c;;
+  if unsafe_get s i = c then i else rindex_rec s (i - 1) c
 
-let rindex s c = rindex_rec s (length s - 1) c;;
+let rindex s c = rindex_rec s (length s - 1) c
 
 let rindex_from s i c =
   if i < -1 || i >= length s then
     invalid_arg "String.rindex_from / Bytes.rindex_from"
   else
     rindex_rec s i c
-;;
+
 
 let contains_from s i c =
   let l = length s in
@@ -246,17 +245,26 @@ let contains_from s i c =
     invalid_arg "String.contains_from / Bytes.contains_from"
   else
     try ignore (index_rec s l i c); true with Not_found -> false
-;;
 
-let contains s c = contains_from s 0 c;;
+
+let contains s c = contains_from s 0 c
 
 let rcontains_from s i c =
   if i < 0 || i >= length s then
     invalid_arg "String.rcontains_from / Bytes.rcontains_from"
   else
     try ignore (rindex_rec s i c); true with Not_found -> false
-;;
+
 
 type t = bytes
 
 let compare (x: t) (y: t) = Pervasives.compare x y
+external equal : t -> t -> bool = "caml_string_equal"
+
+(* Deprecated functions implemented via other deprecated functions *)
+[@@@ocaml.warning "-3"]
+let uppercase s = map Char.uppercase s
+let lowercase s = map Char.lowercase s
+
+let capitalize s = apply1 Char.uppercase s
+let uncapitalize s = apply1 Char.lowercase s
