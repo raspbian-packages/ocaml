@@ -106,7 +106,7 @@ pre-config-stamp: $(TARBALL_TARGET)
 
 ifneq (,$(TARBALL_TARGET))
 $(TARBALL_TARGET): $(UPSTREAM_TARBALL)
-	mkdir debian/$(DISTDIR)
+	mkdir -p debian/$(DISTDIR)
 # Copy upstream tarball
 	cp $< debian/$(DISTDIR)
 # Copy debian/patches
