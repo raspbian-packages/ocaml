@@ -8,25 +8,23 @@ code (bug#338437)
  configure | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
-diff --git a/configure b/configure
-index 4ea1498..46149a7 100755
 --- a/configure
 +++ b/configure
-@@ -365,7 +365,8 @@ case "$bytecc,$target" in
+@@ -374,7 +374,8 @@
    *gcc*,alpha*-*-linux*)
      if cc="$bytecc" sh ./hasgot -mieee; then
        bytecccompopts="-mieee $bytecccompopts";
 -    fi;;
 +    fi
 +    bytecclinkopts="-Wl,--no-relax";;
-   cc,mips-*-irix6*)
-     # Add -n32 flag to ensure compatibility with native-code compiler
-     bytecccompopts="-n32"
-@@ -901,6 +902,7 @@ case "$arch,$nativecc,$system,$target" in
-                        nativecccompopts="$gcc_warnings -DSHRINKED_GNUC";;
-   *,*,rhapsody,*)      nativecccompopts="$gcc_warnings -DDARWIN_VERSION_6 $dl_defs"
-                        if $arch64; then partialld="ld -r -arch ppc64"; fi;;
+   *,mips-*-irix6*)
+     # Turn off warning "unused library"
+     bytecclinkopts="-n32 -Wl,-woff,84";;
+@@ -893,6 +894,7 @@
+ case "$arch,$nativecc,$system,$model" in
+   *,*,nextstep,*)      nativecclinkopts="-posix";;
+   *,*,rhapsody,*)      if $arch64; then partialld="ld -r -arch ppc64"; fi;;
 +  alpha,gcc*,linux*,*) nativecclinkopts="-Wl,--no-relax";;
-   *,gcc*,cygwin,*)     nativecccompopts="$gcc_warnings -U_WIN32";;
    amd64,gcc*,macosx,*) partialld="ld -r -arch x86_64";;
    amd64,gcc*,solaris,*) partialld="ld -r -m elf_x86_64";;
+   power,gcc*,elf,ppc)   partialld="ld -r -m elf32ppclinux";;

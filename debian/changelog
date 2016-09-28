@@ -1,3 +1,9 @@
+ocaml (4.03.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Ximin Luo <infinity0@debian.org>  Wed, 28 Sep 2016 21:59:52 +0200
+
 ocaml (4.02.3-7) unstable; urgency=medium
 
   * d/rules: split install-stamp target into -arch and -indep, to allow

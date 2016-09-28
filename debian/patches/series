@@ -4,8 +4,4 @@
 0004-Put-manpages-in-section-3o-instead-of-3.patch
 0005-Avoid-multiple-declarations-in-generated-.c-files-in.patch
 0006-Embed-bytecode-in-C-object-when-using-custom.patch
-0007-Tune-resource-usage-of-some-tests.patch
 0008-Native-backtraces-don-t-work-on-powerpc-and-sparc.patch
-0010-Enable-ocamldoc-to-build-reproducible-manpages.patch
-0010-Add-a-.file-directive-to-generated-.s-files.patch
-0011-Compatibility-with-x32-architecture.patch

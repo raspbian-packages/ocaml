@@ -9,11 +9,9 @@ gcc.
  configure | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/configure b/configure
-index 46149a7..dfcb849 100755
 --- a/configure
 +++ b/configure
-@@ -1743,7 +1743,7 @@ echo "OTHERLIBRARIES=$otherlibraries" >> Makefile
+@@ -1782,7 +1782,7 @@
  echo "CC_PROFILE=$cc_profile" >> Makefile
  echo "SYSTHREAD_SUPPORT=$systhread_support" >> Makefile
  echo "PARTIALLD=$partialld" >> Makefile
