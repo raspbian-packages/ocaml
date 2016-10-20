@@ -289,7 +289,6 @@ ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
-# Allow test retries; seeing spurious failures most likely due to parallel bugginess
-	cd testsuite && make MAX_TESTSUITE_DIR_RETRIES=3 all
+	cd testsuite && make all
 endif
 endif
