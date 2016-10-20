@@ -1,8 +1,9 @@
-ocaml (4.03.0-1) UNRELEASED; urgency=medium
+ocaml (4.03.0-1) experimental; urgency=medium
 
+  * Team upload.
   * New upstream release.
 
- -- Ximin Luo <infinity0@debian.org>  Wed, 28 Sep 2016 21:59:52 +0200
+ -- Ximin Luo <infinity0@debian.org>  Thu, 20 Oct 2016 17:43:52 +0200
 
 ocaml (4.02.3-7) unstable; urgency=medium
 
