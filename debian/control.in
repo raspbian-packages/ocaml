@@ -18,7 +18,7 @@ Build-Depends:
  libx11-dev,
  zlib1g-dev,
  dh-ocaml (>= 1.0.0~)
-Standards-Version: 3.9.4
+Standards-Version: 3.9.8
 Vcs-Git: git://anonscm.debian.org/pkg-ocaml-maint/packages/ocaml.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-ocaml-maint/packages/ocaml.git
 Homepage: http://caml.inria.fr/
