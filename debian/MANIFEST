@@ -29,6 +29,7 @@ debian/ocaml-interp.install.in
 debian/ocaml-interp.menu
 debian/ocaml-mode.README.Debian
 debian/ocaml-mode.dirs
+debian/ocaml-mode.emacsen-compat
 debian/ocaml-mode.emacsen-install
 debian/ocaml-mode.emacsen-remove
 debian/ocaml-mode.emacsen-startup
