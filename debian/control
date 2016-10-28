@@ -6,7 +6,8 @@ Uploaders:
  Samuel Mimram <smimram@debian.org>,
  Ralf Treinen <treinen@debian.org>,
  Stéphane Glondu <glondu@debian.org>,
- Mehdi Dogguy <mehdi@debian.org>
+ Mehdi Dogguy <mehdi@debian.org>,
+ Ximin Luo <infinity0@debian.org>
 Build-Depends:
  debhelper (>= 9),
  pkg-config,
