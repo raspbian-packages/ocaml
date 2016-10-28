@@ -5,3 +5,4 @@
 0005-Avoid-multiple-declarations-in-generated-.c-files-in.patch
 0006-Embed-bytecode-in-C-object-when-using-custom.patch
 0008-Native-backtraces-don-t-work-on-powerpc-and-sparc.patch
+0009-Skip-native-tests.patch

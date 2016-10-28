@@ -1,0 +1,29 @@
+--- a/testsuite/tests/lib-dynlink-csharp/Makefile
++++ b/testsuite/tests/lib-dynlink-csharp/Makefile
+@@ -30,7 +30,9 @@
+ prepare:
+ 	@if $(SUPPORTS_SHARED_LIBRARIES); then \
+ 	   $(OCAMLC) -c plugin.ml && \
+-	   $(OCAMLOPT) -o plugin.cmxs -shared plugin.ml; \
++	   if $(BYTECODE_ONLY) ; then : ; else \
++	     $(OCAMLOPT) -o plugin.cmxs -shared plugin.ml; \
++	   fi; \
+ 	 fi
+ 
+ .PHONY: bytecode
+--- a/testsuite/tests/link-test/Makefile
++++ b/testsuite/tests/link-test/Makefile
+@@ -15,6 +15,13 @@
+ #**************************************************************************
+ 
+ default:
++	@if $(BYTECODE_ONLY) ; then \
++	  echo " ... testing 'test.reference': => skipped"; \
++	else \
++	  $(MAKE) native; \
++	fi
++
++native:
+ 	printf " ... testing 'test.reference':"
+ 	@$(OCAMLOPT) -c submodule.ml
+ 	@$(OCAMLOPT) -c aliases.ml
