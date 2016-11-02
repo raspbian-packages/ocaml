@@ -1,3 +1,9 @@
+ocaml (4.03.0-5) UNRELEASED; urgency=medium
+
+  * Fix variable substitution in Makefile syntax.
+
+ -- Ximin Luo <infinity0@debian.org>  Thu, 03 Nov 2016 00:13:23 +0100
+
 ocaml (4.03.0-4) experimental; urgency=medium
 
   * Add a versioned Provides so we can have versioned Build-Depends
