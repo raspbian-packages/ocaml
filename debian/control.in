@@ -37,7 +37,7 @@ Depends:
  binutils
 Provides:
  ${ocaml:Provides},
- ${F:BestProvides} (= ${binary:Version}),
+ ${F:BestProvides},
  libnums-ocaml-dev
 Suggests:
  ocaml-doc,

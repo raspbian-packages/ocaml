@@ -248,7 +248,7 @@ override_dh_gencontrol:
 	  echo 'F:OCamlABI=$(OCAML_ABI)' >> debian/$$u.substvars; \
 	done
 ifeq (,$(OCAML_OPT_ARCH))
-	echo 'F:BestProvides=ocaml-best-compilers' >> debian/ocaml-nox.substvars
+	echo 'F:BestProvides=ocaml-best-compilers (= ${binary:Version})' >> debian/ocaml-nox.substvars
 else
 	echo 'F:BestProvides=' >> debian/ocaml-nox.substvars
 endif
