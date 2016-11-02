@@ -1,9 +1,9 @@
-ocaml (4.03.0-4) UNRELEASED; urgency=medium
+ocaml (4.03.0-4) experimental; urgency=medium
 
   * Add a versioned Provides so we can have versioned Build-Depends
     on ocaml-best-compilers in other packages.
 
- -- Ximin Luo <infinity0@debian.org>  Wed, 02 Nov 2016 14:26:43 +0100
+ -- Ximin Luo <infinity0@debian.org>  Wed, 02 Nov 2016 15:26:44 +0100
 
 ocaml (4.03.0-3) experimental; urgency=medium
 
