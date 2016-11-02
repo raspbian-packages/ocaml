@@ -1,3 +1,9 @@
+ocaml (4.03.0-3) UNRELEASED; urgency=medium
+
+  * Default to PIC on arm, to fix failing armhf tests.
+
+ -- Ximin Luo <infinity0@debian.org>  Wed, 02 Nov 2016 04:02:05 +0100
+
 ocaml (4.03.0-2) experimental; urgency=medium
 
   * Add native compilers for ppc64, ppc64el, s390x.
