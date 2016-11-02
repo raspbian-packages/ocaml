@@ -37,7 +37,7 @@ Depends:
  binutils
 Provides:
  ${ocaml:Provides},
- ${F:BestProvides},
+ ${F:BestProvides} (= ${binary:Version}),
  libnums-ocaml-dev
 Suggests:
  ocaml-doc,
@@ -153,7 +153,7 @@ Depends:
  gcc, binutils,
  ${shlibs:Depends},
  ${misc:Depends}
-Provides: ocaml-best-compilers
+Provides: ocaml-best-compilers (= ${binary:Version})
 Replaces: ocaml-nox (<= 3.09.2-3)
 Description: Native code compilers of the OCaml suite (the .opt ones)
  Objective Caml (OCaml) is an implementation of the ML language, based on
