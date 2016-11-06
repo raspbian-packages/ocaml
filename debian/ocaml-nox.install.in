@@ -134,6 +134,9 @@ OPT: @OCamlStdlibDir@/libthreadsnat.a
      usr/share/man/man3/Set.OrderedType.3o
      usr/share/man/man3/Set.S.3o
      usr/share/man/man3/Sort.3o
+     usr/share/man/man3/Spacetime.3o
+     usr/share/man/man3/Spacetime.Series.3o
+     usr/share/man/man3/Spacetime.Snapshot.3o
      usr/share/man/man3/Stack.3o
      usr/share/man/man3/StdLabels.3o
      usr/share/man/man3/StdLabels.Array.3o
@@ -309,6 +312,9 @@ STD: random.mli
 STD: random.cmx
 STD: ratio.cmx
 STD: ratio.mli
+STD: raw_spacetime_lib.cmx
+STD: raw_spacetime_lib.cmxa
+STD: raw_spacetime_lib.mli
 STD: scanf.ml
 STD: scanf.mli
 STD: scanf.cmx
@@ -318,6 +324,10 @@ STD: set.cmx
 STD: sort.ml
 STD: sort.mli
 STD: sort.cmx
+STD: spacetime.ml
+STD: spacetime.mli
+STD: spacetime.cmi
+STD: spacetime.cmx
 STD: stack.ml
 STD: stack.mli
 STD: stack.cmx

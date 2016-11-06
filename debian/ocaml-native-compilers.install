@@ -1,6 +1,12 @@
 usr/bin/ocamlc.opt
+usr/bin/ocamlcp.opt
 usr/bin/ocamldep.opt
 usr/bin/ocamldoc.opt
 usr/bin/ocamllex.opt
 usr/bin/ocamlopt.opt
+usr/bin/ocamloptp.opt
+usr/bin/ocamlmklib.opt
+usr/bin/ocamlmktop.opt
+usr/bin/ocamlprof.opt
+usr/bin/ocamlobjinfo.opt
 debian/ocamlfind/ocaml-native-compilers.conf usr/share/ocaml-findlib/

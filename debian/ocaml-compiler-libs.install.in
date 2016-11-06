@@ -31,6 +31,9 @@ usr/share/man/man3/Ast_mapper.3o
 usr/share/man/man3/Asttypes.3o
 usr/share/man/man3/Attr_helper.3o
 usr/share/man/man3/Builtin_attributes.3o
+usr/share/man/man3/Depend.3o
+usr/share/man/man3/Depend.StringMap.3o
+usr/share/man/man3/Depend.StringSet.3o
 usr/share/man/man3/Lexer.3o
 usr/share/man/man3/Location.3o
 usr/share/man/man3/Longident.3o
@@ -38,6 +41,5 @@ usr/share/man/man3/Parse.3o
 usr/share/man/man3/Parser.3o
 usr/share/man/man3/Parsetree.3o
 usr/share/man/man3/Pprintast.3o
-usr/share/man/man3/Pprintast.printer.3o
 usr/share/man/man3/Printast.3o
 usr/share/man/man3/Syntaxerr.3o
