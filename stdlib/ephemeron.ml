@@ -189,7 +189,7 @@ module GenHashTable = struct
               begin match H.get_data c with
               | None ->
                   (* This case is not impossible because the gc can run between
-                     H.equal and H.get_data *)
+                      H.equal and H.get_data *)
                   find_rec key hkey rest
               | Some d -> d
               end
@@ -256,7 +256,7 @@ module GenHashTable = struct
           | ETrue -> true
           | EFalse | EDead -> mem_in_bucket rest
           end
-      | Cons(hk, c, rest) -> mem_in_bucket rest in
+      | Cons(_hk, _c, rest) -> mem_in_bucket rest in
       mem_in_bucket h.data.(key_index h hkey)
 
     let iter f h =
@@ -402,7 +402,7 @@ module K1 = struct
       let hash = H.hash
       let equal c k =
         (* {!get_key_copy} is not used because the equality of the user can be
-           the physical equality *)
+            the physical equality *)
         match get_key c with
         | None -> GenHashTable.EDead
         | Some k' ->
@@ -421,7 +421,7 @@ module K1 = struct
     include MakeSeeded(struct
         type t = H.t
         let equal = H.equal
-        let hash (seed: int) x = H.hash x
+        let hash (_seed: int) x = H.hash x
       end)
     let create sz = create ~random:false sz
   end
@@ -504,12 +504,12 @@ module K2 = struct
         (struct
           type t = H1.t
           let equal = H1.equal
-          let hash (seed: int) x = H1.hash x
+          let hash (_seed: int) x = H1.hash x
         end)
         (struct
           type t = H2.t
           let equal = H2.equal
-          let hash (seed: int) x = H2.hash x
+          let hash (_seed: int) x = H2.hash x
         end)
     let create sz = create ~random:false sz
   end
@@ -609,7 +609,7 @@ module Kn = struct
     include MakeSeeded(struct
         type t = H.t
         let equal = H.equal
-        let hash (seed: int) x = H.hash x
+        let hash (_seed: int) x = H.hash x
       end)
     let create sz = create ~random:false sz
   end

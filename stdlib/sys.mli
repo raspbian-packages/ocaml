@@ -86,6 +86,22 @@ val os_type : string
 -  ["Win32"] (for MS-Windows, OCaml compiled with MSVC++ or Mingw),
 -  ["Cygwin"] (for MS-Windows, OCaml compiled with Cygwin). *)
 
+type backend_type =
+  | Native
+  | Bytecode
+  | Other of string (**)
+(** Currently, the official distribution only supports [Native] and
+    [Bytecode], but it can be other backends with alternative
+    compilers, for example, javascript.
+
+    @since 4.04.0
+*)
+
+val backend_type : backend_type
+(** Backend type  currently executing the OCaml program.
+    @ since 4.04.0
+ *)
+
 val unix : bool
 (** True if [Sys.os_type = "Unix"].
     @since 4.01.0 *)
@@ -278,10 +294,14 @@ val enable_runtime_warnings: bool -> unit
 (** Control whether the OCaml runtime system can emit warnings
     on stderr.  Currently, the only supported warning is triggered
     when a channel created by [open_*] functions is finalized without
-    being closed.  Runtime warnings are enabled by default. *)
+    being closed.  Runtime warnings are enabled by default.
+
+    @since 4.03.0 *)
 
 val runtime_warnings_enabled: unit -> bool
-(** Return whether runtime warnings are currently enabled. *)
+(** Return whether runtime warnings are currently enabled.
+
+    @since 4.03.0 *)
 
 (** {6 Optimization} *)
 
@@ -298,4 +318,6 @@ external opaque_identity : 'a -> 'a = "%opaque"
         ignore (Sys.opaque_identity (my_pure_computation ()))
       done
     ]}
+
+    @since 4.03.0
 *)

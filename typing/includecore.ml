@@ -33,7 +33,7 @@ let value_descriptions env vd1 vd2 =
           let pc = {pc_desc = p; pc_type = vd2.Types.val_type;
                   pc_env = env; pc_loc = vd1.Types.val_loc; } in
           Tcoerce_primitive pc
-      | (_, Val_prim p) -> raise Dont_match
+      | (_, Val_prim _) -> raise Dont_match
       | (_, _) -> Tcoerce_none
   end else
     raise Dont_match
@@ -51,7 +51,7 @@ let private_flags decl1 decl2 =
 
 let is_absrow env ty =
   match ty.desc with
-    Tconstr(Pident id, _, _) ->
+    Tconstr(Pident _, _, _) ->
       begin match Ctype.expand_head env ty with
         {desc=Tobject _|Tvariant _} -> true
       | _ -> false
@@ -98,7 +98,7 @@ let type_manifest env ty1 params1 ty2 params2 priv2 =
       Ctype.equal env true (ty1::params1) (rest2::params2) &&
       let (fields1,rest1) = Ctype.flatten_fields fi1 in
       (match rest1 with {desc=Tnil|Tvar _|Tconstr _} -> true | _ -> false) &&
-      let pairs, miss1, miss2 = Ctype.associate_fields fields1 fields2 in
+      let pairs, _miss1, miss2 = Ctype.associate_fields fields1 fields2 in
       miss2 = [] &&
       let tl1, tl2 =
         List.split (List.map (fun (_,_,t1,_,t2) -> t1, t2) pairs) in
@@ -126,7 +126,8 @@ type type_mismatch =
   | Field_arity of Ident.t
   | Field_names of int * Ident.t * Ident.t
   | Field_missing of bool * Ident.t
-  | Record_representation of bool
+  | Record_representation of bool   (* true means second one is unboxed float *)
+  | Unboxed_representation of bool  (* true means second one is unboxed *)
   | Immediate
 
 let report_type_mismatch0 first second decl ppf err =
@@ -154,6 +155,10 @@ let report_type_mismatch0 first second decl ppf err =
       pr "Their internal representations differ:@ %s %s %s"
         (if b then second else first) decl
         "uses unboxed float representation"
+  | Unboxed_representation b ->
+      pr "Their internal representations differ:@ %s %s %s"
+         (if b then second else first) decl
+         "uses unboxed representation"
   | Immediate -> pr "%s is not an immediate type" first
 
 let report_type_mismatch first second decl ppf =
@@ -166,9 +171,9 @@ let rec compare_constructor_arguments env cstr params1 params2 arg1 arg2 =
   match arg1, arg2 with
   | Types.Cstr_tuple arg1, Types.Cstr_tuple arg2 ->
       if List.length arg1 <> List.length arg2 then [Field_arity cstr]
-      else if Misc.for_all2
-          (fun ty1 ty2 -> Ctype.equal env true (ty1::params1) (ty2::params2))
-          (arg1) (arg2)
+      else if
+        (* Ctype.equal must be called on all arguments at once, cf. PR#7378 *)
+        Ctype.equal env true (params1 @ arg1) (params2 @ arg2)
       then [] else [Field_type cstr]
   | Types.Cstr_record l1, Types.Cstr_record l2 ->
       compare_records env params1 params2 0 l1 l2
@@ -212,7 +217,8 @@ and compare_records env params1 params2 n labels1 labels2 =
       else if mut1 <> mut2 then [Field_mutable lab1] else
       if Ctype.equal env true (arg1::params1)
                               (arg2::params2)
-      then compare_records env params1 params2 (n+1) rem1 rem2
+      then (* add arguments to the parameters, cf. PR#7378 *)
+        compare_records env (arg1::params1) (arg2::params2) (n+1) rem1 rem2
       else [Field_type lab1]
 
 let type_declarations ?(equality = false) env name decl1 id decl2 =
@@ -234,6 +240,15 @@ let type_declarations ?(equality = false) env name decl1 id decl2 =
           if Ctype.equal env false [ty1] [ty2] then []
           else [Manifest]
         else [Constraint]
+  in
+  if err <> [] then err else
+  let err =
+    match (decl2.type_kind, decl1.type_unboxed.unboxed,
+           decl2.type_unboxed.unboxed) with
+    | Type_abstract, _, _ -> []
+    | _, true, false -> [Unboxed_representation false]
+    | _, false, true -> [Unboxed_representation true]
+    | _ -> []
   in
   if err <> [] then err else
   let err = match (decl1.type_kind, decl2.type_kind) with

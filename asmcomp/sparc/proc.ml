@@ -103,6 +103,8 @@ let phys_reg n =
 let stack_slot slot ty =
   Reg.at_location ty (Stack slot)
 
+let loc_spacetime_node_hole = Reg.dummy  (* Spacetime unsupported *)
+
 (* Calling conventions *)
 
 let calling_conventions first_int last_int first_float last_float make_stack
@@ -134,16 +136,16 @@ let calling_conventions first_int last_int first_float last_float make_stack
 
 let incoming ofs = Incoming ofs
 let outgoing ofs = Outgoing ofs
-let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
+let not_supported _ofs = fatal_error "Proc.loc_results: cannot call"
 
 let max_arguments_for_tailcalls = 10
 
 let loc_arguments arg =
   calling_conventions 6 15 100 105 outgoing arg
 let loc_parameters arg =
-  let (loc, ofs) = calling_conventions 6 15 100 105 incoming arg in loc
+  let (loc, _ofs) = calling_conventions 6 15 100 105 incoming arg in loc
 let loc_results res =
-  let (loc, ofs) = calling_conventions 0 5 100 105 not_supported res in loc
+  let (loc, _ofs) = calling_conventions 0 5 100 105 not_supported res in loc
 
 (* On the Sparc, all arguments to C functions, even floating-point arguments,
    are passed in %o0..%o5, then on the stack *)
@@ -187,13 +189,13 @@ let loc_external_arguments arg =
   (loc, Misc.align (!ofs + 4) 8)
 
 let loc_external_results res =
-  let (loc, ofs) = calling_conventions 0 1 100 100 not_supported res in loc
+  let (loc, _ofs) = calling_conventions 0 1 100 100 not_supported res in loc
 
 let loc_exn_bucket = phys_reg 0         (* $o0 *)
 
 (* Volatile registers: none *)
 
-let regs_are_volatile rs = false
+let regs_are_volatile _rs = false
 
 (* Registers destroyed by operations *)
 
@@ -204,8 +206,9 @@ let destroyed_at_c_call = (* %l0-%l4, %i0-%i5 preserved *)
      108; 109; 110; 111; 112; 113; 114])
 
 let destroyed_at_oper = function
-    Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) -> all_phys_regs
-  | Iop(Iextcall(_, false)) -> destroyed_at_c_call
+    Iop(Icall_ind _ | Icall_imm _ | Iextcall { alloc = true; }) ->
+    all_phys_regs
+  | Iop(Iextcall { alloc = false; }) -> destroyed_at_c_call
   | _ -> [||]
 
 let destroyed_at_raise = all_phys_regs
@@ -213,20 +216,20 @@ let destroyed_at_raise = all_phys_regs
 (* Maximal register pressure *)
 
 let safe_register_pressure = function
-    Iextcall(_, _) -> 0
+    Iextcall _ -> 0
   | _ -> 15
 
 let max_register_pressure = function
-    Iextcall(_, _) -> [| 11; 0 |]
+    Iextcall _ -> [| 11; 0 |]
   | _ -> [| 19; 15 |]
 
 (* Pure operations (without any side effect besides updating their result
    registers). *)
 
 let op_is_pure = function
-  | Icall_ind | Icall_imm _ | Itailcall_ind | Itailcall_imm _
+  | Icall_ind _ | Icall_imm _ | Itailcall_ind _ | Itailcall_imm _
   | Iextcall _ | Istackoffset _ | Istore _ | Ialloc _
-  | Iintop(Icheckbound) | Iintop_imm(Icheckbound, _) -> false
+  | Iintop(Icheckbound _) | Iintop_imm(Icheckbound _, _) -> false
   | _ -> true
 
 (* Layout of the stack *)

@@ -65,9 +65,9 @@ let rec eval_path = function
         with Not_found ->
           raise (Symtable.Error(Symtable.Undefined_global name))
       end
-  | Pdot(p, s, pos) ->
+  | Pdot(p, _s, pos) ->
       Obj.field (eval_path p) pos
-  | Papply(p1, p2) ->
+  | Papply _ ->
       fatal_error "Toploop.eval_path"
 
 let eval_path env path =
@@ -158,7 +158,7 @@ let record_backtrace () =
 
 let load_lambda ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
-  let slam = Simplif.simplify_lambda lam in
+  let slam = Simplif.simplify_lambda "//toplevel//" lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
   let (init_code, fun_code) = Bytegen.compile_phrase slam in
   if !Clflags.dump_instr then
@@ -334,7 +334,7 @@ let execute_phrase print_outcome ppf phr =
                        dir_name;
                false
              end
-          | Directive_int f, Pdir_int (n, Some _) ->
+          | Directive_int _, Pdir_int (_, Some _) ->
               fprintf ppf "Wrong integer literal for directive `%s'.@."
                 dir_name;
               false
@@ -352,19 +352,6 @@ let execute_phrase print_outcome ppf phr =
     Warnings.reset_fatal ();
     raise exn
 
-(* Temporary assignment to a reference *)
-
-let protect r newval body =
-  let oldval = !r in
-  try
-    r := newval;
-    let res = body() in
-    r := oldval;
-    res
-  with x ->
-    r := oldval;
-    raise x
-
 (* Read and execute commands from a file, or from stdin if [name] is "". *)
 
 let use_print_results = ref true
@@ -376,6 +363,9 @@ let preprocess_phrase ppf phr =
         let str =
           Pparse.apply_rewriters_str ~restore:true ~tool_name:"ocaml" str
         in
+        let str =
+          Pparse.ImplementationHooks.apply_hooks
+            { Misc.sourcefile = "//toplevel//" } str in
         Ptop_def str
     | phr -> phr
   in
@@ -398,9 +388,9 @@ let use_file ppf wrap_mod name =
     Warnings.reset_fatal ();
     Location.init lb filename;
     (* Skip initial #! line if any *)
-    Lexer.skip_sharp_bang lb;
+    Lexer.skip_hash_bang lb;
     let success =
-      protect Location.input_name filename (fun () ->
+      protect_refs [ R (Location.input_name, filename) ] (fun () ->
         try
           List.iter
             (fun ph ->
@@ -423,7 +413,7 @@ let mod_use_file ppf name = use_file ppf true name
 let use_file ppf name = use_file ppf false name
 
 let use_silently ppf name =
-  protect use_print_results false (fun () -> use_file ppf name)
+  protect_refs [ R (use_print_results, false) ] (fun () -> use_file ppf name)
 
 (* Reading function for interactive use *)
 
@@ -508,7 +498,9 @@ let set_paths () =
      but keep the directories that user code linked in with ocamlmktop
      may have added to load_path. *)
   load_path := !load_path @ [Filename.concat Config.standard_library "camlp4"];
-  load_path := "" :: (List.rev !Clflags.include_dirs @ !load_path);
+  load_path := "" :: List.rev (!Compenv.last_include_dirs @
+                               !Clflags.include_dirs @
+                               !Compenv.first_include_dirs) @ !load_path;
   Dll.add_path !load_path
 
 let initialize_toplevel_env () =
@@ -520,7 +512,8 @@ exception PPerror
 
 let loop ppf =
   Location.formatter_for_warnings := ppf;
-  fprintf ppf "        OCaml version %s@.@." Config.version;
+  if not !Clflags.noversion then
+    fprintf ppf "        OCaml version %s@.@." Config.version;
   begin
     try initialize_toplevel_env ()
     with Env.Error _ | Typetexp.Error _ as exn ->
@@ -552,12 +545,15 @@ let loop ppf =
 
 (* Execute a script.  If [name] is "", read the script from stdin. *)
 
-let run_script ppf name args =
+let override_sys_argv args =
   let len = Array.length args in
-  if Array.length Sys.argv < len then invalid_arg "Toploop.run_script";
+  if Array.length Sys.argv < len then invalid_arg "Toploop.override_sys_argv";
   Array.blit args 0 Sys.argv 0 len;
   Obj.truncate (Obj.repr Sys.argv) len;
-  Arg.current := 0;
+  Arg.current := 0
+
+let run_script ppf name args =
+  override_sys_argv args;
   Compmisc.init_path ~dir:(Filename.dirname name) true;
                    (* Note: would use [Filename.abspath] here, if we had it. *)
   begin

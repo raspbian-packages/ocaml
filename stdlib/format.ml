@@ -83,12 +83,10 @@ and tbox = Pp_tbox of int list ref  (* Tabulation box *)
 (* The pretty-printer queue: polymorphic queue definition. *)
 type 'a queue_elem =
   | Nil
-  | Cons of 'a queue_cell
-
-and 'a queue_cell = {
-  mutable head : 'a;
-  mutable tail : 'a queue_elem;
-}
+  | Cons of {
+      head : 'a;
+      mutable tail : 'a queue_elem;
+    }
 
 
 type 'a queue = {
@@ -897,6 +895,9 @@ let pp_set_formatter_output_functions state f g =
 let pp_get_formatter_output_functions state () =
   (state.pp_out_string, state.pp_out_flush)
 
+
+let pp_flush_formatter state =
+  pp_flush_queue state false
 
 (* The default function to output new lines. *)
 let display_newline state () = state.pp_out_string "\n" 0  1

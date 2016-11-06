@@ -18,9 +18,6 @@
 
 let print_DEBUG s = print_string s ; print_newline ()
 
-open Config
-open Clflags
-open Misc
 open Format
 open Typedtree
 
@@ -30,7 +27,7 @@ open Typedtree
    then the directories specified with the -I option (in command-line order),
    then the standard library directory. *)
 let init_path () =
-  load_path :=
+  Config.load_path :=
     "" :: List.rev (Config.standard_library :: !Clflags.include_dirs);
   Env.reset_cache ()
 
@@ -40,11 +37,24 @@ let initial_env () =
     if !Clflags.unsafe_string then Env.initial_unsafe_string
     else Env.initial_safe_string
   in
-  try
-    if !Clflags.nopervasives then initial else
-    Env.open_pers_signature "Pervasives" initial
-  with Not_found ->
-    fatal_error "cannot open pervasives.cmi"
+  let initial =
+    (* Open the Pervasives module by reading directly the corresponding cmi
+       file to avoid troubles when building the documentation for the
+       Pervasives modules.
+       Another option might be to add a -nopervasives option to ocamldoc and update
+       stdlib documentation's build process. *)
+    try
+      Env.open_pers_signature "Pervasives" initial
+    with Not_found ->
+      Misc.fatal_error @@ Printf.sprintf "cannot open pervasives.cmi" in
+  let open_mod env m =
+    let open Asttypes in
+    let lid = {loc = Location.in_file "ocamldoc command line";
+               txt = Longident.Lident m } in
+    snd (Typemod.type_open_ Override env lid.loc lid) in
+  (* Open the list of modules given as arguments of the "-open" flag
+     The list is reversed to open the modules in the left-to-right order *)
+  List.fold_left open_mod initial (List.rev !Clflags.open_modules)
 
 (** Optionally preprocess a source file *)
 let preprocess sourcefile =
@@ -54,8 +64,6 @@ let preprocess sourcefile =
     Format.eprintf "Preprocessing error@.%a@."
       Pparse.report_error err;
     exit 2
-
-let (++) x f = f x
 
 (** Analysis of an implementation file. Returns (Some typedtree) if
    no error occured, else None and an error message is printed.*)
@@ -69,7 +77,7 @@ let no_docstring f x =
   Lexer.handle_docstrings := true;
   result
 
-let process_implementation_file ppf sourcefile =
+let process_implementation_file sourcefile =
   init_path ();
   let prefixname = Filename.chop_extension sourcefile in
   let modulename = String.capitalize_ascii(Filename.basename prefixname) in
@@ -79,7 +87,7 @@ let process_implementation_file ppf sourcefile =
   try
     let parsetree =
       Pparse.file ~tool_name Format.err_formatter inputfile
-        (no_docstring Parse.implementation) ast_impl_magic_number
+        (no_docstring Parse.implementation) Pparse.Structure
     in
     let typedtree =
       Typemod.type_implementation
@@ -102,7 +110,7 @@ let process_implementation_file ppf sourcefile =
 
 (** Analysis of an interface file. Returns (Some signature) if
    no error occured, else None and an error message is printed.*)
-let process_interface_file ppf sourcefile =
+let process_interface_file sourcefile =
   init_path ();
   let prefixname = Filename.chop_extension sourcefile in
   let modulename = String.capitalize_ascii(Filename.basename prefixname) in
@@ -110,9 +118,9 @@ let process_interface_file ppf sourcefile =
   let inputfile = preprocess sourcefile in
   let ast =
     Pparse.file ~tool_name Format.err_formatter inputfile
-      (no_docstring Parse.interface) ast_intf_magic_number
+      (no_docstring Parse.interface) Pparse.Signature
   in
-  let sg = Typemod.type_interface (initial_env()) ast in
+  let sg = Typemod.type_interface sourcefile (initial_env()) ast in
   Warnings.check_fatal ();
   (ast, sg, inputfile)
 
@@ -134,7 +142,7 @@ let process_error exn =
         (Printexc.to_string exn)
 
 (** Process the given file, according to its extension. Return the Module.t created, if any.*)
-let process_file ppf sourcefile =
+let process_file sourcefile =
   if !Odoc_global.verbose then
     (
      let f = match sourcefile with
@@ -150,7 +158,7 @@ let process_file ppf sourcefile =
       (
        Location.input_name := file;
        try
-         let (parsetree_typedtree_opt, input_file) = process_implementation_file ppf file in
+         let (parsetree_typedtree_opt, input_file) = process_implementation_file file in
          match parsetree_typedtree_opt with
            None ->
              None
@@ -182,7 +190,7 @@ let process_file ppf sourcefile =
       (
        Location.input_name := file;
        try
-         let (ast, signat, input_file) = process_interface_file ppf file in
+         let (ast, signat, input_file) = process_interface_file file in
          let file_module = Sig_analyser.analyse_signature file
              !Location.input_name ast signat.sig_type
          in
@@ -394,7 +402,7 @@ let analyse_files ?(init=[]) files =
     (List.fold_left
        (fun acc -> fun file ->
          try
-           match process_file Format.err_formatter file with
+           match process_file file with
              None ->
                acc
            | Some m ->

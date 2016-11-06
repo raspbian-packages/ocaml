@@ -44,7 +44,7 @@
     full keys are alive and if the ephemeron is alive. When one of the
     keys is not considered alive anymore by the GC, the data is
     emptied from the ephemeron. The data could be alive for another
-    reason and in that case the GC will free it, but the ephemeron
+    reason and in that case the GC will not free it, but the ephemeron
     will not hold the data anymore.
 
     The ephemerons complicate the notion of liveness of values, because
@@ -222,13 +222,13 @@ module K2 : sig
   val check_key2: ('k1,'k2,'d) t -> bool
   (** Same as {!Ephemeron.K1.check_key} *)
 
-  val blit_key1  : ('k1,_,_) t -> ('k1,_,_) t -> unit
+  val blit_key1: ('k1,_,_) t -> ('k1,_,_) t -> unit
   (** Same as {!Ephemeron.K1.blit_key} *)
 
-  val blit_key2  : (_,'k2,_) t -> (_,'k2,_) t -> unit
+  val blit_key2: (_,'k2,_) t -> (_,'k2,_) t -> unit
   (** Same as {!Ephemeron.K1.blit_key} *)
 
-  val blit_key12 : ('k1,'k2,_) t -> ('k1,'k2,_) t -> unit
+  val blit_key12: ('k1,'k2,_) t -> ('k1,'k2,_) t -> unit
   (** Same as {!Ephemeron.K1.blit_key} *)
 
   val get_data: ('k1,'k2,'d) t -> 'd option
@@ -286,7 +286,7 @@ module Kn : sig
   val check_key: ('k,'d) t -> int ->  bool
   (** Same as {!Ephemeron.K1.check_key} *)
 
-  val blit_key  : ('k,_) t -> int -> ('k,_) t -> int -> int -> unit
+  val blit_key: ('k,_) t -> int -> ('k,_) t -> int -> int -> unit
   (** Same as {!Ephemeron.K1.blit_key} *)
 
   val get_data: ('k,'d) t -> 'd option

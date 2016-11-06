@@ -38,22 +38,30 @@ let base_escape_strings = [
     (">", "&gt;") ;
 ]
 
-let pre_escape_strings = [
+
+let prelike_escape_strings = [
   (" ", "&nbsp;") ;
   ("\t", "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;") ;
-  ]
+  ("\n", "<br>\n")
+]
 
 
 let pre = ref false
 let fmt = ref Format.str_formatter
 
 (** Escape the strings which would clash with html syntax,
-   and some other strings if we want to get a PRE style.*)
+   and some other strings if we want to get a PRE style outside of
+   <pre> </pre>.*)
 let escape s =
+  let escape_strings =
+    if !pre then
+      base_escape_strings
+    else
+      base_escape_strings @ prelike_escape_strings in
   List.fold_left
     (fun acc -> fun (s, s2) -> Str.global_replace (Str.regexp s) s2 acc)
     s
-    (if !pre then base_escape_strings @ pre_escape_strings else base_escape_strings)
+    escape_strings
 
 (** Escape the strings which would clash with html syntax. *)
 let escape_base s =
@@ -82,7 +90,7 @@ let create_hashtable size init =
 
 (** The function used to return html code for the given comment body. *)
 let html_of_comment = ref
-    (fun (s : string) -> "<b>Odoc_ocamlhtml.html_of_comment not initialized</b>")
+    (fun (_ : string) -> "<b>Odoc_ocamlhtml.html_of_comment not initialized</b>")
 
 let keyword_table =
   create_hashtable 149 [
@@ -423,7 +431,7 @@ and comment = parse
   | "*)"
       { match !comment_start_pos with
         | [] -> assert false
-        | [x] -> comment_start_pos := []
+        | [_] -> comment_start_pos := []
         | _ :: l ->
             store_comment_char '*';
             store_comment_char ')';

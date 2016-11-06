@@ -228,7 +228,7 @@ let mk_keep_docs f =
 ;;
 
 let mk_no_keep_docs f =
-  "-keep-docs", Arg.Unit f,
+  "-no-keep-docs", Arg.Unit f,
   " Do not keep documentation strings in .cmi files (default)"
 ;;
 
@@ -385,6 +385,11 @@ let mk_ppx f =
   "<command>  Pipe abstract syntax trees through preprocessor <command>"
 ;;
 
+let mk_plugin f =
+  "-plugin", Arg.String f,
+  "<plugin>  Load dynamic plugin <plugin>"
+;;
+
 let mk_principal f =
   "-principal", Arg.Unit f, " Check principality of type inference"
 ;;
@@ -418,7 +423,9 @@ let mk_S f =
 ;;
 
 let mk_safe_string f =
-  "-safe-string", Arg.Unit f, " Make strings immutable"
+  "-safe-string", Arg.Unit f,
+  if Config.safe_string then " Make strings immutable (default)"
+  else " Make strings immutable"
 ;;
 
 let mk_shared f =
@@ -465,13 +472,30 @@ let mk_unbox_closures_factor f =
     Clflags.default_unbox_closures_factor
 ;;
 
+let mk_unboxed_types f =
+  "-unboxed-types", Arg.Unit f,
+  " unannotated unboxable types will be unboxed"
+;;
+
+let mk_no_unboxed_types f =
+  "-no-unboxed-types", Arg.Unit f,
+  " unannotated unboxable types will not be unboxed (default)"
+;;
+
 let mk_unsafe f =
   "-unsafe", Arg.Unit f,
   " Do not compile bounds checking on array and string access"
 ;;
 
 let mk_unsafe_string f =
-  "-unsafe-string", Arg.Unit f, " Make strings mutable (default)"
+  if Config.safe_string then
+    let err () =
+      raise (Arg.Bad "OCaml has been configured with -safe-string: \
+                      -unsafe-string is not available")
+    in
+    "-unsafe-string", Arg.Unit err, " (option not available)"
+  else
+    "-unsafe-string", Arg.Unit f, " Make strings mutable (default)"
 ;;
 
 let mk_use_runtime f =
@@ -499,6 +523,10 @@ let mk_version f =
 
 let mk__version f =
   "--version", Arg.Unit f, " Print version and exit"
+;;
+
+let mk_no_version f =
+  "-no-version", Arg.Unit f, " Do not print version at startup"
 ;;
 
 let mk_vmthread f =
@@ -724,6 +752,8 @@ module type Common_options = sig
   val _no_strict_sequence : unit -> unit
   val _strict_formats : unit -> unit
   val _no_strict_formats : unit -> unit
+  val _unboxed_types : unit -> unit
+  val _no_unboxed_types : unit -> unit
   val _unsafe : unit -> unit
   val _unsafe_string : unit -> unit
   val _version : unit -> unit
@@ -767,6 +797,7 @@ module type Compiler_options = sig
   val _output_obj : unit -> unit
   val _output_complete_obj : unit -> unit
   val _pack : unit -> unit
+  val _plugin : string -> unit
   val _pp : string -> unit
   val _principal : unit -> unit
   val _no_principal : unit -> unit
@@ -782,6 +813,18 @@ module type Compiler_options = sig
 
   val _nopervasives : unit -> unit
   val _dtimings : unit -> unit
+end
+;;
+
+module type Toplevel_options = sig
+  include Common_options
+  val _init : string -> unit
+  val _noinit : unit -> unit
+  val _no_version : unit -> unit
+  val _noprompt : unit -> unit
+  val _nopromptcont : unit -> unit
+  val _plugin : string -> unit
+  val _stdin : unit -> unit
 end
 ;;
 
@@ -803,13 +846,7 @@ module type Bytecomp_options = sig
 end;;
 
 module type Bytetop_options = sig
-  include Common_options
-  val _init : string -> unit
-  val _noinit : unit -> unit
-  val _noprompt : unit -> unit
-  val _nopromptcont : unit -> unit
-  val _stdin : unit -> unit
-
+  include Toplevel_options
   val _dinstr : unit -> unit
 end;;
 
@@ -875,14 +912,10 @@ module type Optcomp_options = sig
 end;;
 
 module type Opttop_options = sig
-  include Common_options
+  include Toplevel_options
   include Optcommon_options
-  val _init : string -> unit
-  val _noinit : unit -> unit
-  val _noprompt : unit -> unit
-  val _nopromptcont : unit -> unit
+  val _verbose : unit -> unit
   val _S : unit -> unit
-  val _stdin : unit -> unit
 end;;
 
 module type Ocamldoc_options = sig
@@ -957,6 +990,7 @@ struct
     mk_pack_byt F._pack;
     mk_pp F._pp;
     mk_ppx F._ppx;
+    mk_plugin F._plugin;
     mk_principal F._principal;
     mk_no_principal F._no_principal;
     mk_rectypes F._rectypes;
@@ -969,6 +1003,8 @@ struct
     mk_strict_formats F._strict_formats;
     mk_no_strict_formats F._no_strict_formats;
     mk_thread F._thread;
+    mk_unboxed_types F._unboxed_types;
+    mk_no_unboxed_types F._no_unboxed_types;
     mk_unsafe F._unsafe;
     mk_unsafe_string F._unsafe_string;
     mk_use_runtime F._use_runtime;
@@ -1016,6 +1052,7 @@ struct
     mk_nostdlib F._nostdlib;
     mk_open F._open;
     mk_ppx F._ppx;
+    mk_plugin F._plugin;
     mk_principal F._principal;
     mk_no_principal F._no_principal;
     mk_rectypes F._rectypes;
@@ -1027,10 +1064,13 @@ struct
     mk_no_strict_sequence F._no_strict_sequence;
     mk_strict_formats F._strict_formats;
     mk_no_strict_formats F._no_strict_formats;
+    mk_unboxed_types F._unboxed_types;
+    mk_no_unboxed_types F._no_unboxed_types;
     mk_unsafe F._unsafe;
     mk_unsafe_string F._unsafe_string;
     mk_version F._version;
     mk__version F._version;
+    mk_no_version F._no_version;
     mk_vnum F._vnum;
     mk_w F._w;
     mk_warn_error F._warn_error;
@@ -1108,6 +1148,7 @@ struct
     mk_output_complete_obj F._output_complete_obj;
     mk_p F._p;
     mk_pack_opt F._pack;
+    mk_plugin F._plugin;
     mk_pp F._pp;
     mk_ppx F._ppx;
     mk_principal F._principal;
@@ -1129,6 +1170,8 @@ struct
     mk_unbox_closures F._unbox_closures;
     mk_unbox_closures_factor F._unbox_closures_factor;
     mk_inline_max_unroll F._inline_max_unroll;
+    mk_unboxed_types F._unboxed_types;
+    mk_no_unboxed_types F._no_unboxed_types;
     mk_unsafe F._unsafe;
     mk_unsafe_string F._unsafe_string;
     mk_v F._v;
@@ -1209,6 +1252,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_o2 F._o2;
     mk_o3 F._o3;
     mk_open F._open;
+    mk_plugin F._plugin;
     mk_ppx F._ppx;
     mk_principal F._principal;
     mk_no_principal F._no_principal;
@@ -1225,10 +1269,14 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_no_strict_formats F._no_strict_formats;
     mk_unbox_closures F._unbox_closures;
     mk_unbox_closures_factor F._unbox_closures_factor;
+    mk_unboxed_types F._unboxed_types;
+    mk_no_unboxed_types F._no_unboxed_types;
     mk_unsafe F._unsafe;
     mk_unsafe_string F._unsafe_string;
+    mk_verbose F._verbose;
     mk_version F._version;
     mk__version F._version;
+    mk_no_version F._no_version;
     mk_vnum F._vnum;
     mk_w F._w;
     mk_warn_error F._warn_error;
@@ -1293,6 +1341,8 @@ struct
     mk_strict_formats F._strict_formats;
     mk_no_strict_formats F._no_strict_formats;
     mk_thread F._thread;
+    mk_unboxed_types F._unboxed_types;
+    mk_no_unboxed_types F._no_unboxed_types;
     mk_unsafe_string F._unsafe_string;
     mk_v F._v;
     mk_verbose F._verbose;

@@ -40,7 +40,7 @@ val transl_with_constraint:
 
 val abstract_type_decl: int -> type_declaration
 val approx_type_decl:
-    Env.t -> Parsetree.type_declaration list ->
+    Parsetree.type_declaration list ->
                                   (Ident.t * type_declaration) list
 val check_recmod_typedecl:
     Env.t -> Location.t -> Ident.t list -> Path.t -> type_declaration -> unit
@@ -58,6 +58,10 @@ val compute_variance_decls:
      'a Typedtree.class_infos) list ->
     (Types.type_declaration * Types.type_declaration *
      Types.class_declaration * Types.class_type_declaration) list
+
+(* for typeopt.ml *)
+val get_unboxed_type_representation: Env.t -> type_expr -> type_expr option
+
 
 type native_repr_kind = Unboxed | Untagged
 
@@ -92,6 +96,9 @@ type error =
   | Cannot_unbox_or_untag_type of native_repr_kind
   | Deep_unbox_or_untag_attribute of native_repr_kind
   | Bad_immediate_attribute
+  | Bad_unboxed_attribute of string
+  | Wrong_unboxed_type_float
+  | Boxed_and_unboxed
 
 exception Error of Location.t * error
 

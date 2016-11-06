@@ -105,7 +105,7 @@ val blit : 'a t -> int -> 'a t -> int -> int -> unit
 
 module type S = sig
   type data
-    (** The type of the elements stored in the table. *)
+  (** The type of the elements stored in the table. *)
 
   type t
     (** The type of tables that contain elements of type [data].
@@ -118,7 +118,7 @@ module type S = sig
         size [n].  The table will grow as needed. *)
 
   val clear : t -> unit
-    (** Remove all elements from the table. *)
+  (** Remove all elements from the table. *)
 
   val merge : t -> data -> data
     (** [merge t x] returns an instance of [x] found in [t] if any,

@@ -135,7 +135,8 @@ val filter_map_inplace: ('a -> 'b -> 'b option) -> ('a, 'b) t -> unit
     returns [Some new_val], the binding is update to associate the key
     to [new_val].
 
-    Other comments for {!Hashtbl.iter} apply as well.  *)
+    Other comments for {!Hashtbl.iter} apply as well.
+    @since 4.03.0 *)
 
 val fold : ('a -> 'b -> 'c -> 'c) -> ('a, 'b) t -> 'c -> 'c
 (** [Hashtbl.fold f tbl init] computes
@@ -243,10 +244,10 @@ val stats : ('a, 'b) t -> statistics
 module type HashedType =
   sig
     type t
-      (** The type of the hashtable keys. *)
+    (** The type of the hashtable keys. *)
 
     val equal : t -> t -> bool
-      (** The equality predicate used to compare keys. *)
+    (** The equality predicate used to compare keys. *)
 
     val hash : t -> int
       (** A hashing function on keys. It must be such that if two keys are
@@ -301,10 +302,10 @@ module Make (H : HashedType) : S with type key = H.t
 module type SeededHashedType =
   sig
     type t
-      (** The type of the hashtable keys. *)
+    (** The type of the hashtable keys. *)
 
     val equal: t -> t -> bool
-      (** The equality predicate used to compare keys. *)
+    (** The equality predicate used to compare keys. *)
 
     val hash: int -> t -> int
       (** A seeded hashing function on keys.  The first argument is

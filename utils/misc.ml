@@ -30,6 +30,17 @@ let try_finally work cleanup =
   result
 ;;
 
+type ref_and_value = R : 'a ref * 'a -> ref_and_value
+
+let protect_refs =
+  let set_refs l = List.iter (fun (R (r, v)) -> r := v) l in
+  fun refs f ->
+    let backup = List.map (fun (R (r, _)) -> R (r, !r)) refs in
+    set_refs refs;
+    match f () with
+    | x           -> set_refs backup; x
+    | exception e -> set_refs backup; raise e
+
 (* List functions *)
 
 let rec map_end f l1 l2 =
@@ -63,24 +74,6 @@ let rec split_last = function
       (hd :: lst, last)
 
 module Stdlib = struct
-  module String = struct
-    type t = string
-
-    let split s ~on =
-      let is_separator c = (c = on) in
-      let rec split1 res i =
-        if i >= String.length s then res else begin
-          if is_separator s.[i] then split1 res (i+1)
-          else split2 res i (i+1)
-        end
-      and split2 res i j =
-        if j >= String.length s then String.sub s i (j-i) :: res else begin
-          if is_separator s.[j] then split1 (String.sub s i (j-i) :: res) (j+1)
-          else split2 res i (j+1)
-        end
-      in List.rev (split1 [] 0)
-  end
-
   module List = struct
     type 'a t = 'a list
 
@@ -115,7 +108,7 @@ module Stdlib = struct
       let rec aux acc l1 l2 =
         match l1, l2 with
         | [], _ -> (List.rev acc, l2)
-        | h::t, [] -> raise (Invalid_argument "map2_prefix")
+        | _ :: _, [] -> raise (Invalid_argument "map2_prefix")
         | h1::t1, h2::t2 ->
           let h = f h1 h2 in
           aux (h :: acc) t1 t2
@@ -221,7 +214,7 @@ let remove_file filename =
   try
     if Sys.file_exists filename
     then Sys.remove filename
-  with Sys_error msg ->
+  with Sys_error _msg ->
     ()
 
 (* Expand a -I option: if it starts with +, make it relative to the standard
@@ -297,9 +290,6 @@ module Int_literal_converter = struct
 end
 
 (* String operations *)
-
-let chop_extension_if_any fname =
-  try Filename.chop_extension fname with Invalid_argument _ -> fname
 
 let chop_extensions file =
   let dirname = Filename.dirname file and basename = Filename.basename file in
@@ -484,22 +474,6 @@ let did_you_mean ppf get_choices =
        (if rest = [] then "" else " or ")
        last
 
-(* split a string [s] at every char [c], and return the list of sub-strings *)
-let split s c =
-  let len = String.length s in
-  let rec iter pos to_rev =
-    if pos = len then List.rev ("" :: to_rev) else
-      match try
-              Some ( String.index_from s pos c )
-        with Not_found -> None
-      with
-          Some pos2 ->
-            if pos2 = pos then iter (pos+1) ("" :: to_rev) else
-              iter (pos2+1) ((String.sub s pos (pos2-pos)) :: to_rev)
-        | None -> List.rev ( String.sub s pos (len-pos) :: to_rev )
-  in
-  iter 0 []
-
 let cut_at s c =
   let pos = String.index s c in
   String.sub s 0 pos, String.sub s (pos+1) (String.length s - pos - 1)
@@ -641,3 +615,82 @@ let normalise_eol s =
       if s.[i] <> '\r' then Buffer.add_char b s.[i]
     done;
     Buffer.contents b
+
+let delete_eol_spaces src =
+  let len_src = String.length src in
+  let dst = Bytes.create len_src in
+  let rec loop i_src i_dst =
+    if i_src = len_src then
+      i_dst
+    else
+      match src.[i_src] with
+      | ' ' | '\t' ->
+        loop_spaces 1 (i_src + 1) i_dst
+      | c ->
+        Bytes.set dst i_dst c;
+        loop (i_src + 1) (i_dst + 1)
+  and loop_spaces spaces i_src i_dst =
+    if i_src = len_src then
+      i_dst
+    else
+      match src.[i_src] with
+      | ' ' | '\t' ->
+        loop_spaces (spaces + 1) (i_src + 1) i_dst
+      | '\n' ->
+        Bytes.set dst i_dst '\n';
+        loop (i_src + 1) (i_dst + 1)
+      | _ ->
+        for n = 0 to spaces do
+          Bytes.set dst (i_dst + n) src.[i_src - spaces + n]
+        done;
+        loop (i_src + 1) (i_dst + spaces + 1)
+  in
+  let stop = loop 0 0 in
+  Bytes.sub_string dst 0 stop
+
+type hook_info = {
+  sourcefile : string;
+}
+
+exception HookExnWrapper of
+    {
+      error: exn;
+      hook_name: string;
+      hook_info: hook_info;
+    }
+
+exception HookExn of exn
+
+let raise_direct_hook_exn e = raise (HookExn e)
+
+let fold_hooks list hook_info ast =
+  List.fold_left (fun ast (hook_name,f) ->
+    try
+      f hook_info ast
+    with
+    | HookExn e -> raise e
+    | error -> raise (HookExnWrapper {error; hook_name; hook_info})
+       (* when explicit reraise with backtrace will be available,
+          it should be used here *)
+
+  ) ast (List.sort compare list)
+
+module type HookSig = sig
+  type t
+
+  val add_hook : string -> (hook_info -> t -> t) -> unit
+  val apply_hooks : hook_info -> t -> t
+end
+
+module MakeHooks(M: sig
+    type t
+  end) : HookSig with type t = M.t
+= struct
+
+  type t = M.t
+
+  let hooks = ref []
+  let add_hook name f = hooks := (name, f) :: !hooks
+  let apply_hooks sourcefile intf =
+    fold_hooks !hooks sourcefile intf
+end

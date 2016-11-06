@@ -26,6 +26,7 @@ let load_path = ref ([] : (string * string array) list)
 let ml_synonyms = ref [".ml"]
 let mli_synonyms = ref [".mli"]
 let native_only = ref false
+let bytecode_only = ref false
 let error_occurred = ref false
 let raw_dependencies = ref false
 let sort_files = ref false
@@ -279,21 +280,21 @@ let read_and_approximate inputfile =
     report_err exn;
     !Depend.free_structure_names
 
-let read_parse_and_extract parse_function extract_function def magic
-    source_file =
+let read_parse_and_extract parse_function extract_function def ast_kind
+                           source_file =
   Depend.free_structure_names := Depend.StringSet.empty;
   try
     let input_file = Pparse.preprocess source_file in
     begin try
       let ast =
         Pparse.file ~tool_name Format.err_formatter
-                    input_file parse_function magic
+                    input_file parse_function ast_kind
       in
       let bound_vars =
         List.fold_left
           (fun bv modname ->
             Depend.open_module bv (Longident.Lident modname))
-          !module_map !Clflags.open_modules
+          !module_map ((* PR#7248 *) List.rev !Clflags.open_modules)
       in
       let r = extract_function bound_vars ast in
       Pparse.remove_preprocessed input_file;
@@ -309,6 +310,46 @@ let read_parse_and_extract parse_function extract_function def magic
     else (read_and_approximate source_file, def)
   end
 
+let print_ml_dependencies source_file extracted_deps =
+  let basename = Filename.chop_extension source_file in
+  let byte_targets = [ basename ^ ".cmo" ] in
+  let native_targets =
+    if !all_dependencies
+    then [ basename ^ ".cmx"; basename ^ ".o" ]
+    else [ basename ^ ".cmx" ] in
+  let init_deps = if !all_dependencies then [source_file] else [] in
+  let cmi_name = basename ^ ".cmi" in
+  let init_deps, extra_targets =
+    if List.exists (fun ext -> Sys.file_exists (basename ^ ext))
+        !mli_synonyms
+    then (cmi_name :: init_deps, cmi_name :: init_deps), []
+    else (init_deps, init_deps),
+         (if !all_dependencies then [cmi_name] else [])
+  in
+  let (byt_deps, native_deps) =
+    Depend.StringSet.fold (find_dependency ML)
+      extracted_deps init_deps in
+  if not !native_only then
+    print_dependencies (byte_targets @ extra_targets) byt_deps;
+  if not !bytecode_only then
+    print_dependencies (native_targets @ extra_targets) native_deps
+
+let print_mli_dependencies source_file extracted_deps =
+  let basename = Filename.chop_extension source_file in
+  let (byt_deps, _opt_deps) =
+    Depend.StringSet.fold (find_dependency MLI)
+      extracted_deps ([], []) in
+  print_dependencies [basename ^ ".cmi"] byt_deps
+
+let print_file_dependencies (source_file, kind, extracted_deps) =
+  if !raw_dependencies then begin
+    print_raw_dependencies source_file extracted_deps
+  end else
+    match kind with
+    | ML -> print_ml_dependencies source_file extracted_deps
+    | MLI -> print_mli_dependencies source_file extracted_deps
+
+
 let ml_file_dependencies source_file =
   let parse_use_file_as_impl lexbuf =
     let f x =
@@ -320,54 +361,16 @@ let ml_file_dependencies source_file =
   in
   let (extracted_deps, ()) =
     read_parse_and_extract parse_use_file_as_impl Depend.add_implementation ()
-                           Config.ast_impl_magic_number source_file
+                           Pparse.Structure source_file
   in
-  if !sort_files then
-    files := (source_file, ML, !Depend.free_structure_names) :: !files
-  else
-    if !raw_dependencies then begin
-      print_raw_dependencies source_file extracted_deps
-    end else begin
-      let basename = Filename.chop_extension source_file in
-      let byte_targets = [ basename ^ ".cmo" ] in
-      let native_targets =
-        if !all_dependencies
-        then [ basename ^ ".cmx"; basename ^ ".o" ]
-        else [ basename ^ ".cmx" ] in
-      let init_deps = if !all_dependencies then [source_file] else [] in
-      let cmi_name = basename ^ ".cmi" in
-      let init_deps, extra_targets =
-        if List.exists (fun ext -> Sys.file_exists (basename ^ ext))
-                       !mli_synonyms
-        then (cmi_name :: init_deps, cmi_name :: init_deps), []
-        else (init_deps, init_deps),
-             (if !all_dependencies then [cmi_name] else [])
-      in
-      let (byt_deps, native_deps) =
-        Depend.StringSet.fold (find_dependency ML)
-          extracted_deps init_deps in
-      if not !native_only then
-        print_dependencies (byte_targets @ extra_targets) byt_deps;
-      print_dependencies (native_targets @ extra_targets) native_deps;
-    end
+  files := (source_file, ML, extracted_deps) :: !files
 
 let mli_file_dependencies source_file =
   let (extracted_deps, ()) =
     read_parse_and_extract Parse.interface Depend.add_signature ()
-                           Config.ast_intf_magic_number source_file
+                           Pparse.Signature source_file
   in
-  if !sort_files then
-    files := (source_file, MLI, extracted_deps) :: !files
-  else
-    if !raw_dependencies then begin
-      print_raw_dependencies source_file extracted_deps
-    end else begin
-      let basename = Filename.chop_extension source_file in
-      let (byt_deps, _opt_deps) =
-        Depend.StringSet.fold (find_dependency MLI)
-          extracted_deps ([], []) in
-      print_dependencies [basename ^ ".cmi"] byt_deps
-    end
+  files := (source_file, MLI, extracted_deps) :: !files
 
 let process_file_as process_fun def source_file =
   Compenv.readenv ppf (Before_compile source_file);
@@ -493,11 +496,11 @@ let rec dump_map s0 ppf m =
 
 let process_ml_map =
   read_parse_and_extract Parse.implementation Depend.add_implementation_binding
-                         StringMap.empty Config.ast_impl_magic_number
+                         StringMap.empty Pparse.Structure
 
 let process_mli_map =
   read_parse_and_extract Parse.interface Depend.add_signature_binding
-                         StringMap.empty Config.ast_intf_magic_number
+                         StringMap.empty Pparse.Signature
 
 let parse_map fname =
   map_files := fname :: !map_files ;
@@ -571,6 +574,8 @@ let _ =
         " Print module dependencies in raw form (not suitable for make)";
      "-native", Arg.Set native_only,
         " Generate dependencies for native-code only (no .cmo files)";
+     "-bytecode", Arg.Set bytecode_only,
+        " Generate dependencies for bytecode-code only (no .cmx files)";
      "-one-line", Arg.Set one_line,
         " Output one line per file, regardless of the length";
      "-open", Arg.String (add_to_list Clflags.open_modules),
@@ -589,5 +594,6 @@ let _ =
          " Print version number and exit";
     ] file_dependencies usage;
   Compenv.readenv ppf Before_link;
-  if !sort_files then sort_files_by_dependencies !files;
+  if !sort_files then sort_files_by_dependencies !files
+  else List.iter print_file_dependencies (List.sort compare !files);
   exit (if !error_occurred then 2 else 0)

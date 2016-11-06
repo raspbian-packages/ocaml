@@ -39,6 +39,8 @@ module type Common_options = sig
   val _no_strict_sequence : unit -> unit
   val _strict_formats : unit -> unit
   val _no_strict_formats : unit -> unit
+  val _unboxed_types : unit -> unit
+  val _no_unboxed_types : unit -> unit
   val _unsafe : unit -> unit
   val _unsafe_string : unit -> unit
   val _version : unit -> unit
@@ -82,6 +84,7 @@ module type Compiler_options = sig
   val _output_obj : unit -> unit
   val _output_complete_obj : unit -> unit
   val _pack : unit -> unit
+  val _plugin : string -> unit
   val _pp : string -> unit
   val _principal : unit -> unit
   val _no_principal : unit -> unit
@@ -97,6 +100,18 @@ module type Compiler_options = sig
 
   val _nopervasives : unit -> unit
   val _dtimings : unit -> unit
+end
+;;
+
+module type Toplevel_options = sig
+  include Common_options
+  val _init : string -> unit
+  val _noinit : unit -> unit
+  val _no_version : unit -> unit
+  val _noprompt : unit -> unit
+  val _nopromptcont : unit -> unit
+  val _plugin : string -> unit
+  val _stdin : unit -> unit
 end
 ;;
 
@@ -118,13 +133,7 @@ module type Bytecomp_options = sig
 end;;
 
 module type Bytetop_options = sig
-  include Common_options
-  val _init : string -> unit
-  val _noinit : unit -> unit
-  val _noprompt : unit -> unit
-  val _nopromptcont : unit -> unit
-  val _stdin : unit -> unit
-
+  include Toplevel_options
   val _dinstr : unit -> unit
 end;;
 
@@ -190,14 +199,10 @@ module type Optcomp_options = sig
 end;;
 
 module type Opttop_options = sig
-  include Common_options
+  include Toplevel_options
   include Optcommon_options
-  val _init : string -> unit
-  val _noinit : unit -> unit
-  val _noprompt : unit -> unit
-  val _nopromptcont : unit -> unit
+  val _verbose : unit -> unit
   val _S : unit -> unit
-  val _stdin : unit -> unit
 end;;
 
 module type Ocamldoc_options = sig

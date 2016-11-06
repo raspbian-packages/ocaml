@@ -431,7 +431,7 @@ and print_out_sig_item ppf =
   | Osig_typext (ext, Oext_exception) ->
       fprintf ppf "@[<2>exception %a@]"
         print_out_constr (ext.oext_name, ext.oext_args, ext.oext_ret_type)
-  | Osig_typext (ext, es) ->
+  | Osig_typext (ext, _es) ->
       print_out_extension_constructor ppf ext
   | Osig_modtype (name, Omty_abstract) ->
       fprintf ppf "@[<2>module type %s@]" name
@@ -506,6 +506,9 @@ and print_out_type_decl kwd ppf td =
   let print_immediate ppf =
     if td.otype_immediate then fprintf ppf " [%@%@immediate]" else ()
   in
+  let print_unboxed ppf =
+    if td.otype_unboxed then fprintf ppf " [%@%@unboxed]" else ()
+  in
   let print_out_tkind ppf = function
   | Otyp_abstract -> ()
   | Otyp_record lbls ->
@@ -523,13 +526,19 @@ and print_out_type_decl kwd ppf td =
         print_private td.otype_private
         !out_type ty
   in
-  fprintf ppf "@[<2>@[<hv 2>%t%a@]%t%t@]"
+  fprintf ppf "@[<2>@[<hv 2>%t%a@]%t%t%t@]"
     print_name_params
     print_out_tkind ty
     print_constraints
     print_immediate
+    print_unboxed
 
 and print_out_constr ppf (name, tyl,ret_type_opt) =
+  let name =
+    match name with
+    | "::" -> "(::)"   (* #7200 *)
+    | s -> s
+  in
   match ret_type_opt with
   | None ->
       begin match tyl with
