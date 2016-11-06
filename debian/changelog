@@ -1,3 +1,9 @@
+ocaml (4.03.0-6) UNRELEASED; urgency=medium
+
+  * Use secure and canonical URIs for Vcs-* fields
+
+ -- Mehdi Dogguy <mehdi@debian.org>  Sun, 06 Nov 2016 11:01:52 +0100
+
 ocaml (4.03.0-5) experimental; urgency=medium
 
   * Fix variable substitution in Makefile syntax.
