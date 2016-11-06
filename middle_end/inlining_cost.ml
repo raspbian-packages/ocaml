@@ -39,7 +39,9 @@ let prim_size (prim : Lambda.primitive) args =
   | Pccall p -> (if p.Primitive.prim_alloc then 10 else 4) + List.length args
   | Praise _ -> 4
   | Pstringlength -> 5
-  | Pstringrefs | Pstringsets -> 6
+  | Pbyteslength -> 5
+  | Pstringrefs -> 6
+  | Pbytesrefs | Pbytessets -> 6
   | Pmakearray _ -> 5 + List.length args
   | Parraylength Pgenarray -> 6
   | Parraylength _ -> 2
@@ -85,7 +87,7 @@ let lambda_smaller' lam ~than:threshold =
     | Let { defining_expr; body; _ } ->
       lambda_named_size defining_expr;
       lambda_size body
-    | Let_mutable (_, _, body) -> lambda_size body
+    | Let_mutable { body } -> lambda_size body
     | Let_rec (bindings, body) ->
       List.iter (fun (_, lam) -> lambda_named_size lam) bindings;
       lambda_size body

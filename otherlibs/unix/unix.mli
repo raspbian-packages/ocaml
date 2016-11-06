@@ -716,9 +716,7 @@ val has_symlink : unit -> bool
    simply indicates that the symlink system call is available. *)
 
 val readlink : string -> string
-(** Read the contents of a link.
-
-   On Windows: not implemented. *)
+(** Read the contents of a symbolic link. *)
 
 
 (** {6 Polling} *)
@@ -882,7 +880,9 @@ val sleep : int -> unit
 
 val sleepf : float -> unit
 (** Stop execution for the given number of seconds.  Like [sleep],
-    but fractions of seconds are supported. *)
+    but fractions of seconds are supported.
+
+    @since 4.03.0 *)
 
 val times : unit -> process_times
 (** Return the execution times of the process.
@@ -1066,9 +1066,8 @@ type socket_domain =
   | PF_INET                     (** Internet domain (IPv4) *)
   | PF_INET6                    (** Internet domain (IPv6) *)
 (** The type of socket domains.  Not all platforms support
-    IPv6 sockets (type [PF_INET6]).
-    On Windows, the domains [PF_UNIX] and [PF_INET6] are not
-    supported; [PF_INET] is fully supported. *)
+    IPv6 sockets (type [PF_INET6]).  Windows does not support
+    [PF_UNIX]. *)
 
 type socket_type =
     SOCK_STREAM                 (** Stream socket *)
@@ -1076,7 +1075,9 @@ type socket_type =
   | SOCK_RAW                    (** Raw socket *)
   | SOCK_SEQPACKET              (** Sequenced packets socket *)
 (** The type of socket kinds, specifying the semantics of
-   communications. *)
+   communications.  [SOCK_SEQPACKET] is included for completeness,
+   but is rarely supported by the OS, and needs system calls that
+   are not available in this library. *)
 
 type sockaddr =
     ADDR_UNIX of string
@@ -1366,7 +1367,7 @@ val getaddrinfo:
 
 type name_info =
   { ni_hostname : string;               (** Name or IP address of host *)
-    ni_service : string                 (** Name of service or port number *)
+    ni_service : string;                (** Name of service or port number *)
   }
 (** Host and service information returned by {!Unix.getnameinfo}. *)
 

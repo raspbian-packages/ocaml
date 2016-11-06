@@ -410,11 +410,13 @@ let expression sub exp =
           ))
     | Texp_variant (label, expo) ->
         Pexp_variant (label, map_opt (sub.expr sub) expo)
-    | Texp_record (list, expo) ->
-        Pexp_record (List.map (fun (lid, _, exp) ->
-              (map_loc sub lid, sub.expr sub exp)
-          ) list,
-          map_opt (sub.expr sub) expo)
+    | Texp_record { fields; extended_expression; _ } ->
+        let list = Array.fold_left (fun l -> function
+            | _, Kept _ -> l
+            | _, Overridden (lid, exp) -> (lid, sub.expr sub exp) :: l)
+            [] fields
+        in
+        Pexp_record (list, map_opt (sub.expr sub) extended_expression)
     | Texp_field (exp, lid, _label) ->
         Pexp_field (sub.expr sub exp, map_loc sub lid)
     | Texp_setfield (exp1, lid, _label, exp2) ->
@@ -450,6 +452,9 @@ let expression sub exp =
     | Texp_letmodule (_id, name, mexpr, exp) ->
         Pexp_letmodule (name, sub.module_expr sub mexpr,
           sub.expr sub exp)
+    | Texp_letexception (ext, exp) ->
+        Pexp_letexception (sub.extension_constructor sub ext,
+                           sub.expr sub exp)
     | Texp_assert exp -> Pexp_assert (sub.expr sub exp)
     | Texp_lazy exp -> Pexp_lazy (sub.expr sub exp)
     | Texp_object (cl, _) ->
@@ -747,7 +752,7 @@ let class_field sub cf =
   in
   Cf.mk ~loc ~attrs desc
 
-let location sub l = l
+let location _sub l = l
 
 let default_mapper =
   {

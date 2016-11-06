@@ -26,7 +26,7 @@ inherit Selectgen.selector_generic as super
 
 method is_immediate n = (n <= 4095) && (n >= -4096)
 
-method select_addressing chunk = function
+method select_addressing _chunk = function
     Cconst_symbol s ->
       (Ibased(s, 0), Ctuple [])
   | Cop((Caddv | Cadda), [Cconst_symbol s; Cconst_int n]) ->
@@ -38,6 +38,9 @@ method select_addressing chunk = function
   | arg ->
       (Iindexed 0, arg)
 
+method private iextcall (func, alloc) =
+  Iextcall { func; alloc; label_after = Cmm.new_label (); }
+
 method! select_operation op args =
   match (op, args) with
   (* For SPARC V7 multiplication, division and modulus are turned into
@@ -45,11 +48,11 @@ method! select_operation op args =
      For SPARC V8 and V9, use hardware multiplication and division,
      but C library routine for modulus. *)
     (Cmuli, _) when !arch_version = SPARC_V7 ->
-      (Iextcall(".umul", false), args)
+      (self#iextcall(".umul", false), args)
   | (Cdivi, _) when !arch_version = SPARC_V7 ->
-      (Iextcall(".div", false), args)
+      (self#iextcall(".div", false), args)
   | (Cmodi, _) ->
-      (Iextcall(".rem", false), args)
+      (self#iextcall(".rem", false), args)
   | _ ->
       super#select_operation op args
 

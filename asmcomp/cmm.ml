@@ -107,6 +107,16 @@ let swap_comparison = function
   | Clt -> Cgt | Cle -> Cge
   | Cgt -> Clt | Cge -> Cle
 
+type label = int
+
+let label_counter = ref 99
+
+let new_label() = incr label_counter; !label_counter
+
+type raise_kind =
+  | Raise_withtrace
+  | Raise_notrace
+
 type memory_chunk =
     Byte_unsigned
   | Byte_signed
@@ -120,11 +130,13 @@ type memory_chunk =
   | Double
   | Double_u
 
-type operation =
+and operation =
     Capply of machtype * Debuginfo.t
-  | Cextcall of string * machtype * bool * Debuginfo.t
+  | Cextcall of string * machtype * bool * Debuginfo.t * label option
+    (** If specified, the given label will be placed immediately after the
+        call (at the same place as any frame descriptor would reference). *)
   | Cload of memory_chunk
-  | Calloc
+  | Calloc of Debuginfo.t
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
@@ -135,7 +147,7 @@ type operation =
   | Caddf | Csubf | Cmulf | Cdivf
   | Cfloatofint | Cintoffloat
   | Ccmpf of comparison
-  | Craise of Lambda.raise_kind * Debuginfo.t
+  | Craise of raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
 
 type expression =
@@ -145,7 +157,7 @@ type expression =
   | Cconst_symbol of string
   | Cconst_pointer of int
   | Cconst_natpointer of nativeint
-  | Cconst_blockheader of nativeint
+  | Cblockheader of nativeint * Debuginfo.t
   | Cvar of Ident.t
   | Clet of Ident.t * expression * expression
   | Cassign of Ident.t * expression
@@ -164,11 +176,11 @@ type fundecl =
     fun_args: (Ident.t * machtype) list;
     fun_body: expression;
     fun_fast: bool;
-    fun_dbg : Debuginfo.t; }
+    fun_dbg : Debuginfo.t;
+  }
 
 type data_item =
     Cdefine_symbol of string
-  | Cdefine_label of int
   | Cglobal_symbol of string
   | Cint8 of int
   | Cint16 of int
@@ -177,7 +189,6 @@ type data_item =
   | Csingle of float
   | Cdouble of float
   | Csymbol_address of string
-  | Clabel_address of int
   | Cstring of string
   | Cskip of int
   | Calign of int
@@ -185,3 +196,6 @@ type data_item =
 type phrase =
     Cfunction of fundecl
   | Cdata of data_item list
+
+let reset () =
+  label_counter := 99

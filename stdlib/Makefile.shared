@@ -20,8 +20,9 @@ TARGET_BINDIR ?= $(BINDIR)
 
 COMPILER=../ocamlc
 CAMLC=$(CAMLRUN) $(COMPILER)
-COMPFLAGS=-strict-sequence -w +32+33..39+50 -g -warn-error A -bin-annot \
-	  -nostdlib -safe-string
+COMPFLAGS=-strict-sequence -absname -w +a-4-9-41-42-44-45-48 \
+          -g -warn-error A -bin-annot -nostdlib \
+          -safe-string -strict-formats
 ifeq "$(FLAMBDA)" "true"
 OPTCOMPFLAGS=-O3
 else
@@ -46,7 +47,8 @@ OTHERS=list.cmo char.cmo bytes.cmo string.cmo sys.cmo \
   genlex.cmo ephemeron.cmo \
   filename.cmo complex.cmo \
   arrayLabels.cmo listLabels.cmo bytesLabels.cmo \
-  stringLabels.cmo moreLabels.cmo stdLabels.cmo
+  stringLabels.cmo moreLabels.cmo stdLabels.cmo \
+  spacetime.cmo
 
 all: stdlib.cma std_exit.cmo camlheader target_camlheader camlheader_ur
 
@@ -107,8 +109,9 @@ clean::
 	           -p -c -o $*.p.cmx $<
 
 # Dependencies on the compiler
-$(OBJS) std_exit.cmo: $(COMPILER)
-$(OBJS:.cmo=.cmi) std_exit.cmi: $(COMPILER)
+COMPILER_DEPS=$(filter-out -use-prims, $(COMPILER))
+$(OBJS) std_exit.cmo: $(COMPILER_DEPS)
+$(OBJS:.cmo=.cmi) std_exit.cmi: $(COMPILER_DEPS)
 $(OBJS:.cmo=.cmx) std_exit.cmx: $(OPTCOMPILER)
 $(OBJS:.cmo=.p.cmx) std_exit.p.cmx: $(OPTCOMPILER)
 
@@ -131,5 +134,5 @@ include .depend
 # .p.cmx files.  When the compiler imports another compilation unit,
 # it looks for the .cmx file (not .p.cmx).
 depend:
-	$(CAMLDEP) *.mli *.ml > .depend
-	$(CAMLDEP) *.ml | sed -e 's/\.cmx : /.p.cmx : /g' >>.depend
+	$(CAMLDEP) -slash *.mli *.ml > .depend
+	$(CAMLDEP) -slash *.ml | sed -e 's/\.cmx : /.p.cmx : /g' >>.depend

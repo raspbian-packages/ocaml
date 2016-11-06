@@ -17,8 +17,10 @@ include ../config/Makefile
 
 CC=$(NATIVECC)
 FLAGS=-I../byterun -DCAML_NAME_SPACE -DNATIVE_CODE \
-      -DTARGET_$(ARCH) -DMODEL_$(MODEL) -DSYS_$(SYSTEM) $(IFLEXDIR)
-CFLAGS=$(FLAGS) $(NATIVECCCOMPOPTS)
+      -DTARGET_$(ARCH) -DMODEL_$(MODEL) -DSYS_$(SYSTEM) $(IFLEXDIR) \
+      $(LIBUNWIND_INCLUDE_FLAGS)
+#CFLAGS=$(FLAGS) -g -O0
+CFLAGS=$(FLAGS) -g -O0 $(NATIVECCCOMPOPTS)
 DFLAGS=$(FLAGS) -g -DDEBUG $(NATIVECCCOMPOPTS)
 IFLAGS=$(FLAGS) -DCAML_INSTR
 PFLAGS=$(FLAGS) -pg -DPROFILING $(NATIVECCPROFOPTS) $(NATIVECCCOMPOPTS)
@@ -31,7 +33,8 @@ COBJS=startup_aux.o startup.o \
   gc_ctrl.o terminfo.o md5.o obj.o lexing.o printexc.o callback.o weak.o \
   compact.o finalise.o custom.o $(UNIX_OR_WIN32).o backtrace_prim.o \
   backtrace.o \
-  natdynlink.o debugger.o meta.o dynlink.o clambda_checks.o
+  natdynlink.o debugger.o meta.o dynlink.o clambda_checks.o \
+  spacetime.o spacetime_snapshot.o spacetime_offline.o
 
 ASMOBJS=$(ARCH).o
 
@@ -204,7 +207,7 @@ LINKEDFILES=misc.c freelist.c major_gc.c minor_gc.c memory.c alloc.c array.c \
   compare.c ints.c floats.c str.c io.c extern.c intern.c hash.c sys.c \
   parsing.c gc_ctrl.c terminfo.c md5.c obj.c lexing.c printexc.c callback.c \
   weak.c compact.c finalise.c meta.c custom.c main.c globroots.c \
-  $(UNIX_OR_WIN32).c dynlink.c signals.c debugger.c
+  $(UNIX_OR_WIN32).c dynlink.c signals.c debugger.c startup_aux.c backtrace.c
 
 clean::
 	rm -f $(LINKEDFILES)

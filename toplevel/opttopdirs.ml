@@ -81,11 +81,11 @@ let load_file ppf name0 =
       (* The Dynlink interface does not allow us to distinguish between
           a Dynlink.Error exceptions raised in the loaded modules
           or a genuine error during dynlink... *)
-      try Dynlink.loadfile fn; true
+      try Compdynlink.loadfile fn; true
       with
-      | Dynlink.Error err ->
+      | Compdynlink.Error err ->
         fprintf ppf "Error while loading %s: %s.@."
-          name (Dynlink.error_message err);
+          name (Compdynlink.error_message err);
         false
       | exn ->
         print_exception_outcome ppf exn;
@@ -111,9 +111,9 @@ type 'a printer_type_new = Format.formatter -> 'a -> unit
 type 'a printer_type_old = 'a -> unit
 
 let match_printer_type ppf desc typename =
-  let (printer_type, _) =
+  let printer_type =
     try
-      Env.lookup_type (Ldot(Lident "Topdirs", typename)) !toplevel_env
+      Env.lookup_type (Ldot(Lident "Opttopdirs", typename)) !toplevel_env
     with Not_found ->
       fprintf ppf "Cannot find type Topdirs.%s.@." typename;
       raise Exit in
@@ -151,7 +151,7 @@ let dir_install_printer ppf lid =
     let v = eval_path !toplevel_env path in
     let print_function =
       if is_old_style then
-        (fun formatter repr -> Obj.obj v (Obj.obj repr))
+        (fun _formatter repr -> Obj.obj v (Obj.obj repr))
       else
         (fun formatter repr -> Obj.obj v formatter (Obj.obj repr)) in
     install_printer path ty_arg print_function
@@ -159,7 +159,7 @@ let dir_install_printer ppf lid =
 
 let dir_remove_printer ppf lid =
   try
-    let (ty_arg, path, is_old_style) = find_printer_type ppf lid in
+    let (_ty_arg, path, _is_old_style) = find_printer_type ppf lid in
     begin try
       remove_printer path
     with Not_found ->

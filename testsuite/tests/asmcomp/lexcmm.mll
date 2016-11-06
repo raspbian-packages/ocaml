@@ -1,18 +1,3 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                OCaml                                   *)
-(*                                                                        *)
-(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
-(*                                                                        *)
-(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
-(*     en Automatique.                                                    *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
-
 {
 open Parsecmm
 
@@ -61,9 +46,8 @@ let keyword_table =
     "mulh", MULH;
     "or", OR;
     "proj", PROJ;
-    "raise", RAISE Lambda.Raise_regular;
-    "reraise", RAISE Lambda.Raise_reraise;
-    "raise_notrace", RAISE Lambda.Raise_notrace;
+    "raise_withtrace", RAISE Cmm.Raise_withtrace;
+    "raise_notrace", RAISE Cmm.Raise_notrace;
     "seq", SEQ;
     "signed", SIGNED;
     "skip", SKIP;

@@ -222,6 +222,8 @@ module Options = Main_args.Make_ocamldoc_options(struct
   let _no_strict_formats = unset Clflags.strict_formats
   let _thread = set Clflags.use_threads
   let _vmthread = set Clflags.use_vmthreads
+  let _unboxed_types = set Clflags.unboxed_types
+  let _no_unboxed_types = unset Clflags.unboxed_types
   let _unsafe () = assert false
   let _unsafe_string = set Clflags.unsafe_string
   let _v () = Compenv.print_version_and_library "documentation generator"
@@ -306,8 +308,8 @@ let default_options = Options.list @
     M.generate_dot ;
   "-customdir", Arg.Unit (fun () -> Printf.printf "%s\n" Odoc_config.custom_generators_path; exit 0),
   M.display_custom_generators_dir ;
-  "-i", Arg.String (fun s -> ()), M.add_load_dir ;
-  "-g", Arg.String (fun s -> ()), M.load_file ^
+  "-i", Arg.String (fun _ -> ()), M.add_load_dir ;
+  "-g", Arg.String (fun _ -> ()), M.load_file ^
   "\n\n *** HTML options ***\n";
 
 (* html only options *)

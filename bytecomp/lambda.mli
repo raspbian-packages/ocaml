@@ -25,6 +25,7 @@ type compile_time_constant =
   | Ostype_unix
   | Ostype_win32
   | Ostype_cygwin
+  | Backend_type
 
 type loc_kind =
   | Loc_FILE
@@ -44,17 +45,23 @@ type initialization_or_assignment =
   | Initialization
   | Assignment
 
+type is_safe =
+  | Safe
+  | Unsafe
+
 type primitive =
-    Pidentity
+  | Pidentity
+  | Pbytes_to_string
+  | Pbytes_of_string
   | Pignore
-  | Prevapply of Location.t
-  | Pdirapply of Location.t
+  | Prevapply
+  | Pdirapply
   | Ploc of loc_kind
     (* Globals *)
   | Pgetglobal of Ident.t
   | Psetglobal of Ident.t
   (* Operations on heap blocks *)
-  | Pmakeblock of int * mutable_flag
+  | Pmakeblock of int * mutable_flag * block_shape
   | Pfield of int
   | Psetfield of int * immediate_or_pointer * initialization_or_assignment
   | Pfloatfield of int
@@ -69,7 +76,8 @@ type primitive =
   (* Boolean operations *)
   | Psequand | Psequor | Pnot
   (* Integer operations *)
-  | Pnegint | Paddint | Psubint | Pmulint | Pdivint | Pmodint
+  | Pnegint | Paddint | Psubint | Pmulint
+  | Pdivint of is_safe | Pmodint of is_safe
   | Pandint | Porint | Pxorint
   | Plslint | Plsrint | Pasrint
   | Pintcomp of comparison
@@ -81,7 +89,8 @@ type primitive =
   | Paddfloat | Psubfloat | Pmulfloat | Pdivfloat
   | Pfloatcomp of comparison
   (* String operations *)
-  | Pstringlength | Pstringrefu | Pstringsetu | Pstringrefs | Pstringsets
+  | Pstringlength | Pstringrefu  | Pstringrefs
+  | Pbyteslength | Pbytesrefu | Pbytessetu | Pbytesrefs | Pbytessets
   (* Array operations *)
   | Pmakearray of array_kind * mutable_flag
   | Pduparray of array_kind * mutable_flag
@@ -107,8 +116,8 @@ type primitive =
   | Paddbint of boxed_integer
   | Psubbint of boxed_integer
   | Pmulbint of boxed_integer
-  | Pdivbint of boxed_integer
-  | Pmodbint of boxed_integer
+  | Pdivbint of { size : boxed_integer; is_safe : is_safe }
+  | Pmodbint of { size : boxed_integer; is_safe : is_safe }
   | Pandbint of boxed_integer
   | Porbint of boxed_integer
   | Pxorbint of boxed_integer
@@ -151,6 +160,12 @@ and comparison =
 
 and array_kind =
     Pgenarray | Paddrarray | Pintarray | Pfloatarray
+
+and value_kind =
+    Pgenval | Pfloatval | Pboxedintval of boxed_integer | Pintval
+
+and block_shape =
+  value_kind list option
 
 and boxed_integer = Primitive.boxed_integer =
     Pnativeint | Pint32 | Pint64
@@ -203,7 +218,8 @@ type let_kind = Strict | Alias | StrictOpt | Variable
       in e'
     StrictOpt: e does not have side-effects, but depend on the store;
       we can discard e if x does not appear in e'
-    Variable: the variable x is assigned later in e' *)
+    Variable: the variable x is assigned later in e'
+ *)
 
 type meth_kind = Self | Public | Cached
 
@@ -220,13 +236,14 @@ type lambda =
   | Lconst of structured_constant
   | Lapply of lambda_apply
   | Lfunction of lfunction
-  | Llet of let_kind * Ident.t * lambda * lambda
+  | Llet of let_kind * value_kind * Ident.t * lambda * lambda
   | Lletrec of (Ident.t * lambda) list * lambda
-  | Lprim of primitive * lambda list
+  | Lprim of primitive * lambda list * Location.t
   | Lswitch of lambda * lambda_switch
 (* switch on strings, clauses are sorted by string order,
    strings are pairwise distinct *)
-  | Lstringswitch of lambda * (string * lambda) list * lambda option
+  | Lstringswitch of
+      lambda * (string * lambda) list * lambda option * Location.t
   | Lstaticraise of int * lambda list
   | Lstaticcatch of lambda * (int * Ident.t list) * lambda
   | Ltrywith of lambda * Ident.t * lambda
@@ -243,7 +260,8 @@ and lfunction =
   { kind: function_kind;
     params: Ident.t list;
     body: lambda;
-    attr: function_attribute; } (* specified with [@inline] attribute *)
+    attr: function_attribute; (* specified with [@inline] attribute *)
+    loc : Location.t; }
 
 and lambda_apply =
   { ap_func : lambda;
@@ -272,10 +290,22 @@ and lambda_event_kind =
   | Lev_pseudo
 
 type program =
-  { code : lambda;
-    main_module_block_size : int; }
-(* Lambda code for the Closure middle-end. The main module block size
-   is required for preallocating the block *)
+  { module_ident : Ident.t;
+    main_module_block_size : int;
+    required_globals : Ident.Set.t;    (* Modules whose initializer side effects
+                                          must occur before [code]. *)
+    code : lambda }
+(* Lambda code for the middle-end.
+   * In the closure case the code is a sequence of assignments to a
+     preallocated block of size [main_module_block_size] using
+     (Setfield(Getglobal(module_ident))). The size is used to preallocate
+     the block.
+   * In the flambda case the code is an expression returning a block
+     value of size [main_module_block_size]. The size is used to build
+     the module root as an initialize_symbol
+     Initialize_symbol(module_name, 0,
+       [getfield 0; ...; getfield (main_module_block_size - 1)])
+*)
 
 (* Sharing key *)
 val make_key: lambda -> lambda option

@@ -137,6 +137,8 @@ and shift_operation =
   | Ishiftlogicalright
   | Ishiftarithmeticright
 
+let spacetime_node_hole_pointer_is_live_before _specific_op = false
+
 (* Sizes, endianness *)
 
 let big_endian = false
@@ -157,7 +159,7 @@ let identity_addressing = Iindexed 0
 
 let offset_addressing (Iindexed n) delta = Iindexed(n + delta)
 
-let num_args_addressing (Iindexed n) = 1
+let num_args_addressing (Iindexed _) = 1
 
 (* Printing operations and addressing modes *)
 

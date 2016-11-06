@@ -13,6 +13,8 @@
 /*                                                                        */
 /**************************************************************************/
 
+#define CAML_INTERNALS
+
 /* Win32-specific stuff */
 
 #define WIN32_LEAN_AND_MEAN
@@ -47,6 +49,12 @@
 
 #ifndef S_ISREG
 #define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
+#endif
+
+/* Very old Microsoft headers don't include intptr_t */
+#if defined(_MSC_VER) && !defined(_UINTPTR_T_DEFINED)
+typedef unsigned int uintptr_t;
+#define _UINTPTR_T_DEFINED
 #endif
 
 CAMLnoreturn_start
@@ -97,9 +105,17 @@ int caml_write_fd(int fd, int flags, void * buf, int n)
 {
   int retcode;
   if ((flags & CHANNEL_FLAG_FROM_SOCKET) == 0) {
+#if defined(NATIVE_CODE) && defined(WITH_SPACETIME)
+  if (flags & CHANNEL_FLAG_BLOCKING_WRITE) {
+    retcode = write(fd, buf, n);
+  } else {
+#endif
     caml_enter_blocking_section();
     retcode = write(fd, buf, n);
     caml_leave_blocking_section();
+#if defined(NATIVE_CODE) && defined(WITH_SPACETIME)
+  }
+#endif
     if (retcode == -1) caml_sys_io_error(NO_ARG);
   } else {
     caml_enter_blocking_section();
@@ -579,7 +595,7 @@ int caml_win32_random_seed (intnat data[16])
 }
 
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && __STDC_SECURE_LIB__ >= 200411L
 
 static void invalid_parameter_handler(const wchar_t* expression,
    const wchar_t* function,
@@ -611,6 +627,26 @@ int caml_executable_name(char * name, int name_len)
 }
 
 /* snprintf emulation */
+
+#ifdef LACKS_VSCPRINTF
+/* No _vscprintf until Visual Studio .NET 2002 and sadly no version number
+   in the CRT headers until Visual Studio 2005 so forced to predicate this
+   on the compiler version instead */
+int _vscprintf(const char * format, va_list args)
+{
+  int n;
+  int sz = 5;
+  char* buf = (char*)malloc(sz);
+  n = _vsnprintf(buf, sz, format, args);
+  while (n < 0 || n > sz) {
+    sz += 512;
+    buf = (char*)realloc(buf, sz);
+    n = _vsnprintf(buf, sz, format, args);
+  }
+  free(buf);
+  return n;
+}
+#endif
 
 #if defined(_WIN32) && !defined(_UCRT)
 int caml_snprintf(char * buf, size_t size, const char * format, ...)

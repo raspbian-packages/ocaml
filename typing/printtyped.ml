@@ -121,6 +121,16 @@ let list i f ppf l =
      line i ppf "]\n";
 ;;
 
+let array i f ppf a =
+  if Array.length a = 0 then
+    line i ppf "[]\n"
+  else begin
+    line i ppf "[\n";
+    Array.iter (f (i+1) ppf) a;
+    line i ppf "]\n"
+  end
+;;
+
 let option i f ppf x =
   match x with
   | None -> line i ppf "None\n";
@@ -214,6 +224,10 @@ and pattern i ppf x =
         line i ppf "Tpat_type %a\n" fmt_path id;
         attributes i ppf attrs;
         pattern i ppf { x with pat_extra = rem }
+    | (Tpat_open (id,_,_), _, attrs)::rem ->
+        line i ppf "Tpat_open \"%a\"\n" fmt_path id;
+        attributes i ppf attrs;
+        pattern i ppf { x with pat_extra = rem }
     | [] ->
   match x.pat_desc with
   | Tpat_any -> line i ppf "Tpat_any\n";
@@ -231,7 +245,7 @@ and pattern i ppf x =
   | Tpat_variant (l, po, _) ->
       line i ppf "Tpat_variant \"%s\"\n" l;
       option i pattern ppf po;
-  | Tpat_record (l, c) ->
+  | Tpat_record (l, _c) ->
       line i ppf "Tpat_record\n";
       list i longident_x_pattern ppf l;
   | Tpat_array (l) ->
@@ -291,7 +305,7 @@ and expression i ppf x =
       line i ppf "Texp_apply\n";
       expression i ppf e;
       list i label_x_expression ppf l;
-  | Texp_match (e, l1, l2, partial) ->
+  | Texp_match (e, l1, l2, _partial) ->
       line i ppf "Texp_match\n";
       expression i ppf e;
       list i case ppf l1;
@@ -309,10 +323,10 @@ and expression i ppf x =
   | Texp_variant (l, eo) ->
       line i ppf "Texp_variant \"%s\"\n" l;
       option i expression ppf eo;
-  | Texp_record (l, eo) ->
+  | Texp_record { fields; extended_expression; _ } ->
       line i ppf "Texp_record\n";
-      list i longident_x_expression ppf l;
-      option i expression ppf eo;
+      array i record_field ppf fields;
+      option i expression ppf extended_expression;
   | Texp_field (e, li, _) ->
       line i ppf "Texp_field\n";
       expression i ppf e;
@@ -361,6 +375,10 @@ and expression i ppf x =
   | Texp_letmodule (s, _, me, e) ->
       line i ppf "Texp_letmodule \"%a\"\n" fmt_ident s;
       module_expr i ppf me;
+      expression i ppf e;
+  | Texp_letexception (cd, e) ->
+      line i ppf "Pexp_letexception\n";
+      extension_constructor i ppf cd;
       expression i ppf e;
   | Texp_assert (e) ->
       line i ppf "Texp_assert";
@@ -819,9 +837,12 @@ and string_x_expression i ppf (s, _, e) =
   line i ppf "<override> \"%a\"\n" fmt_path s;
   expression (i+1) ppf e;
 
-and longident_x_expression i ppf (li, _, e) =
-  line i ppf "%a\n" fmt_longident li;
-  expression (i+1) ppf e;
+and record_field i ppf = function
+  | _, Overridden (li, e) ->
+      line i ppf "%a\n" fmt_longident li;
+      expression (i+1) ppf e;
+  | _, Kept _ ->
+      line i ppf "<kept>"
 
 and label_x_expression i ppf (l, e) =
   line i ppf "<arg>\n";

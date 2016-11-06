@@ -67,6 +67,7 @@ and use_threads = ref false             (* -thread *)
 and use_vmthreads = ref false           (* -vmthread *)
 and noassert = ref false                (* -noassert *)
 and verbose = ref false                 (* -verbose *)
+and noversion = ref false               (* -no-version *)
 and noprompt = ref false                (* -noprompt *)
 and nopromptcont = ref false            (* -nopromptcont *)
 and init_file = ref (None : string option)   (* -init *)
@@ -152,7 +153,8 @@ let runtime_variant = ref "";;      (* -runtime-variant *)
 
 let keep_docs = ref false              (* -keep-docs *)
 let keep_locs = ref false              (* -keep-locs *)
-let unsafe_string = ref true;;         (* -safe-string / -unsafe-string *)
+let unsafe_string = ref (not Config.safe_string)
+                                   (* -safe-string / -unsafe-string *)
 
 let classic_inlining = ref false       (* -Oclassic *)
 let inlining_report = ref false    (* -inlining-report *)
@@ -354,3 +356,5 @@ let parse_color_setting = function
   | "never" -> Some Misc.Color.Never
   | _ -> None
 let color = ref Misc.Color.Auto ;; (* -color *)
+
+let unboxed_types = ref false

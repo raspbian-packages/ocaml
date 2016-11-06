@@ -38,7 +38,7 @@ that permits interactive use of the OCaml system through a
 read-eval-print loop. In this mode, the system repeatedly reads OCaml
 phrases from the input, then typechecks, compiles and evaluates
 them, then prints the inferred type and result value, if any. The
-system prints a # (sharp) prompt before reading each phrase.
+system prints a # (hash) prompt before reading each phrase.
 
 A toplevel phrase can span several lines. It is terminated by ;; (a
 double-semicolon). The syntax of toplevel phrases is as follows.
@@ -142,6 +142,11 @@ Opens the given module before starting the toplevel. If several
 options are given, they are processed in order, just as if
 the statements open! module1;; ... open! moduleN;; were input.
 .TP
+.BI \-plugin \ plugin
+Dynamically load the code of the given
+.I plugin
+(a .cmo or .cma file) in the toplevel.
+.TP
 .BI \-ppx \ command
 After parsing, pipe the abstract syntax tree through the preprocessor
 .IR command .
@@ -185,6 +190,17 @@ interactive session.
 .B \-strict\-sequence
 Force the left-hand part of each sequence to have type unit.
 .TP
+.B \-unboxed\-types
+When a type is unboxable (i.e. a record with a single argument or a
+concrete datatype with a single constructor of one argument) it will
+be unboxed unless annotated with
+.BR [@@ocaml.boxed] .
+.TP
+.B \-no-unboxed\-types
+When a type is unboxable  it will be boxed unless annotated with
+.BR [@@ocaml.unboxed] .
+This is the default.
+.TP
 .B \-unsafe
 Turn bound checking off on array and string accesses (the
 .BR v.(i) and s.[i]
@@ -205,6 +221,9 @@ Print version string and exit.
 .TP
 .B \-vnum
 Print short version number and exit.
+.TP
+.B \-no\-version
+Do not print the version banner at startup.
 .TP
 .BI \-w \ warning\-list
 Enable or disable warnings according to the argument

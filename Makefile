@@ -48,6 +48,9 @@ world.opt:
 	$(MAKE) coldstart
 	$(MAKE) opt.opt
 
+reconfigure:
+	./configure $(CONFIGURE_ARGS)
+
 # Hard bootstrap how-to:
 # (only necessary in some cases, for example if you remove some primitive)
 #
@@ -95,7 +98,8 @@ coldstart:
 	cp byterun/ocamlrun$(EXE) boot/ocamlrun$(EXE)
 	cd yacc; $(MAKE) all
 	cp yacc/ocamlyacc$(EXE) boot/ocamlyacc$(EXE)
-	cd stdlib; $(MAKE) COMPILER=../boot/ocamlc all
+	cd stdlib; \
+	  $(MAKE) COMPILER="../boot/ocamlc -use-prims ../byterun/primitives" all
 	cd stdlib; cp $(LIBFILES) ../boot
 	if test -f boot/libcamlrun.a; then :; else \
 	  ln -s ../byterun/libcamlrun.a boot/libcamlrun.a; fi
@@ -220,10 +224,10 @@ install:
 	  dllbigarray$(EXT_DLL) dllnums$(EXT_DLL) dllthreads$(EXT_DLL) \
 	  dllunix$(EXT_DLL) dllgraphics$(EXT_DLL) dllstr$(EXT_DLL)
 	cd byterun; $(MAKE) install
-	cp ocamlc $(INSTALL_BINDIR)/ocamlc$(EXE)
+	cp ocamlc $(INSTALL_BINDIR)/ocamlc.byte$(EXE)
 	cp ocaml $(INSTALL_BINDIR)/ocaml$(EXE)
 	cd stdlib; $(MAKE) install
-	cp lex/ocamllex $(INSTALL_BINDIR)/ocamllex$(EXE)
+	cp lex/ocamllex $(INSTALL_BINDIR)/ocamllex.byte$(EXE)
 	cp $(CAMLYACC)$(EXE) $(INSTALL_BINDIR)/ocamlyacc$(EXE)
 	cp utils/*.cmi utils/*.cmt utils/*.cmti \
 	   parsing/*.cmi parsing/*.cmt parsing/*.cmti \
@@ -244,12 +248,16 @@ install:
 	if test -n "$(WITH_OCAMLDOC)"; then (cd ocamldoc; $(MAKE) install); fi
 	if test -n "$(WITH_DEBUGGER)"; then (cd debugger; $(MAKE) install); fi
 	cp config/Makefile $(INSTALL_LIBDIR)/Makefile.config
-	if test -f ocamlopt; then $(MAKE) installopt; fi
+	if test -f ocamlopt; then $(MAKE) installopt; else \
+	   cd $(INSTALL_BINDIR); \
+	   ln -sf ocamlc.byte$(EXE) ocamlc$(EXE); \
+	   ln -sf ocamllex.byte$(EXE) ocamllex$(EXE); \
+	   fi
 
 # Installation of the native-code compiler
 installopt:
 	cd asmrun; $(MAKE) install
-	cp ocamlopt $(INSTALL_BINDIR)/ocamlopt$(EXE)
+	cp ocamlopt $(INSTALL_BINDIR)/ocamlopt.byte$(EXE)
 	cd stdlib; $(MAKE) installopt
 	cp middle_end/*.cmi middle_end/*.cmt middle_end/*.cmti \
 		$(INSTALL_COMPLIBDIR)
@@ -261,13 +269,18 @@ installopt:
 		else :; fi
 	for i in $(OTHERLIBRARIES); \
 	  do (cd otherlibs/$$i; $(MAKE) installopt) || exit $$?; done
-	if test -f ocamlopt.opt ; then $(MAKE) installoptopt; fi
+	if test -f ocamlopt.opt ; then $(MAKE) installoptopt; else \
+	   cd $(INSTALL_BINDIR); ln -sf ocamlopt.byte$(EXE) ocamlopt$(EXE); fi
 	cd tools; $(MAKE) installopt
 
 installoptopt:
 	cp ocamlc.opt $(INSTALL_BINDIR)/ocamlc.opt$(EXE)
 	cp ocamlopt.opt $(INSTALL_BINDIR)/ocamlopt.opt$(EXE)
 	cp lex/ocamllex.opt $(INSTALL_BINDIR)/ocamllex.opt$(EXE)
+	cd $(INSTALL_BINDIR); \
+	   ln -sf ocamlc.opt$(EXE) ocamlc$(EXE); \
+	   ln -sf ocamlopt.opt$(EXE) ocamlopt$(EXE); \
+	   ln -sf ocamllex.opt$(EXE) ocamllex$(EXE)
 	cp utils/*.cmx parsing/*.cmx typing/*.cmx bytecomp/*.cmx \
            driver/*.cmx asmcomp/*.cmx $(INSTALL_COMPLIBDIR)
 	cp compilerlibs/ocamlcommon.cmxa compilerlibs/ocamlcommon.a \
@@ -323,9 +336,11 @@ compilerlibs/ocamloptcomp.cma: $(MIDDLE_END) $(ASMCOMP)
 partialclean::
 	rm -f compilerlibs/ocamloptcomp.cma
 
-ocamlopt: compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma $(OPTSTART)
+ocamlopt: compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma \
+          compilerlibs/ocamlbytecomp.cma $(OPTSTART)
 	$(CAMLC) $(LINKFLAGS) -o ocamlopt \
-	  compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma $(OPTSTART)
+	  compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma \
+	  compilerlibs/ocamlbytecomp.cma $(OPTSTART)
 
 partialclean::
 	rm -f ocamlopt
@@ -372,12 +387,10 @@ partialclean::
 	rm -f compilerlibs/ocamlopttoplevel.cmxa
 
 ocamlnat: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
-    otherlibs/dynlink/dynlink.cmxa compilerlibs/ocamlopttoplevel.cmxa \
+    compilerlibs/ocamlbytecomp.cmxa \
+    compilerlibs/ocamlopttoplevel.cmxa \
     $(OPTTOPLEVELSTART:.cmo=.cmx)
-	$(CAMLOPT) $(LINKFLAGS) -linkall -o ocamlnat \
-	    otherlibs/dynlink/dynlink.cmxa compilerlibs/ocamlcommon.cmxa \
-	    compilerlibs/ocamloptcomp.cmxa compilerlibs/ocamlopttoplevel.cmxa \
-	    $(OPTTOPLEVELSTART:.cmo=.cmx)
+	$(CAMLOPT) $(LINKFLAGS) -linkall -o $@ $^
 
 partialclean::
 	rm -f ocamlnat
@@ -414,12 +427,17 @@ utils/config.ml: utils/config.mlp config/Makefile
 	    -e 's|%%ASM%%|$(ASM)|' \
 	    -e 's|%%ASM_CFI_SUPPORTED%%|$(ASM_CFI_SUPPORTED)|' \
 	    -e 's|%%WITH_FRAME_POINTERS%%|$(WITH_FRAME_POINTERS)|' \
+	    -e 's|%%WITH_SPACETIME%%|$(WITH_SPACETIME)|' \
+	    -e 's|%%PROFINFO_WIDTH%%|$(PROFINFO_WIDTH)|' \
+	    -e 's|%%LIBUNWIND_AVAILABLE%%|$(LIBUNWIND_AVAILABLE)|' \
+	    -e 's|%%LIBUNWIND_LINK_FLAGS%%|$(LIBUNWIND_LINK_FLAGS)|' \
 	    -e 's|%%MKDLL%%|$(MKDLL)|' \
 	    -e 's|%%MKEXE%%|$(MKEXE)|' \
 	    -e 's|%%MKMAINDLL%%|$(MKMAINDLL)|' \
 	    -e 's|%%HOST%%|$(HOST)|' \
 	    -e 's|%%TARGET%%|$(TARGET)|' \
 	    -e 's|%%FLAMBDA%%|$(FLAMBDA)|' \
+	    -e 's|%%SAFE_STRING%%|$(SAFE_STRING)|' \
 	    utils/config.mlp > utils/config.ml
 
 partialclean::
@@ -478,9 +496,11 @@ partialclean::
 	rm -f compilerlibs/ocamloptcomp.cmxa compilerlibs/ocamloptcomp.a
 
 ocamlopt.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
+              compilerlibs/ocamlbytecomp.cmxa  \
               $(OPTSTART:.cmo=.cmx)
 	$(CAMLOPT) $(LINKFLAGS) -o ocamlopt.opt \
 	   compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
+	   compilerlibs/ocamlbytecomp.cmxa  \
 	   $(OPTSTART:.cmo=.cmx)
 
 partialclean::
@@ -521,65 +541,31 @@ beforedepend:: bytecomp/runtimedef.ml
 
 # Choose the right machine-dependent files
 
-asmcomp/arch.ml: asmcomp/$(ARCH)/arch.ml
-	ln -s $(ARCH)/arch.ml asmcomp/arch.ml
+asmcomp/arch.ml: asmcomp/$(ARCH_OCAMLOPT)/arch.ml
+	ln -s $(ARCH_OCAMLOPT)/arch.ml asmcomp/arch.ml
 
-partialclean::
-	rm -f asmcomp/arch.ml
+asmcomp/proc.ml: asmcomp/$(ARCH_OCAMLOPT)/proc.ml
+	ln -s $(ARCH_OCAMLOPT)/proc.ml asmcomp/proc.ml
 
-beforedepend:: asmcomp/arch.ml
+asmcomp/selection.ml: asmcomp/$(ARCH_OCAMLOPT)/selection.ml
+	ln -s $(ARCH_OCAMLOPT)/selection.ml asmcomp/selection.ml
 
-asmcomp/proc.ml: asmcomp/$(ARCH)/proc.ml
-	ln -s $(ARCH)/proc.ml asmcomp/proc.ml
+asmcomp/CSE.ml: asmcomp/$(ARCH_OCAMLOPT)/CSE.ml
+	ln -s $(ARCH_OCAMLOPT)/CSE.ml asmcomp/CSE.ml
 
-partialclean::
-	rm -f asmcomp/proc.ml
+asmcomp/reload.ml: asmcomp/$(ARCH_OCAMLOPT)/reload.ml
+	ln -s $(ARCH_OCAMLOPT)/reload.ml asmcomp/reload.ml
 
-beforedepend:: asmcomp/proc.ml
-
-asmcomp/selection.ml: asmcomp/$(ARCH)/selection.ml
-	ln -s $(ARCH)/selection.ml asmcomp/selection.ml
-
-partialclean::
-	rm -f asmcomp/selection.ml
-
-beforedepend:: asmcomp/selection.ml
-
-asmcomp/CSE.ml: asmcomp/$(ARCH)/CSE.ml
-	ln -s $(ARCH)/CSE.ml asmcomp/CSE.ml
-
-partialclean::
-	rm -f asmcomp/CSE.ml
-
-beforedepend:: asmcomp/CSE.ml
-
-asmcomp/reload.ml: asmcomp/$(ARCH)/reload.ml
-	ln -s $(ARCH)/reload.ml asmcomp/reload.ml
-
-partialclean::
-	rm -f asmcomp/reload.ml
-
-beforedepend:: asmcomp/reload.ml
-
-asmcomp/scheduling.ml: asmcomp/$(ARCH)/scheduling.ml
-	ln -s $(ARCH)/scheduling.ml asmcomp/scheduling.ml
-
-partialclean::
-	rm -f asmcomp/scheduling.ml
-
-beforedepend:: asmcomp/scheduling.ml
+asmcomp/scheduling.ml: asmcomp/$(ARCH_OCAMLOPT)/scheduling.ml
+	ln -s $(ARCH_OCAMLOPT)/scheduling.ml asmcomp/scheduling.ml
 
 # Preprocess the code emitters
 
-asmcomp/emit.ml: asmcomp/$(ARCH)/emit.mlp tools/cvt_emit
-	echo \# 1 \"$(ARCH)/emit.mlp\" > asmcomp/emit.ml
-	$(CAMLRUN) tools/cvt_emit <asmcomp/$(ARCH)/emit.mlp >>asmcomp/emit.ml \
+asmcomp/emit.ml: asmcomp/$(ARCH_OCAMLOPT)/emit.mlp tools/cvt_emit
+	echo \# 1 \"$(ARCH_OCAMLOPT)/emit.mlp\" > asmcomp/emit.ml
+	$(CAMLRUN) tools/cvt_emit <asmcomp/$(ARCH_OCAMLOPT)/emit.mlp \
+	                          >>asmcomp/emit.ml \
 	|| { rm -f asmcomp/emit.ml; exit 2; }
-
-partialclean::
-	rm -f asmcomp/emit.ml
-
-beforedepend:: asmcomp/emit.ml
 
 tools/cvt_emit: tools/cvt_emit.mll
 	cd tools && $(MAKE) cvt_emit
@@ -764,6 +750,10 @@ depend: beforedepend
 	 middle_end/base_types driver toplevel; \
 	 do $(CAMLDEP) $(DEPFLAGS) $$d/*.mli $$d/*.ml; \
 	 done) > .depend
+	$(CAMLDEP) $(DEPFLAGS) -native \
+		-impl driver/compdynlink.mlopt >> .depend
+	$(CAMLDEP) $(DEPFLAGS) -bytecode \
+		-impl driver/compdynlink.mlbyte >> .depend
 
 alldepend:: depend
 

@@ -32,7 +32,7 @@ let rec error_of_extension ext =
       match inner with
       | {pstr_desc=Pstr_extension (ext, _)} :: rest ->
           error_of_extension ext :: sub_from rest
-      | {pstr_loc} :: rest ->
+      | _ :: rest ->
           (Location.errorf ~loc
              "Invalid syntax for sub-error of extension '%s'." txt) ::
             sub_from rest
@@ -188,3 +188,26 @@ let explicit_arity =
       | ({txt="ocaml.explicit_arity"|"explicit_arity"; _}, _) -> true
       | _ -> false
     )
+
+let immediate =
+  List.exists
+    (function
+      | ({txt="ocaml.immediate"|"immediate"; _}, _) -> true
+      | _ -> false
+    )
+
+(* The "ocaml.boxed (default)" and "ocaml.unboxed (default)"
+   attributes cannot be input by the user, they are added by the
+   compiler when applying the default setting. This is done to record
+   in the .cmi the default used by the compiler when compiling the
+   source file because the default can change between compiler
+   invocations. *)
+
+let check l (x, _) = List.mem x.txt l
+
+let has_unboxed attr =
+  List.exists (check ["ocaml.unboxed"; "unboxed"])
+    attr
+
+let has_boxed attr =
+  List.exists (check ["ocaml.boxed"; "boxed"]) attr

@@ -51,7 +51,7 @@ let pseudoregs_for_operation op arg res =
   (* Two-address binary operations: arg.(0) and res.(0) must be the same *)
   | Iintop(Iadd|Isub|Imul|Iand|Ior|Ixor)  | Iaddf|Isubf|Imulf|Idivf ->
       ([|res.(0); arg.(1)|], res)
-  | Ispecific(sop) ->
+  | Ispecific _ ->
     ( [| arg.(0); arg.(1); res.(0) |], [| res.(0) |])
   (* One-address unary operations: arg.(0) and res.(0) must be the same *)
   |  Iintop_imm((Imul|Iand|Ior|Ixor), _) -> (res, res)
@@ -62,9 +62,11 @@ class selector = object (self)
 
 inherit Selectgen.selector_generic as super
 
-method is_immediate n = (n <= 2147483647) && (n >= -2147483648)
+method is_immediate n = n <= 0x7FFF_FFFF && n >= (-1-0x7FFF_FFFF)
+  (* -1-.... : hack so that this can be compiled on 32-bit
+     (cf 'make check_all_arches') *)
 
-method select_addressing chunk exp =
+method select_addressing _chunk exp =
   let (a, d) = select_addr exp in
   (* 20-bit signed displacement *)
   if d < 0x80000 && d >= -0x80000 then begin
@@ -80,9 +82,10 @@ method! select_operation op args =
     (Cmulhi, _) -> (Iintop Imulh, args)
   (* The and, or and xor instructions have a different range of immediate
      operands than the other instructions *)
-  | (Cand, _) -> self#select_logical Iand (-0x1_0000_0000) (-1) args
-  | (Cor, _) -> self#select_logical Ior 0 0xFFFF_FFFF args
-  | (Cxor, _) -> self#select_logical Ixor  0 0xFFFF_FFFF args
+  | (Cand, _) ->
+      self#select_logical Iand (-1 lsl 32 (*0x1_0000_0000*)) (-1) args
+  | (Cor, _) -> self#select_logical Ior 0 (1 lsl 32 - 1 (*0xFFFF_FFFF*)) args
+  | (Cxor, _) -> self#select_logical Ixor  0 (1 lsl 32 - 1 (*0xFFFF_FFFF*)) args
   (* Recognize mult-add and mult-sub instructions *)
   | (Caddf, [Cop(Cmulf, [arg1; arg2]); arg3]) ->
       (Ispecific Imultaddf, [arg1; arg2; arg3])
