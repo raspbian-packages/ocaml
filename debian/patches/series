@@ -9,3 +9,4 @@
 0010-Enable-ocamldoc-to-build-reproducible-manpages.patch
 0010-Add-a-.file-directive-to-generated-.s-files.patch
 0011-Compatibility-with-x32-architecture.patch
+0012-arm-default-PIC.patch

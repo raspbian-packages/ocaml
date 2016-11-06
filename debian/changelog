@@ -1,3 +1,9 @@
+ocaml (4.02.3-8) UNRELEASED; urgency=medium
+
+  * Default to PIC on arm, to fix failing armhf tests (Closes: #837359).
+
+ -- Mehdi Dogguy <mehdi@debian.org>  Sun, 06 Nov 2016 10:36:15 +0100
+
 ocaml (4.02.3-7) unstable; urgency=medium
 
   * d/rules: split install-stamp target into -arch and -indep, to allow
