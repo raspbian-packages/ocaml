@@ -7,7 +7,7 @@ Forwarded: TODO
 This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
 --- a/utils/clflags.ml
 +++ b/utils/clflags.ml
-@@ -146,6 +146,7 @@
+@@ -147,6 +147,7 @@
  
  let pic_code = ref (match Config.architecture with (* -fPIC *)
                       | "amd64" -> true
@@ -17,7 +17,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  let runtime_variant = ref "";;      (* -runtime-variant *)
 --- a/man/ocamlopt.m
 +++ b/man/ocamlopt.m
-@@ -682,10 +682,10 @@
+@@ -702,10 +702,10 @@
  Select the floating-point hardware
  .TP
  .B \-fPIC

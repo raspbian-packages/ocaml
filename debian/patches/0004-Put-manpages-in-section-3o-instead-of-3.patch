@@ -8,7 +8,7 @@ Subject: Put manpages in section 3o instead of 3
 
 --- a/ocamldoc/Makefile
 +++ b/ocamldoc/Makefile
-@@ -328,7 +328,7 @@
+@@ -320,7 +320,7 @@
  stdlib_man/Pervasives.3o: $(STDLIB_MLIS)
  	$(MKDIR) stdlib_man
  	$(OCAMLDOC_RUN) -man -d stdlib_man $(INCLUDES) \

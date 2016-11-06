@@ -11,7 +11,7 @@ gcc.
 
 --- a/configure
 +++ b/configure
-@@ -1782,7 +1782,7 @@
+@@ -1946,7 +1946,7 @@
  echo "CC_PROFILE=$cc_profile" >> Makefile
  echo "SYSTHREAD_SUPPORT=$systhread_support" >> Makefile
  echo "PARTIALLD=$partialld" >> Makefile

@@ -1,8 +1,12 @@
-ocaml (4.03.0-6) UNRELEASED; urgency=medium
+ocaml (4.04.0-1) UNRELEASED; urgency=medium
 
+  [ Mehdi Dogguy ]
   * Use secure and canonical URIs for Vcs-* fields
 
- -- Mehdi Dogguy <mehdi@debian.org>  Sun, 06 Nov 2016 11:01:52 +0100
+  [ Ximin Luo ]
+  * New upstream release.
+
+ -- Ximin Luo <infinity0@debian.org>  Sun, 06 Nov 2016 19:58:56 +0100
 
 ocaml (4.03.0-5) experimental; urgency=medium
 

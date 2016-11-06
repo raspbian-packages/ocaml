@@ -23,7 +23,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
 
 --- a/bytecomp/bytelink.ml
 +++ b/bytecomp/bytelink.ml
-@@ -456,7 +456,7 @@
+@@ -465,7 +465,7 @@
  
  (* Output a bytecode executable as a C file *)
  
@@ -32,7 +32,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
    let outchan = open_out outfile in
    begin try
      (* The bytecode *)
-@@ -498,14 +498,27 @@
+@@ -507,14 +507,27 @@
      (* The table of primitives *)
      Symtable.output_primitive_table outchan mlvalues_primitives;
      (* The entry point *)
@@ -62,7 +62,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
  \n#ifdef __cplusplus\
  \n}\
  \n#endif\n";
-@@ -544,6 +557,17 @@
+@@ -553,6 +566,17 @@
        if String.contains name '.' then name else name ^ ".exe"
    | _ -> name
  
@@ -80,7 +80,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
  (* Main entry point (build a custom runtime if needed) *)
  
  let link ppf objfiles output_name =
-@@ -558,6 +582,16 @@
+@@ -575,6 +599,16 @@
    Clflags.dllibs := !lib_dllibs @ !Clflags.dllibs; (* put user's DLLs first *)
    if not !Clflags.custom_runtime then
      link_bytecode ppf tolink output_name true
@@ -97,7 +97,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
    else if not !Clflags.output_c_object then begin
      let bytecode_name = Filename.temp_file "camlcode" "" in
      let prim_name = Filename.temp_file "camlprim" ".c" in
-@@ -607,7 +641,7 @@
+@@ -624,7 +658,7 @@
      if Sys.file_exists c_file then raise(Error(File_exists c_file));
      let temps = ref [] in
      try

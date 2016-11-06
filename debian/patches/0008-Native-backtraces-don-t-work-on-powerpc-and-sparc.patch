@@ -8,7 +8,7 @@ Subject: Native backtraces don't work on powerpc and sparc
 
 --- a/testsuite/tests/backtrace/Makefile
 +++ b/testsuite/tests/backtrace/Makefile
-@@ -24,7 +24,10 @@
+@@ -29,7 +29,10 @@
  
  default:
  	@$(MAKE) byte

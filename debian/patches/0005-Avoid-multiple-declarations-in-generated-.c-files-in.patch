@@ -20,7 +20,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
 
 --- a/bytecomp/bytelink.ml
 +++ b/bytecomp/bytelink.ml
-@@ -440,6 +440,20 @@
+@@ -449,6 +449,20 @@
      remove_file outfile;
      raise x
  
@@ -41,7 +41,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
  (* Output a bytecode executable as a C file *)
  
  let link_bytecode_as_c ppf tolink outfile =
-@@ -482,7 +496,7 @@
+@@ -491,7 +505,7 @@
        (Marshal.to_string sections []);
      output_string outchan "\n};\n\n";
      (* The table of primitives *)
@@ -50,7 +50,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
      (* The entry point *)
      output_string outchan "\
  \nvoid caml_startup(char ** argv)\
-@@ -563,7 +577,7 @@
+@@ -580,7 +594,7 @@
          #else\n\
          typedef long value;\n\
          #endif\n";
