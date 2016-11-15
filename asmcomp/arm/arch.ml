@@ -56,7 +56,7 @@ let (arch, fpu, thumb) =
     end in
   (ref def_arch, ref def_fpu, ref def_thumb)
 
-let pic_code = ref false
+let pic_code = ref true
 
 let farch spec =
   arch := (match spec with
