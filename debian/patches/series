@@ -12,3 +12,4 @@
 0012-arm-default-PIC.patch
 0013-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
 0014-Compute-a-stable-name-for-preprocessed-files.patch
+0015-CVE-2015-8869.patch
