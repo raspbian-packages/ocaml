@@ -21,10 +21,19 @@ type error =
 
 exception Error of error
 
+external open_desc: string -> open_flag list -> int -> int = "caml_sys_open"
+external close_desc: int -> unit = "caml_sys_close"
+
 (* Optionally preprocess a source file *)
 
 let call_external_preprocessor sourcefile pp =
-      let tmpfile = Filename.temp_file "ocamlpp" "" in
+      (* do not use Filename.temp_file as the resulting temporary file name will be
+       * recorded in the debug output of the resulting binary and thus make the
+       * output random and unreproducible *)
+      let temp_dir = Filename.get_temp_dir_name () in
+      let hash = Digest.to_hex (Digest.string (sourcefile^pp)) in
+      let tmpfile = Filename.concat temp_dir ("ocamlpp"^hash) in
+      close_desc(open_desc tmpfile [Open_wronly; Open_creat; Open_excl] 0o600);
       let comm = Printf.sprintf "%s %s > %s"
                                 pp (Filename.quote sourcefile) tmpfile
       in
