@@ -3,6 +3,8 @@ ocaml (4.02.3-9) UNRELEASED; urgency=medium
   * obey hardening LDFLAGS (Closes: #792502). Thanks to Török Edwin
     for the patch!
     - add patch 0013-Obey-ldflags.patch
+  * Compute a stable name for preprocessed files (Closes: #838188).
+    Thanks to Johannes Schauer for the patch!
 
  -- Mehdi Dogguy <mehdi@debian.org>  Thu, 22 Dec 2016 00:12:38 +0100
 
