@@ -10,3 +10,4 @@
 0010-Add-a-.file-directive-to-generated-.s-files.patch
 0011-Compatibility-with-x32-architecture.patch
 0012-arm-default-PIC.patch
+0013-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
