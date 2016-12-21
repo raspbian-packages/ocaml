@@ -1,10 +1,11 @@
-Description: Default to PIC on arm
- Otherwise the armhf build fails now that PIE is enabled by default.
-Author: Mehdi Dogguy <mehdi@debian.org>
+From: Mehdi Dogguy <mehdi@debian.org>
 Date: Sun, 6 Nov 2016 10:36:00 +0100
+Subject: Default to PIC on arm
+
+Otherwise the armhf build fails now that PIE is enabled by default.
+
 Bug-Debian: https://bugs.debian.org/837359
 Forwarded: TODO
-
 ---
  asmcomp/arm/arch.ml | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
