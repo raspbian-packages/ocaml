@@ -1,4 +1,4 @@
-ocaml (4.02.3-9) UNRELEASED; urgency=medium
+ocaml (4.02.3-9) unstable; urgency=medium
 
   * obey hardening LDFLAGS (Closes: #792502). Thanks to Török Edwin
     for the patch!
@@ -7,7 +7,7 @@ ocaml (4.02.3-9) UNRELEASED; urgency=medium
     Thanks to Johannes Schauer for the patch!
   * CVE-2015-8869 (Closes: #824139).
 
- -- Mehdi Dogguy <mehdi@debian.org>  Thu, 22 Dec 2016 00:12:38 +0100
+ -- Mehdi Dogguy <mehdi@debian.org>  Thu, 22 Dec 2016 00:48:59 +0100
 
 ocaml (4.02.3-8) unstable; urgency=medium
 
