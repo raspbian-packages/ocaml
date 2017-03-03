@@ -8,8 +8,6 @@ OCaml for Debian
   o ocaml-base: contains the runtime stuff (ocamlrun + dlls + Tk)
   o ocaml-base-nox: contains the runtime stuff (ocamlrun + dlls - Tk)
 
-  o ocaml-native-compilers: contains the native built part of the OCaml suite
-    (ocamlc.opt, ocamlopt.opt, ocamllex.opt)
   o ocaml-compiler-libs: contains several modules used internally by
     the OCaml compilers.  They are not needed for normal OCaml
     development, but may be helpful in the development of certain

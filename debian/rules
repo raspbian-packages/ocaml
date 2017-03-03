@@ -53,9 +53,6 @@ export OCAMLOBJINFO = OCAMLLIB=tools boot/ocamlrun tools/objinfo
 #export DH_VERBOSE=1
 
 export DH_OPTIONS
-ifeq ($(OCAML_OPT_ARCH),)
-  DH_OPTIONS += -Nocaml-native-compilers
-endif
 
 # This has to be exported to make gen_modules work
 export OCAML_OPT_ARCH
@@ -248,9 +245,9 @@ override_dh_gencontrol:
 	  echo 'F:OCamlABI=$(OCAML_ABI)' >> debian/$$u.substvars; \
 	done
 ifeq (,$(OCAML_OPT_ARCH))
-	echo 'F:BestProvides=ocaml-best-compilers (= $${binary:Version})' >> debian/ocaml-nox.substvars
+	echo 'F:NativeProvides=' >> debian/ocaml-nox.substvars
 else
-	echo 'F:BestProvides=' >> debian/ocaml-nox.substvars
+	echo 'F:NativeProvides=ocaml-native-compilers (= $${binary:Version})' >> debian/ocaml-nox.substvars
 endif
 # Create .md5sums files and compute dependencies. Use $(OCAML_ABI)
 # because we know that OCaml ABI represents best dependencies for
