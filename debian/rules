@@ -47,7 +47,7 @@ endif
 endif
 
 # Environment variable for dh_ocaml
-export OCAMLOBJINFO = OCAMLLIB=tools boot/ocamlrun tools/objinfo
+export OCAMLOBJINFO = OCAMLLIB=tools boot/ocamlrun tools/ocamlobjinfo
 
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
