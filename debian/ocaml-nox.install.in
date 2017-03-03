@@ -6,25 +6,25 @@
      usr/bin/ocamllex
      usr/bin/ocamlmklib
      usr/bin/ocamlmktop
+     usr/bin/ocamlobjinfo
      usr/bin/ocamlprof
      usr/bin/ocamlyacc
-     usr/bin/ocamlobjinfo
      usr/bin/ocamlc.*
      usr/bin/ocamlcp.*
      usr/bin/ocamldep.*
      usr/bin/ocamldoc.*
      usr/bin/ocamllex.*
-     usr/bin/ocamlopt.*
-     usr/bin/ocamloptp.*
      usr/bin/ocamlmklib.*
      usr/bin/ocamlmktop.*
-     usr/bin/ocamlprof.*
      usr/bin/ocamlobjinfo.*
+     usr/bin/ocamlprof.*
 debian/ocamlfind/ocaml-native-compilers.conf usr/share/ocaml-findlib/
      @OCamlStdlibDir@/objinfo_helper
      debian/native-archs @OCamlStdlibDir@
 OPT: usr/bin/ocamlopt
 OPT: usr/bin/ocamloptp
+OPT: usr/bin/ocamlopt.*
+OPT: usr/bin/ocamloptp.*
      @OCamlStdlibDir@/stdlib.cma
      @OCamlStdlibDir@/dynlink.cma
 DYN: @OCamlStdlibDir@/dynlink.cmx
