@@ -50,8 +50,8 @@ DYN: @OCamlStdlibDir@/nums.cmxs
      @OCamlStdlibDir@/printf.cmi
      @OCamlStdlibDir@/queue.cmi
      @OCamlStdlibDir@/random.cmi
-     @OCamlStdlibDir@/raw_spacetime_lib.cmi
-     @OCamlStdlibDir@/raw_spacetime_lib.cma
+OPT: @OCamlStdlibDir@/raw_spacetime_lib.cmi
+OPT: @OCamlStdlibDir@/raw_spacetime_lib.cma
 DYN: @OCamlStdlibDir@/raw_spacetime_lib.cmxs
      @OCamlStdlibDir@/scanf.cmi
      @OCamlStdlibDir@/set.cmi

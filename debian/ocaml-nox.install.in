@@ -326,7 +326,7 @@ STD: ratio.cmx
 STD: ratio.mli
 STD: raw_spacetime_lib.cmx
 STD: raw_spacetime_lib.cmxa
-STD: raw_spacetime_lib.mli
+OPT: @OCamlStdlibDir@/raw_spacetime_lib.mli
 STD: scanf.ml
 STD: scanf.mli
 STD: scanf.cmx
