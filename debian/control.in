@@ -37,7 +37,7 @@ Depends:
  binutils
 Provides:
  ${ocaml:Provides},
- ocaml-best-compilers,
+ ocaml-best-compilers (= ${binary:Version}),
  ${F:NativeProvides},
  libnums-ocaml-dev
 Suggests:
@@ -46,7 +46,7 @@ Suggests:
 Recommends:
  camlp4,
  file
-Replaces: ocaml-interp (<< 3.11.1-3)
+Replaces: ocaml-interp (<< 3.11.1-3), ocaml-native-compilers (<< 4.04.0-1)
 Breaks:
  dh-ocaml (<< 1.0.0),
  ocaml-interp (<< 3.11.1-3),
@@ -79,7 +79,6 @@ Package: ocaml
 Architecture: any
 Depends:
  ocaml-base-nox,
- ${shlibs:Depends},
  ${misc:Depends},
  ${ocaml:Depends},
  libx11-dev
@@ -112,9 +111,8 @@ Description: ML language implementation with a class-based object system
 Package: ocaml-base-nox
 Architecture: any
 Depends:
- ${shlibs:Depends},
  ${misc:Depends},
- ${ocaml:Depends}
+ ${shlibs:Depends},
 Provides:
  ${ocaml:Provides}
 Replaces: ocaml-interp (<< 3.11.1-3)
@@ -165,7 +163,6 @@ Architecture: any
 Depends:
  ocaml-compiler-libs (= ${binary:Version}),
  ${ocaml:Depends},
- ${shlibs:Depends},
  ${misc:Depends}
 Provides:
  ocaml-interp-${F:OCamlABI}
@@ -181,8 +178,6 @@ Description: OCaml interactive interpreter and standard libraries
 Package: ocaml-compiler-libs
 Architecture: any
 Depends:
- ${ocaml:Depends},
- ${shlibs:Depends},
  ${misc:Depends},
  ocaml-nox-${F:OCamlABI}
 Provides:
@@ -202,7 +197,6 @@ Package: ocaml-mode
 Architecture: all
 Depends:
  emacs | emacsen, emacsen-common (>= 2.0.8),
- ${shlibs:Depends},
  ${misc:Depends}
 Suggests: ocaml
 Description: major mode for editing Objective Caml in Emacs

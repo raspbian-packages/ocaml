@@ -241,7 +241,7 @@ endif
 
 .PHONY: override_dh_gencontrol
 override_dh_gencontrol:
-	for u in $(ALL_PACKAGES); do \
+	for u in ocaml-source ocaml-interp ocaml-compiler-libs; do \
 	  echo 'F:OCamlABI=$(OCAML_ABI)' >> debian/$$u.substvars; \
 	done
 ifeq (,$(OCAML_OPT_ARCH))
