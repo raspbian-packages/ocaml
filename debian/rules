@@ -210,6 +210,7 @@ ifeq ($(OCAML_HAVE_OCAMLOPT),no)
 	rm -f \
 	  $(INSTDIR)/share/man/man1/ocamloptp.1 \
 	  $(INSTDIR)/share/man/man1/ocamlopt.1 \
+	  $(INSTDIR)/bin/ocamloptp.* \
 	  $(INSTDIR)/bin/ocamloptp
 endif
 # Dispatch files with dh_install

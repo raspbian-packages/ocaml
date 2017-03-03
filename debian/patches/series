@@ -7,4 +7,3 @@
 0008-Native-backtraces-don-t-work-on-powerpc-and-sparc.patch
 0009-Skip-native-tests.patch
 0010-arm-default-PIC.patch
-0011-fix-nonnative-ocamlopt.patch
