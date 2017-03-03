@@ -12,7 +12,7 @@
      usr/bin/ocamlc.*
      usr/bin/ocamlcp.*
      usr/bin/ocamldep.*
-     usr/bin/ocamldoc.*
+OPT: usr/bin/ocamldoc.opt
      usr/bin/ocamllex.*
      usr/bin/ocamlmklib.*
      usr/bin/ocamlmktop.*
