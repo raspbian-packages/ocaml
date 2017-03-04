@@ -41,6 +41,12 @@ OCAMLINIT_SED := \
   -e 's%@OCamlStdlibDir@%$(OCAML_STDLIB_DIR)%g' \
   -e 's%@OCamlDllDir@%$(OCAML_DLL_DIR)%g'
 
+ifeq ($(DEB_BUILD_ARCH_BITS),64)
+  OCAMLINIT_SED += -e 's/^64: //'
+else
+  OCAMLINIT_SED += -e '/^64: /d'
+endif
+
 ifeq ($(OCAML_HAVE_OCAMLOPT),yes)
   OCAMLINIT_SED += -e 's/^OPT: //' -e '/^BYTE: /d'
 else
