@@ -1,3 +1,9 @@
+ocaml (4.05.0~rc1-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Ximin Luo <infinity0@debian.org>  Tue, 04 Jul 2017 18:45:07 +0200
+
 ocaml (4.04.0-2) experimental; urgency=medium
 
   * Fix the build on non-opt+64 arches for raw_spacetime.
