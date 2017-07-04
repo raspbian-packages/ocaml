@@ -78,7 +78,13 @@ let get_unboxed_from_attributes sdecl =
 
 (* Enter all declared types in the environment as abstract types *)
 
-let enter_type env sdecl id =
+let enter_type rec_flag env sdecl id =
+  let needed =
+    match rec_flag with
+    | Asttypes.Nonrecursive -> Btype.is_row_name (Ident.name id)
+    | Asttypes.Recursive -> true
+  in
+  if not needed then env else
   let decl =
     { type_params =
         List.map (fun _ -> Btype.newgenvar ()) sdecl.ptype_params;
@@ -133,7 +139,8 @@ let rec get_unboxed_type_representation env ty fuel =
   | _ -> Some ty
 
 let get_unboxed_type_representation env ty =
-  get_unboxed_type_representation env ty 100000
+  (* Do not give too much fuel: PR#7424 *)
+  get_unboxed_type_representation env ty 100
 ;;
 
 (* Determine if a type's values are represented by floats at run-time. *)
@@ -269,13 +276,63 @@ let make_constructor env type_path type_params sargs sret_type =
       widen z;
       targs, Some tret_type, args, Some ret_type
 
+(* Check that the variable [id] is present in the [univ] list. *)
+let check_type_var loc univ id =
+  let f t = (Btype.repr t).id = id in
+  if not (List.exists f univ) then raise (Error (loc, Wrong_unboxed_type_float))
+
+(* Check that all the variables found in [ty] are in [univ].
+   Because [ty] is the argument to an abstract type, the representation
+   of that abstract type could be any subexpression of [ty], in particular
+   any type variable present in [ty].
+*)
+let rec check_unboxed_abstract_arg loc univ ty =
+  match ty.desc with
+  | Tvar _ -> check_type_var loc univ ty.id
+  | Tarrow (_, t1, t2, _)
+  | Tfield (_, _, t1, t2) ->
+    check_unboxed_abstract_arg loc univ t1;
+    check_unboxed_abstract_arg loc univ t2
+  | Ttuple args
+  | Tconstr (_, args, _)
+  | Tpackage (_, _, args) ->
+    List.iter (check_unboxed_abstract_arg loc univ) args
+  | Tobject (fields, r) ->
+    check_unboxed_abstract_arg loc univ fields;
+    begin match !r with
+    | None -> ()
+    | Some (_, args) -> List.iter (check_unboxed_abstract_arg loc univ) args
+    end
+  | Tnil
+  | Tunivar _ -> ()
+  | Tlink e -> check_unboxed_abstract_arg loc univ e
+  | Tsubst _ -> assert false
+  | Tvariant { row_fields; row_more; row_name } ->
+    List.iter (check_unboxed_abstract_row_field loc univ) row_fields;
+    check_unboxed_abstract_arg loc univ row_more;
+    begin match row_name with
+    | None -> ()
+    | Some (_, args) -> List.iter (check_unboxed_abstract_arg loc univ) args
+    end
+  | Tpoly (t, _) -> check_unboxed_abstract_arg loc univ t
+
+and check_unboxed_abstract_row_field loc univ (_, field) =
+  match field with
+  | Rpresent (Some ty) -> check_unboxed_abstract_arg loc univ ty
+  | Reither (_, args, _, r) ->
+    List.iter (check_unboxed_abstract_arg loc univ) args;
+    begin match !r with
+    | None -> ()
+    | Some f -> check_unboxed_abstract_row_field loc univ ("", f)
+    end
+  | Rabsent
+  | Rpresent None -> ()
+
 (* Check that the argument to a GADT constructor is compatible with unboxing
-   the type, given the existential variables introduced by this constructor. *)
-let rec check_unboxed_gadt_arg loc ex env ty =
+   the type, given the universal parameters of the type. *)
+let rec check_unboxed_gadt_arg loc univ env ty =
   match get_unboxed_type_representation env ty with
-  | Some {desc = Tvar _; id} ->
-    let f t = (Btype.repr t).id = id in
-    if List.exists f ex then raise(Error(loc, Wrong_unboxed_type_float))
+  | Some {desc = Tvar _; id} -> check_type_var loc univ id
   | Some {desc = Tarrow _ | Ttuple _ | Tpackage _ | Tobject _ | Tnil
                  | Tvariant _; _} ->
     ()
@@ -285,10 +342,10 @@ let rec check_unboxed_gadt_arg loc ex env ty =
     let tydecl = Env.find_type p env in
     assert (not tydecl.type_unboxed.unboxed);
     if tydecl.type_kind = Type_abstract then
-      List.iter (check_unboxed_gadt_arg loc ex env) args
+      List.iter (check_unboxed_abstract_arg loc univ) args
   | Some {desc = Tfield _ | Tlink _ | Tsubst _; _} -> assert false
   | Some {desc = Tunivar _; _} -> ()
-  | Some {desc = Tpoly (t2, _); _} -> check_unboxed_gadt_arg loc ex env t2
+  | Some {desc = Tpoly (t2, _); _} -> check_unboxed_gadt_arg loc univ env t2
   | None -> ()
       (* This case is tricky: the argument is another (or the same) type
          in the same recursive definition. In this case we don't have to
@@ -381,10 +438,14 @@ let transl_declaration env sdecl id =
                unboxed (or abstract) type constructor applied to some
                existential type variable. Of course we also have to rule
                out any abstract type constructor applied to anything that
-               might be an existential type variable. *)
+               might be an existential type variable.
+               There is a difficulty with existential variables created
+               out of thin air (rather than bound by the declaration).
+               See PR#7511 and GPR#1133 for details. *)
             match Datarepr.constructor_existentials args ret_type with
             | _, [] -> ()
-            | [argty], ex -> check_unboxed_gadt_arg sdecl.ptype_loc ex env argty
+            | [argty], _ex ->
+                check_unboxed_gadt_arg sdecl.ptype_loc params env argty
             | _ -> assert false
           end;
           let tcstr =
@@ -1204,10 +1265,7 @@ let transl_type_decl env rec_flag sdecl_list =
   Ctype.begin_def();
   (* Enter types. *)
   let temp_env =
-    match rec_flag with
-    | Asttypes.Nonrecursive -> env
-    | Asttypes.Recursive -> List.fold_left2 enter_type env sdecl_list id_list
-  in
+    List.fold_left2 (enter_type rec_flag) env sdecl_list id_list in
   (* Translate each declaration. *)
   let current_slot = ref None in
   let warn_unused = Warnings.is_active (Warnings.Unused_type_declaration "") in
@@ -1330,7 +1388,7 @@ let transl_extension_constructor env type_path type_params
         in
           args, ret_type, Text_decl(targs, tret_type)
     | Pext_rebind lid ->
-        let cdescr = Typetexp.find_constructor env sext.pext_loc lid.txt in
+        let cdescr = Typetexp.find_constructor env lid.loc lid.txt in
         let usage =
           if cdescr.cstr_private = Private || priv = Public
           then Env.Positive else Env.Privatize
@@ -1438,7 +1496,8 @@ let transl_type_extension check_open env loc styext =
   reset_type_variables();
   Ctype.begin_def();
   let (type_path, type_decl) =
-    Typetexp.find_type env loc styext.ptyext_path.txt
+    let lid = styext.ptyext_path in
+    Typetexp.find_type env lid.loc lid.txt
   in
   begin
     match type_decl.type_kind with

@@ -2426,7 +2426,8 @@ and unify3 env t1 t1' t2 t2' =
     try
       begin match (d1, d2) with
         (Tarrow (l1, t1, u1, c1), Tarrow (l2, t2, u2, c2)) when l1 = l2 ||
-        !Clflags.classic && not (is_optional l1 || is_optional l2) ->
+        (!Clflags.classic || !umode = Pattern) &&
+        not (is_optional l1 || is_optional l2) ->
           unify  env t1 t2; unify env  u1 u2;
           begin match commu_repr c1, commu_repr c2 with
             Clink r, c2 -> set_commu r c2
@@ -3049,7 +3050,9 @@ and moregen_row inst_nongen type_pairs env row1 row2 =
       raise (Unify [])
   | _ when static_row row1 -> ()
   | _ when may_inst ->
-      let ext = newgenty (Tvariant {row2 with row_fields = r2}) in
+      let ext =
+        newgenty (Tvariant {row2 with row_fields = r2; row_name = None})
+      in
       moregen_occur env rm1.level ext;
       link_type rm1 ext
   | Tconstr _, Tconstr _ ->
@@ -4195,7 +4198,15 @@ let rec normalize_type_rec env visited ty =
   let ty = repr ty in
   if not (TypeSet.mem ty !visited) then begin
     visited := TypeSet.add ty !visited;
-    begin match ty.desc with
+    let tm = row_of_type ty in
+    begin if not (is_Tconstr ty) && is_constr_row ~allow_ident:false tm then
+      match tm.desc with (* PR#7348 *)
+        Tconstr (Path.Pdot(m,i,pos), tl, _abbrev) ->
+          let i' = String.sub i 0 (String.length i - 4) in
+          log_type ty;
+          ty.desc <- Tconstr(Path.Pdot(m,i',pos), tl, ref Mnil)
+      | _ -> assert false
+    else match ty.desc with
     | Tvariant row ->
       let row = row_repr row in
       let fields = List.map

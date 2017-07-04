@@ -58,6 +58,7 @@
 /asmrun/*.p.c
 /asmrun/*.d.c
 /asmrun/alloc.c
+/asmrun/afl.c
 /asmrun/array.c
 /asmrun/backtrace.c
 /asmrun/callback.c
@@ -94,6 +95,7 @@
 /asmrun/terminfo.c
 /asmrun/unix.c
 /asmrun/weak.c
+/asmrun/win32.c
 
 /boot/Saved
 /boot/ocamlrun
@@ -121,6 +123,7 @@
 /config/m.h
 /config/s.h
 /config/Makefile
+/config/auto-aux/hashbang4
 
 /debugger/lexer.ml
 /debugger/parser.ml
@@ -360,6 +363,8 @@
 /tools/cmpbyt.opt
 /tools/stripdebug
 /tools/stripdebug.opt
+/tools/make_opcodes
+/tools/make_opcodes.ml
 
 /utils/config.ml
 

@@ -441,7 +441,7 @@ class virtual text =
 
     method html_of_Link b s t =
       bs b "<a href=\"";
-      bs b s ;
+      bs b (self#escape s);
       bs b "\">";
       self#html_of_text b t;
       bs b "</a>"
@@ -861,7 +861,7 @@ class html =
         ".indextable {border: 1px #ddd solid; border-collapse: collapse}";
         ".indextable td, .indextable th {border: 1px #ddd solid; min-width: 80px}";
         ".indextable td.module {background-color: #eee ;  padding-left: 2px; padding-right: 2px}";
-        ".indextable td.module a {color: 4E6272; text-decoration: none; display: block; width: 100%}";
+        ".indextable td.module a {color: #4E6272; text-decoration: none; display: block; width: 100%}";
         ".indextable td.module a:hover {text-decoration: underline; background-color: transparent}";
         ".deprecated {color: #888; font-style: italic}" ;
 
@@ -1291,9 +1291,13 @@ class html =
           (
            match modu with
              None ->
+               (* first we close the current <pre> tag, since the following
+                  list of module elements is not preformatted *)
+               bs b "</pre>";
                bs b "<div class=\"sig_block\">";
                List.iter (self#html_of_module_element b father) eles;
-               bs b "</div>"
+               bs b "</div>";
+               bs b "\n<pre>"
            | Some m ->
                let (html_file, _) = Naming.html_files m.m_name in
                bp b " <a href=\"%s\">..</a> " html_file
@@ -1402,9 +1406,13 @@ class html =
                (
                 match modu with
                   None ->
+                    (*close the current <pre> tag, to avoid anarchic line breaks
+                      in the list of module elements *)
+                    bs b "</pre>";
                     bs b "<div class=\"sig_block\">";
                     List.iter (self#html_of_module_element b father) eles;
-                    bs b "</div>"
+                    bs b "</div>";
+                    bs b "<pre>";
                 | Some m ->
                     let (html_file, _) = Naming.html_files m.m_name in
                     bp b " <a href=\"%s\">..</a> " html_file
@@ -2564,7 +2572,10 @@ class html =
           );
         bs b "</h1>\n";
 
-        if not modu.m_text_only then self#html_of_module b ~with_link: false modu;
+        if not modu.m_text_only then
+          self#html_of_module b ~with_link: false modu
+        else
+          self#html_of_info ~indent:false b modu.m_info;
 
         (* parameters for functors *)
         self#html_of_module_parameter_list b

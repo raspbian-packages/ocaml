@@ -23,7 +23,8 @@
 #include "caml/misc.h"
 #include "caml/mlvalues.h"
 #include "caml/signals.h"
-#include "spacetime.h"
+/* Why is caml/spacetime.h included conditionnally sometimes and not here ? */
+#include "caml/spacetime.h"
 
 static const mlsize_t mlsize_t_max = -1;
 
