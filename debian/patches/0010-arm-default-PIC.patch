@@ -17,7 +17,7 @@ This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
  let runtime_variant = ref "";;      (* -runtime-variant *)
 --- a/man/ocamlopt.m
 +++ b/man/ocamlopt.m
-@@ -702,10 +702,10 @@
+@@ -739,10 +739,10 @@
  Select the floating-point hardware
  .TP
  .B \-fPIC

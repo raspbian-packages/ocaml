@@ -11,12 +11,12 @@ gcc.
 
 --- a/configure
 +++ b/configure
-@@ -1946,7 +1946,7 @@
+@@ -2039,7 +2039,7 @@
+ echo "OTHERLIBRARIES=$otherlibraries" >> Makefile
  echo "CC_PROFILE=$cc_profile" >> Makefile
  echo "SYSTHREAD_SUPPORT=$systhread_support" >> Makefile
- echo "PARTIALLD=$partialld" >> Makefile
--echo "PACKLD=\$(PARTIALLD) \$(NATIVECCLINKOPTS) -o " \
-+echo "PACKLD=\$(PARTIALLD) $(echo $nativecclinkopts|sed s/-Wl,//g) -o " \
-   | sed -e 's/ $/\\ /' >> Makefile
- echo "DLLCCCOMPOPTS=$dllccompopts" >> Makefile
+-echo "PACKLD=$partialld $nativecclinkopts -o\\ " >> Makefile
++echo "PACKLD=$partialld $(echo $nativecclinkopts|sed s/-Wl,//g) -o\\ " >> Makefile
  echo "IFLEXDIR=$iflexdir" >> Makefile
+ echo "O=o" >> Makefile
+ echo "A=a" >> Makefile

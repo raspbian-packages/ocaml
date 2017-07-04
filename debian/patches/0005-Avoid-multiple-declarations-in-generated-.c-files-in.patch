@@ -50,7 +50,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
      (* The entry point *)
      output_string outchan "\
  \nvoid caml_startup(char ** argv)\
-@@ -580,7 +594,7 @@
+@@ -587,7 +601,7 @@
          #else\n\
          typedef long value;\n\
          #endif\n";
@@ -61,7 +61,7 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
          }\n\
 --- a/bytecomp/symtable.ml
 +++ b/bytecomp/symtable.ml
-@@ -118,15 +118,17 @@
+@@ -112,15 +112,17 @@
  
  open Printf
  
@@ -92,4 +92,4 @@ Signed-off-by: Stephane Glondu <steph@glondu.net>
 +val output_primitive_table: out_channel -> string list -> unit
  val data_global_map: unit -> Obj.t
  val data_primitive_names: unit -> string
- 
+ val transl_const: Lambda.structured_constant -> Obj.t
