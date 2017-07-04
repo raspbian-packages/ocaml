@@ -47,6 +47,8 @@ module Options = Main_args.Make_optcomp_options (struct
 
   let _a = set make_archive
   let _absname = set Location.absname
+  let _afl_instrument = set afl_instrument
+  let _afl_inst_ratio n = afl_inst_ratio := n
   let _annot = set annotations
   let _binannot = set binary_annotations
   let _c = set compile_only
@@ -185,9 +187,9 @@ module Options = Main_args.Make_optcomp_options (struct
   let _warn_error s = Warnings.parse_options true s
   let _warn_help = Warnings.help_warnings
   let _color option =
-    begin match Clflags.parse_color_setting option with
+    begin match parse_color_setting option with
           | None -> ()
-          | Some setting -> Clflags.color := setting
+          | Some setting -> color := Some setting
     end
   let _where () = print_standard_library ()
 
@@ -223,6 +225,9 @@ module Options = Main_args.Make_optcomp_options (struct
   let _dtimings = set print_timings
   let _opaque = set opaque
 
+  let _args = Arg.read_arg
+  let _args0 = Arg.read_arg0
+
   let anonymous = anonymous
 end);;
 
@@ -231,13 +236,25 @@ let main () =
   let ppf = Format.err_formatter in
   try
     readenv ppf Before_args;
-    Arg.parse (Arch.command_line_options @ Options.list) anonymous usage;
-    Compenv.process_deferred_actions
-      (ppf,
-       Optcompile.implementation ~backend,
-       Optcompile.interface,
-       ".cmx",
-       ".cmxa");
+    Clflags.add_arguments __LOC__ (Arch.command_line_options @ Options.list);
+    Clflags.parse_arguments anonymous usage;
+    Compmisc.read_color_env ppf;
+    if !gprofile && not Config.profiling then
+      fatal "Profiling with \"gprof\" is not supported on this platform.";
+    begin try
+      Compenv.process_deferred_actions
+        (ppf,
+         Optcompile.implementation ~backend,
+         Optcompile.interface,
+         ".cmx",
+         ".cmxa");
+    with Arg.Bad msg ->
+      begin
+        prerr_endline msg;
+        Clflags.print_arguments usage;
+        exit 2
+      end
+    end;
     readenv ppf Before_link;
     if
       List.length (List.filter (fun x -> !x)

@@ -146,7 +146,7 @@ caml_ba_alloc(int flags, int num_dims, void * data, intnat * dim)
   struct caml_ba_array * b;
   intnat dimcopy[CAML_BA_MAX_NUM_DIMS];
 
-  Assert(num_dims >= 1 && num_dims <= CAML_BA_MAX_NUM_DIMS);
+  Assert(num_dims >= 0 && num_dims <= CAML_BA_MAX_NUM_DIMS);
   Assert((flags & CAML_BA_KIND_MASK) <= CAML_BA_CHAR);
   for (i = 0; i < num_dims; i++) dimcopy[i] = dim[i];
   size = 0;
@@ -202,7 +202,8 @@ CAMLprim value caml_ba_create(value vkind, value vlayout, value vdim)
   int i, flags;
 
   num_dims = Wosize_val(vdim);
-  if (num_dims < 1 || num_dims > CAML_BA_MAX_NUM_DIMS)
+  /* here num_dims is unsigned (mlsize_t) so no need to check (num_dims >= 0) */
+  if (num_dims > CAML_BA_MAX_NUM_DIMS)
     caml_invalid_argument("Bigarray.create: bad number of dimensions");
   for (i = 0; i < num_dims; i++) {
     dim[i] = Long_val(Field(vdim, i));
@@ -1048,9 +1049,9 @@ CAMLprim value caml_ba_slice(value vb, value vind)
   intnat * sub_dims;
   char * sub_data;
 
-  /* Check number of indices < number of dimensions of array */
+  /* Check number of indices <= number of dimensions of array */
   num_inds = Wosize_val(vind);
-  if (num_inds >= b->num_dims)
+  if (num_inds > b->num_dims)
     caml_invalid_argument("Bigarray.slice: too many indices");
   /* Compute offset and check bounds */
   if ((b->flags & CAML_BA_LAYOUT_MASK) == CAML_BA_C_LAYOUT) {
@@ -1090,7 +1091,8 @@ CAMLprim value caml_ba_change_layout(value vb, value vlayout)
   /* if the layout is different, change the flags and reverse the dimensions */
   if (Caml_ba_layout_val(vlayout) != (b->flags & CAML_BA_LAYOUT_MASK)) {
     /* change the flags to reflect the new layout */
-    int flags = (b->flags & CAML_BA_KIND_MASK) | Caml_ba_layout_val(vlayout);
+    int flags = (b->flags & (CAML_BA_KIND_MASK | CAML_BA_MANAGED_MASK))
+                 | Caml_ba_layout_val(vlayout);
     /* reverse the dimensions */
     intnat new_dim[CAML_BA_MAX_NUM_DIMS];
     unsigned int i;
@@ -1099,8 +1101,8 @@ CAMLprim value caml_ba_change_layout(value vb, value vlayout)
     caml_ba_update_proxy(b, Caml_ba_array_val(res));
     CAMLreturn(res);
   } else {
-  /* otherwise, do nothing */
-  CAMLreturn(vb);
+    /* otherwise, do nothing */
+    CAMLreturn(vb);
   }
   #undef b
 }
@@ -1299,7 +1301,8 @@ CAMLprim value caml_ba_reshape(value vb, value vdim)
   int i;
 
   num_dims = Wosize_val(vdim);
-  if (num_dims < 1 || num_dims > CAML_BA_MAX_NUM_DIMS)
+  /* here num_dims is unsigned (mlsize_t) so no need to check (num_dims >= 0) */
+  if (num_dims > CAML_BA_MAX_NUM_DIMS)
     caml_invalid_argument("Bigarray.reshape: bad number of dimensions");
   num_elts = 1;
   for (i = 0; i < num_dims; i++) {

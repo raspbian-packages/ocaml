@@ -14,7 +14,8 @@
 #**************************************************************************
 
 BASEDIR=../..
-CSC_COMMAND=csc
+# Only run this test for TOOLCHAIN=msvc
+CSC_COMMAND=$(filter csc,$(subst msvc,csc,$(TOOLCHAIN)))
 CSC=$(CSC_COMMAND) $(CSC_FLAGS)
 
 COMPFLAGS=-I $(OTOPDIR)/otherlibs/bigarray -I $(OTOPDIR)/otherlibs/dynlink \
@@ -31,7 +32,9 @@ all: prepare bytecode bytecode-dll native native-dll
 prepare:
 	@if $(SUPPORTS_SHARED_LIBRARIES); then \
 	   $(OCAMLC) -c plugin.ml && \
-	   $(OCAMLOPT) -o plugin.cmxs -shared plugin.ml; \
+	   if $(BYTECODE_ONLY) ; then : ; else \
+	     $(OCAMLOPT) -o plugin.cmxs -shared plugin.ml; \
+	   fi; \
 	 fi
 
 .PHONY: bytecode
