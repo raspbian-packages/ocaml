@@ -56,6 +56,7 @@ OPT: @OCamlStdlibDir@/libthreadsnat.a
      usr/share/man/man3/Array.3o
      usr/share/man/man3/ArrayLabels.3o
      usr/share/man/man3/Bigarray.3o
+     usr/share/man/man3/Bigarray.Array0.3o
      usr/share/man/man3/Bigarray.Array1.3o
      usr/share/man/man3/Bigarray.Array2.3o
      usr/share/man/man3/Bigarray.Array3.3o
@@ -181,6 +182,7 @@ STD: arg.ml
 STD: arg.mli
 STD: arg.cmx
 STD: arith_flags.cmx
+STD: arith_status.cmti
 STD: arith_status.cmx
 STD: arith_status.mli
 STD: arrayLabels.ml
@@ -189,8 +191,10 @@ STD: arrayLabels.cmx
 STD: array.ml
 STD: array.mli
 STD: array.cmx
+STD: big_int.cmti
 STD: big_int.cmx
 STD: big_int.mli
+STD: bigarray.cmti
 STD: bigarray.cmx
 STD: bigarray.cmxa
 STD: bigarray.mli
@@ -237,6 +241,7 @@ STD: condition.mli
 STD: digest.ml
 STD: digest.mli
 STD: digest.cmx
+STD: dynlink.cmti
 STD: dynlink.mli
 STD: event.mli
 STD: ephemeron.ml
@@ -287,11 +292,13 @@ STD: moreLabels.ml
 STD: moreLabels.mli
 STD: moreLabels.cmx
 STD: mutex.mli
+STD: nat.cmti
 STD: nat.cmx
 STD: nat.mli
 STD: nativeint.ml
 STD: nativeint.mli
 STD: nativeint.cmx
+STD: num.cmti
 STD: num.cmx
 STD: num.mli
 STD: nums.cmxa
@@ -315,6 +322,8 @@ STD: printf.mli
 STD: printf.cmx
 STD: profiling.cmi
 STD: profiling.cmo
+STD: profiling.cmt
+STD: profiling.cmti
 STD: profiling.cmx
 STD: queue.ml
 STD: queue.mli
@@ -322,6 +331,7 @@ STD: queue.cmx
 STD: random.ml
 STD: random.mli
 STD: random.cmx
+STD: ratio.cmti
 STD: ratio.cmx
 STD: ratio.mli
 64: STD: raw_spacetime_lib.cmx
@@ -350,6 +360,7 @@ STD: std_exit.ml
 STD: stdLabels.cmx
 STD: stdLabels.ml
 STD: stdLabels.mli
+STD: str.cmti
 STD: str.cmx
 STD: str.cmxa
 STD: str.mli
@@ -371,9 +382,11 @@ STD: uchar.ml
 STD: uchar.mli
 STD: uchar.cmi
 STD: uchar.cmx
+STD: unix.cmti
 STD: unix.cmx
 STD: unix.cmxa
 STD: unix.mli
+STD: unixLabels.cmti
 STD: unixLabels.cmx
 STD: unixLabels.mli
 STD: weak.ml

@@ -6,8 +6,8 @@ include /usr/share/dpkg/buildflags.mk
 
 PACKAGE := ocaml
 ALL_PACKAGES := $(shell dh_listpackages)
-OCAMLMAJOR := 4.04
-OCAMLMINOR := 0
+OCAMLMAJOR := 4.05
+OCAMLMINOR := 0+rc1
 
 # Use ccache if pkg.ocaml.ccache build-profile is active.
 # Your rebuilds will be *much quicker*.
@@ -210,8 +210,6 @@ install-stamp-arch:
 # Install OCaml
 	$(MAKE) install PREFIX=$(INSTDIR)
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
-# Remove empty directory
-	rmdir $(CURDIR)/debian/tmp$(OCAML_STDLIB_DIR)/ocamldoc/custom
 # Remove uninstalled files
 	rm -f \
 	  $(INSTDIR)/share/man/man1/ocamlopt.opt.1 \
