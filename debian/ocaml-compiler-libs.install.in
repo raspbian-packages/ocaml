@@ -2,7 +2,6 @@
 @OCamlStdlibDir@/topdirs.cmi
 @OCamlStdlibDir@/topdirs.cmt
 @OCamlStdlibDir@/topdirs.cmti
-@OCamlStdlibDir@/topdirs.mli
 usr/share/man/man3/Ast_helper.3o
 usr/share/man/man3/Ast_helper.Cf.3o
 usr/share/man/man3/Ast_helper.Ci.3o
