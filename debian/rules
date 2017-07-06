@@ -101,7 +101,7 @@ debian/control:
 pre-config-stamp: $(TARBALL_TARGET)
 	chmod +x debian/gen_modules.pl
 # Backup upstream config.{sub,guess}, and use most up-to-date ones
-	for ext in sub guess; do \
+	set -e; for ext in sub guess; do \
 	  if [ -f /usr/share/misc/config.$$ext ] && \
 	    ! [ -f debian/config.orig.$$ext ]; then \
 	    mv config/gnu/config.$$ext debian/config.orig.$$ext; \
@@ -178,7 +178,7 @@ endif
 	  rm -Rf boot; \
 	  mv boot.debian boot; \
 	fi
-	for ext in sub guess; do \
+	set -e; for ext in sub guess; do \
 	  if [ -f debian/config.orig.$$ext ] ; then \
 	    mv -f debian/config.orig.$$ext config/gnu/config.$$ext; \
 	  fi; \
@@ -224,7 +224,7 @@ ifeq ($(OCAML_HAVE_OCAMLOPT),no)
 endif
 # Dispatch files with dh_install
 	cd debian && \
-	for u in ocaml ocaml-nox; do \
+	set -e; for u in ocaml ocaml-nox; do \
 	  DESTDIR=tmp ./gen_modules.pl $$u.install > $$u.install.new; \
 	  mv $$u.install.new $$u.install; \
 	done
@@ -235,12 +235,13 @@ endif
 	fi
 # Install additional files not handled by dh_install
 # Beware: dh_install does not handle renamings, please pay attention
-	for u in dumpobj; do \
+	set -e; for u in dumpobj; do \
 	  if [ -f tools/$$u ]; then \
 	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
 	  fi \
 	done
-	for pkg in ocaml ocaml-nox ocaml-base; do ( \
+	set -e; for pkg in ocaml ocaml-nox ocaml-base; do ( \
+	  mkdir -p debian/$$pkg/usr/share/doc/$$pkg && \
 	  cd debian/$$pkg/usr/share/doc/$$pkg && \
 	  ln -sf ../ocaml-base-nox/README.gz . && \
 	  ln -sf ../ocaml-base-nox/README.Debian .; \
@@ -251,7 +252,7 @@ endif
 
 .PHONY: override_dh_gencontrol
 override_dh_gencontrol:
-	for u in ocaml-source ocaml-interp ocaml-compiler-libs; do \
+	set -e; for u in ocaml-source ocaml-interp ocaml-compiler-libs; do \
 	  echo 'F:OCamlABI=$(OCAML_ABI)' >> debian/$$u.substvars; \
 	done
 ifeq (,$(OCAML_OPT_ARCH))
