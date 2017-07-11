@@ -16,6 +16,10 @@
 BASEDIR=../..
 
 .PHONY: default
+
+# This test relies on the upstream behaviour of -custom
+export OCAML_CUSTOM_EMBED=n
+
 default:
 	@$(MAKE) compile
 	@$(MAKE) run
