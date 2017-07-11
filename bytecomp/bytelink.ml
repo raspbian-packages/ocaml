@@ -465,7 +465,7 @@ let mlvalues_primitives = [
 
 (* Output a bytecode executable as a C file *)
 
-let link_bytecode_as_c ppf tolink outfile =
+let link_bytecode_as_c ppf tolink outfile with_main =
   let outchan = open_out outfile in
   begin try
     (* The bytecode *)
@@ -507,7 +507,18 @@ let link_bytecode_as_c ppf tolink outfile =
     (* The table of primitives *)
     Symtable.output_primitive_table outchan mlvalues_primitives;
     (* The entry point *)
-    output_string outchan "\
+    if with_main then begin
+      output_string outchan "\
+\nint main(int argc, char **argv)\
+\n{\
+\n  caml_startup_code(caml_code, sizeof(caml_code),\
+\n                    caml_data, sizeof(caml_data),\
+\n                    caml_sections, sizeof(caml_sections),\
+\n                    argv);\
+\n  return 0; /* not reached */\
+\n}\n"
+    end else begin
+      output_string outchan "\
 \nvoid caml_startup(char ** argv)\
 \n{\
 \n  caml_startup_code(caml_code, sizeof(caml_code),\
@@ -521,7 +532,9 @@ let link_bytecode_as_c ppf tolink outfile =
 \n                               caml_data, sizeof(caml_data),\
 \n                               caml_sections, sizeof(caml_sections),\
 \n                               argv);\
-\n}\
+\n}\n"
+      end;
+    output_string outchan "\
 \n#ifdef __cplusplus\
 \n}\
 \n#endif\n";
@@ -560,6 +573,17 @@ let fix_exec_name name =
       if String.contains name '.' then name else name ^ ".exe"
   | _ -> name
 
+(* Debian-specific -custom behaviour:
+   - if DEB_HOST_ARCH is non-empty, it is activated by default
+   - can be enabled/disabled by setting OCAML_CUSTOM_EMBED to y/n
+*)
+
+let custom_embed =
+  try Sys.getenv "OCAML_CUSTOM_EMBED" = "y"
+  with Not_found ->
+    try Sys.getenv "DEB_HOST_ARCH" <> ""
+    with Not_found -> false
+
 (* Main entry point (build a custom runtime if needed) *)
 
 let link ppf objfiles output_name =
@@ -582,6 +606,16 @@ let link ppf objfiles output_name =
   Clflags.dllibs := !lib_dllibs @ !Clflags.dllibs; (* put user's DLLs first *)
   if not !Clflags.custom_runtime then
     link_bytecode ppf tolink output_name true
+  else if custom_embed && not !Clflags.output_c_object && not !Clflags.make_runtime then
+    let c_file = Filename.temp_file "camlobj" ".c" in
+    try
+      link_bytecode_as_c ppf tolink c_file true;
+      let exec_name = fix_exec_name output_name in
+      if not (build_custom_runtime c_file exec_name)
+      then raise(Error Custom_runtime);
+    with x ->
+      remove_file c_file;
+      raise x
   else if not !Clflags.output_c_object then begin
     let bytecode_name = Filename.temp_file "camlcode" "" in
     let prim_name = Filename.temp_file "camlprim" ".c" in
@@ -631,7 +665,7 @@ let link ppf objfiles output_name =
     if Sys.file_exists c_file then raise(Error(File_exists c_file));
     let temps = ref [] in
     try
-      link_bytecode_as_c ppf tolink c_file;
+      link_bytecode_as_c ppf tolink c_file false;
       if not (Filename.check_suffix output_name ".c") then begin
         temps := c_file :: !temps;
         if Ccomp.compile_file c_file <> 0 then

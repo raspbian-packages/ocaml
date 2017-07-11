@@ -16,6 +16,9 @@
 MAIN_MODULE=pr3612
 C_FILES=custom_finalize
 
+# This test relies on the upstream behaviour of -custom
+export OCAML_CUSTOM_EMBED=n
+
 BASEDIR=../../..
 include $(BASEDIR)/makefiles/Makefile.one
 include $(BASEDIR)/makefiles/Makefile.common

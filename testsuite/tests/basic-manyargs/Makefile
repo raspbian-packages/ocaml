@@ -18,5 +18,8 @@ BASEDIR=../..
 MAIN_MODULE=manyargs
 C_FILES=manyargsprim
 
+# This test relies on the upstream behaviour of -custom
+export OCAML_CUSTOM_EMBED=n
+
 include $(BASEDIR)/makefiles/Makefile.one
 include $(BASEDIR)/makefiles/Makefile.common
