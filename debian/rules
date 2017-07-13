@@ -295,3 +295,7 @@ ifeq (,$(DEB_TEST_BUILD_PREFIX))
 	cd testsuite && make all
 endif
 endif
+
+.PHONY: override_dh_installdocs
+override_dh_installdocs:
+	dh_installdocs --ignore debian/README.Debian
