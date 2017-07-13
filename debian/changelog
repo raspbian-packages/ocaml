@@ -1,3 +1,10 @@
+ocaml (4.02.3-10) unstable; urgency=medium
+
+  * Add Provides: ocamlbuild to ocaml-nox
+  * Tell dh_installdocs to ignore README.Debian (see #868204)
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 13 Jul 2017 04:40:57 +0200
+
 ocaml (4.02.3-9) unstable; urgency=medium
 
   * obey hardening LDFLAGS (Closes: #792502). Thanks to Török Edwin
