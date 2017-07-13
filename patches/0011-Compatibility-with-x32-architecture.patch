@@ -1,0 +1,49 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Tue, 16 Feb 2016 11:29:16 +0100
+Subject: Compatibility with x32 architecture
+
+Origin: https://github.com/ocaml/ocaml/commit/58c07fa89ec6546cea911f1d2e7803fd7aa75de9
+Bug: http://caml.inria.fr/mantis/view.php?id=6722
+Bug-Debian: https://bugs.debian.org/773409
+---
+ byterun/caml/signals_machdep.h |  2 +-
+ configure                      | 11 +++++------
+ 2 files changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/byterun/caml/signals_machdep.h b/byterun/caml/signals_machdep.h
+index 4987e2f..ce6bd2e 100644
+--- a/byterun/caml/signals_machdep.h
++++ b/byterun/caml/signals_machdep.h
+@@ -16,7 +16,7 @@
+ #ifndef CAML_SIGNALS_MACHDEP_H
+ #define CAML_SIGNALS_MACHDEP_H
+ 
+-#if defined(__GNUC__) && defined(__i386__)
++#if defined(__GNUC__) && (defined(__i386__) || (defined(__x86_64__) && defined(__ILP32__)))
+ 
+ #define Read_and_clear(dst,src) \
+   asm("xorl %0, %0; xchgl %0, %1" \
+diff --git a/configure b/configure
+index dfcb849..c37a2e5 100755
+--- a/configure
++++ b/configure
+@@ -874,14 +874,13 @@ esac
+ 
+ # Some platforms exist both in 32-bit and 64-bit variants, not distinguished
+ # by $target.  Turn off native code compilation on platforms where 64-bit mode
+-# is not supported.  (PR#4441)
++# is not supported  (PR#4441).
++# Sometimes, it's 32-bit mode that is not supported  (PR#6722).
+ 
+-if $arch64; then
+-  case "$arch,$model" in
+-    sparc,default|power,ppc)
++case "$arch64,$arch,$model" in
++  true,sparc,*|true,power,ppc|false,amd64,*)
+       arch=none; model=default; system=unknown;;
+-  esac
+-fi
++esac
+ 
+ if test -z "$ccoption"; then
+   nativecc="$bytecc"
