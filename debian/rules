@@ -7,7 +7,7 @@ include /usr/share/dpkg/buildflags.mk
 PACKAGE := ocaml
 ALL_PACKAGES := $(shell dh_listpackages)
 OCAMLMAJOR := 4.05
-OCAMLMINOR := 0+rc1
+OCAMLMINOR := 0
 
 # Use ccache if pkg.ocaml.ccache build-profile is active.
 # Your rebuilds will be *much quicker*.
