@@ -1,6 +1,7 @@
 ocaml (4.05.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * Update to latest Standards-Version; no changes required.
 
  -- Ximin Luo <infinity0@debian.org>  Fri, 14 Jul 2017 14:03:24 +0200
 

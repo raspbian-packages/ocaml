@@ -19,7 +19,7 @@ Build-Depends:
  libx11-dev,
  zlib1g-dev,
  dh-ocaml (>= 1.0.0~)
-Standards-Version: 3.9.8
+Standards-Version: 4.0.0
 Vcs-Git: https://anonscm.debian.org/git/pkg-ocaml-maint/packages/ocaml.git/
 Vcs-Browser: https://anonscm.debian.org/git/pkg-ocaml-maint/packages/ocaml.git/
 Homepage: https://ocaml.org/
