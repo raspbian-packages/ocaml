@@ -1,9 +1,9 @@
-ocaml (4.05.0-1) UNRELEASED; urgency=medium
+ocaml (4.05.0-1) experimental; urgency=medium
 
   * New upstream release.
   * Update to latest Standards-Version; no changes required.
 
- -- Ximin Luo <infinity0@debian.org>  Fri, 14 Jul 2017 14:03:24 +0200
+ -- Ximin Luo <infinity0@debian.org>  Mon, 17 Jul 2017 16:11:47 +0200
 
 ocaml (4.04.0-2) experimental; urgency=medium
 
