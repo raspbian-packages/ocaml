@@ -22,7 +22,7 @@ Build-Depends:
 Standards-Version: 3.9.8
 Vcs-Git: https://anonscm.debian.org/git/pkg-ocaml-maint/packages/ocaml.git/
 Vcs-Browser: https://anonscm.debian.org/git/pkg-ocaml-maint/packages/ocaml.git/
-Homepage: http://caml.inria.fr/
+Homepage: https://ocaml.org/
 
 # This needs to stay at the top - we symlink docs to the copy in this package,
 # and dh_installdocs installs README.Debian etc into the first package listed.
