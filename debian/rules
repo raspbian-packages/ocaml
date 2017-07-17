@@ -10,7 +10,6 @@ OCAMLMAJOR := 4.05
 OCAMLMINOR := 0
 
 # Use ccache if pkg.ocaml.ccache build-profile is active.
-# Your rebuilds will be *much quicker*.
 ifneq (,$(filter pkg.ocaml.ccache,$(DEB_BUILD_PROFILES)))
 export PATH := /usr/lib/ccache:$(PATH)
 export CCACHE_DIR := $(CURDIR)/debian/ccache
