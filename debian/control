@@ -37,6 +37,7 @@ Depends:
 Provides:
  ${ocaml:Provides},
  ${F:BestProvides},
+ ocamlbuild,
  libnums-ocaml-dev
 Suggests:
  ocaml-doc,

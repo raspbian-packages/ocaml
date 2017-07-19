@@ -1,3 +1,10 @@
+ocaml (4.02.3-10) unstable; urgency=medium
+
+  * Add Provides: ocamlbuild to ocaml-nox
+  * Tell dh_installdocs to ignore README.Debian (see #868204)
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 13 Jul 2017 04:40:57 +0200
+
 ocaml (4.02.3-9+rpi1) stretch-staging; urgency=medium
 
   [changes brought forward from 4.01.0-5+rpi1 by Peter Michael Green <plugwash@raspbian.org> at Sat, 24 Jan 2015 10:29:46 +0000]
