@@ -1,3 +1,7 @@
+ocaml (4.02.3-10+rpi1) buster-staging; urgency=medium
+
+ -- Raspbian forward porter <root@raspbian.org>  Wed, 19 Jul 2017 23:51:55 +0000
+
 ocaml (4.02.3-10) unstable; urgency=medium
 
   * Add Provides: ocamlbuild to ocaml-nox
