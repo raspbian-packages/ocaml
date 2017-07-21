@@ -1,3 +1,9 @@
+ocaml (4.05.0-4) UNRELEASED; urgency=medium
+
+  * Fix new natdynlink logic, fixes FTBFS on some more arches.
+
+ -- Ximin Luo <infinity0@debian.org>  Fri, 21 Jul 2017 20:24:43 +0200
+
 ocaml (4.05.0-3) experimental; urgency=medium
 
   * Fix Makefile $-escaping syntax, fixes FTBFS on a bunch of arches.
