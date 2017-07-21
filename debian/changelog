@@ -1,8 +1,8 @@
-ocaml (4.05.0-3) UNRELEASED; urgency=medium
+ocaml (4.05.0-3) experimental; urgency=medium
 
   * Fix Makefile $-escaping syntax, fixes FTBFS on a bunch of arches.
 
- -- Ximin Luo <infinity0@debian.org>  Fri, 21 Jul 2017 18:56:46 +0200
+ -- Ximin Luo <infinity0@debian.org>  Fri, 21 Jul 2017 19:08:27 +0200
 
 ocaml (4.05.0-2) experimental; urgency=medium
 
