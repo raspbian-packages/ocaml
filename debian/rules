@@ -302,6 +302,7 @@ ifeq (kfreebsd,$(DEB_HOST_ARCH_OS))
 	rm -rf testsuite/tests/lib-threads/torture.ml
 	rm -rf testsuite/tests/lib-threads/close.ml
 	rm -rf testsuite/tests/lib-unix/pipe_eof.ml
+	rm -rf testsuite/tests/lib-scanf-2/
 endif
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
