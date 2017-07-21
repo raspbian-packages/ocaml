@@ -48,11 +48,15 @@ else
   OCAMLINIT_SED += -e '/^OPT: /d' -e 's/^BYTE: //'
 endif
 
+# Upstream Makefile is mildly buggy, sets NATDYNLINK for sparc64 with no opt
+# support. This double-if should stay correct in all future situations.
+ifeq ($(OCAML_HAVE_OCAMLOPT),yes)
 ifeq ($(NATDYNLINK),true)
   OCAMLINIT_SED += -e 's/^DYN: //'
 else
   OCAMLINIT_SED += -e '/^DYN: /d'
   OCAMLINIT_SED += -e '/\.cmxs$$/d'
+endif
 endif
 
 ifeq ($(PROFILING),true)

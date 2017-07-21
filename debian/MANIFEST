@@ -14,7 +14,6 @@ debian/ld.conf.in
 debian/man/ocamldumpobj.1
 debian/man/ocamlmklib.1
 debian/man/ocamlobjinfo.1
-debian/natdynlink-archs
 debian/native-archs
 debian/ocaml-base-nox.README.Debian
 debian/ocaml-base-nox.dirs.in
