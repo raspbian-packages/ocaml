@@ -63,8 +63,8 @@ endif
 
 otherlib = \
 OCAMLINIT_SED += $(if $(filter $(1),$(OTHERLIBRARIES)),\
-  -e 's/^OTH: \(.*\b$(1)\.\w\w*$$\\)/\1/',\
-  -e '/^OTH: .*\b$(1)\.\w\w*$$/d')
+  -e 's/^OTH: \(.*\b$(1)\.\w\w*$$$$\)/\1/',\
+  -e '/^OTH: .*\b$(1)\.\w\w*$$$$/d')
 # careful, no whitespace after the comma
 $(eval $(call otherlib,raw_spacetime_lib))
 
