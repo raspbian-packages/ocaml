@@ -19,10 +19,13 @@
 # 02110-1301 USA.
 #
 
+_ocaml_share_path ?= /usr/share/ocaml
+
 ifndef _ocaml_share_ocamlinit
 _ocaml_share_ocamlinit = 1
 
 include $(CURDIR)/debian/ocamlvars.mk
+include $(_ocaml_share_path)/ocamlvars.mk
 -include $(CURDIR)/config/Makefile
 
 # list of .in files contained (non-recursively) in debian/ that requires
