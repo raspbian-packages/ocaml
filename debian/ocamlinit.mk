@@ -19,24 +19,17 @@
 # 02110-1301 USA.
 #
 
-_ocaml_share_path ?= /usr/share/ocaml
-
 ifndef _ocaml_share_ocamlinit
 _ocaml_share_ocamlinit = 1
 
-include $(_ocaml_share_path)/ocamlvars.mk
+include $(CURDIR)/debian/ocamlvars.mk
+-include $(CURDIR)/config/Makefile
 
 # list of .in files contained (non-recursively) in debian/ that requires
 # pre-build filling.
 # debian/rules writers might need to add stuff to this list:
 #  e.g.: OCAML_IN_FILES += debian/patches/foo	# (no .in extension)
 OCAML_IN_FILES ?= $(filter-out debian/control,$(patsubst %.in,%,$(wildcard debian/*.in)))
-
-# WARNING: there are currently duplications with ocamlvars.mk and
-# ocaml.mk, but hopefully they will be removed at some point in the
-# future
-
--include $(CURDIR)/config/Makefile
 
 OCAMLINIT_SED := \
   -e 's%@OCamlABI@%$(OCAML_ABI)%g' \
