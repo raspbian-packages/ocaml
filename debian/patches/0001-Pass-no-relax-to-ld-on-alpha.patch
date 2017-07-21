@@ -20,7 +20,7 @@ code (bug#338437)
    *,mips-*-irix6*)
      # Turn off warning "unused library"
      bytecclinkopts="-n32 -Wl,-woff,84";;
-@@ -972,6 +973,7 @@
+@@ -982,6 +983,7 @@
  case "$arch,$nativecc,$system,$model" in
    *,*,nextstep,*)      nativecclinkopts="-posix";;
    *,*,rhapsody,*)      if $arch64; then partialld="ld -r -arch ppc64"; fi;;

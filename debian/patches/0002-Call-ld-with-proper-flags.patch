@@ -11,7 +11,7 @@ gcc.
 
 --- a/configure
 +++ b/configure
-@@ -2039,7 +2039,7 @@
+@@ -2049,7 +2049,7 @@
  echo "OTHERLIBRARIES=$otherlibraries" >> Makefile
  echo "CC_PROFILE=$cc_profile" >> Makefile
  echo "SYSTHREAD_SUPPORT=$systhread_support" >> Makefile
