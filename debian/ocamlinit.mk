@@ -43,11 +43,8 @@ OCAMLINIT_SED := \
   -e 's%@OCamlStdlibDir@%$(OCAML_STDLIB_DIR)%g' \
   -e 's%@OCamlDllDir@%$(OCAML_DLL_DIR)%g'
 
-ifeq ($(DEB_BUILD_ARCH_BITS),64)
-  OCAMLINIT_SED += -e 's/^64: //'
-else
-  OCAMLINIT_SED += -e '/^64: /d'
-endif
+# When using these prefixs in *.install.in they must appear in the same order
+# as below, with STD: going last since it's processed by gen_modules.pl
 
 ifeq ($(OCAML_HAVE_OCAMLOPT),yes)
   OCAMLINIT_SED += -e 's/^OPT: //' -e '/^BYTE: /d'
@@ -55,11 +52,25 @@ else
   OCAMLINIT_SED += -e '/^OPT: /d' -e 's/^BYTE: //'
 endif
 
-ifeq ($(OCAML_NATDYNLINK),yes)
+ifeq ($(NATDYNLINK),true)
   OCAMLINIT_SED += -e 's/^DYN: //'
 else
   OCAMLINIT_SED += -e '/^DYN: /d'
+  OCAMLINIT_SED += -e '/\.cmxs$$/d'
 endif
+
+ifeq ($(PROFILING),true)
+  OCAMLINIT_SED += -e 's/^PROFILING: //'
+else
+  OCAMLINIT_SED += -e '/^PROFILING: /d'
+endif
+
+otherlib = \
+OCAMLINIT_SED += $(if $(filter $(1),$(OTHERLIBRARIES)),\
+  -e 's/^OTH: \(.*\b$(1)\.\w\w*$$\\)/\1/',\
+  -e '/^OTH: .*\b$(1)\.\w\w*$$/d')
+# careful, no whitespace after the comma
+$(eval $(call otherlib,raw_spacetime_lib))
 
 ocamlinit: ocamlinit-stamp
 ocamlinit-stamp: config/Makefile

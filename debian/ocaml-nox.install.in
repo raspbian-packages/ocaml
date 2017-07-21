@@ -43,7 +43,7 @@ DYN: @OCamlStdlibDir@/dynlink.a
 OPT: @OCamlStdlibDir@/libasmrun.a
 OPT: @OCamlStdlibDir@/libasmrun_pic.a
 OPT: @OCamlStdlibDir@/libasmrun_shared.so
-OPT: @OCamlStdlibDir@/libasmrunp.a
+OPT: PROFILING: @OCamlStdlibDir@/libasmrunp.a
      @OCamlStdlibDir@/libcamlrun.a
      @OCamlStdlibDir@/libcamlrun_pic.a
      @OCamlStdlibDir@/libcamlrun_shared.so
@@ -334,9 +334,9 @@ STD: random.cmx
 STD: ratio.cmti
 STD: ratio.cmx
 STD: ratio.mli
-64: STD: raw_spacetime_lib.cmx
-64: STD: raw_spacetime_lib.cmxa
-64: STD: raw_spacetime_lib.mli
+OTH: STD: raw_spacetime_lib.cmx
+OTH: STD: raw_spacetime_lib.cmxa
+OTH: STD: raw_spacetime_lib.mli
 STD: scanf.ml
 STD: scanf.mli
 STD: scanf.cmx
