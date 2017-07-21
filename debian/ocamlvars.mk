@@ -1,4 +1,8 @@
-# Can't use /usr/share/ocaml/ocamlvars.mk because it tries to run ocamlc
+include /usr/share/dpkg/architecture.mk
+
+OCAMLMAJOR := 4.05
+OCAMLMINOR := 0
+
 OCAML_ABI := $(OCAMLMAJOR).$(OCAMLMINOR)
 OCAML_STDLIB_DIR := /usr/lib/ocaml
 OCAML_NATIVE_ARCHS := $(shell cat debian/native-archs)
