@@ -36,6 +36,8 @@ OCAML_IN_FILES ?= $(filter-out debian/control,$(patsubst %.in,%,$(wildcard debia
 # ocaml.mk, but hopefully they will be removed at some point in the
 # future
 
+-include $(CURDIR)/config/Makefile
+
 OCAMLINIT_SED := \
   -e 's%@OCamlABI@%$(OCAML_ABI)%g' \
   -e 's%@OCamlStdlibDir@%$(OCAML_STDLIB_DIR)%g' \
@@ -60,7 +62,7 @@ else
 endif
 
 ocamlinit: ocamlinit-stamp
-ocamlinit-stamp:
+ocamlinit-stamp: config/Makefile
 	for t in $(OCAML_IN_FILES); do \
 	  sed $(OCAMLINIT_SED) $$t.in > $$t; \
 	done

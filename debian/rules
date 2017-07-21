@@ -35,9 +35,6 @@ else
   OCAML_NATDYNLINK := no
 endif
 
-# dh_ocamlinit cannot be used for ocaml itself
-include debian/ocamlinit.mk
-
 MD5SUMSDIR = /var/lib/ocaml/md5sums
 INSTDIR = $(CURDIR)/debian/tmp/usr
 DISTDIR = $(PACKAGE)-$(OCAML_ABI)
@@ -89,8 +86,6 @@ CONFIGURE_SED := \
 build:
 	dh $@
 
-ocamlinit-stamp: $(TARBALL_TARGET)
-
 # Generate ocaml-native-compilers' Architecture field.
 # Should never be called automatically.
 .PHONY: debian/control
@@ -131,12 +126,15 @@ $(TARBALL_TARGET): $(UPSTREAM_TARBALL)
 endif
 
 .PHONY: override_dh_auto_configure
-override_dh_auto_configure: config-stamp
+override_dh_auto_configure: config-stamp ocamlinit-stamp
 
-config-stamp: pre-config-stamp ocamlinit-stamp
+config-stamp: pre-config-stamp
 	./configure $(CONFIGURE_OPTS)
 	sed -i $(CONFIGURE_SED) config/Makefile
 	touch $@
+
+ocamlinit-stamp: $(TARBALL_TARGET) config-stamp
+	$(MAKE) -f $(CURDIR)/debian/ocamlinit.mk ocamlinit-stamp
 
 .PHONY: override_dh_auto_build
 override_dh_auto_build: build-stamp
@@ -167,11 +165,12 @@ endif
 	touch $@
 
 .PHONY: override_dh_auto_clean
-override_dh_auto_clean: ocamlinit-clean
+override_dh_auto_clean:
 ifneq ($(wildcard $(CURDIR)/config/Makefile),)
 	$(MAKE) clean
 	$(MAKE) -C emacs clean
 endif
+	$(MAKE) -f $(CURDIR)/debian/ocamlinit.mk ocamlinit-clean
 # Restore files altered by the build process
 	if test -d boot.debian; then \
 	  rm -Rf boot; \
