@@ -1,3 +1,9 @@
+ocaml (4.05.0-5) UNRELEASED; urgency=medium
+
+  * Proper fix for kfreebsd-* not having dup3/pipe2.
+
+ -- Ximin Luo <infinity0@debian.org>  Sat, 22 Jul 2017 12:07:29 +0200
+
 ocaml (4.05.0-4) experimental; urgency=medium
 
   * Fix new natdynlink logic, fixes FTBFS on some more arches.
