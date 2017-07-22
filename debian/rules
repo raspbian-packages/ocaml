@@ -87,6 +87,11 @@ pre-config-stamp: $(TARBALL_TARGET)
 	    cp -f /usr/share/misc/config.$$ext config/gnu/config.$$ext; \
 	  fi; \
 	done
+# Debian kfreebsd has non-working shims for dup3/pipe2, see #827935. Upstream
+# ./configure isn't sophisticated enough to detect this so patch it out here.
+ifeq (kfreebsd,$(DEB_HOST_ARCH_OS))
+	sed -i -e '/HAS_DUP3/d' -e '/HAS_PIPE2/d' ./configure
+endif
 # Create empty directory present in upstream tarball
 	mkdir -p compilerlibs
 	touch $@
@@ -276,19 +281,6 @@ ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
 	rm -rf testsuite/tests/tool-debugger/basic/
 	rm -rf testsuite/tests/tool-debugger/find-artifacts/
 	rm -rf testsuite/tests/tool-debugger/no_debug_event/
-ifeq (kfreebsd,$(DEB_HOST_ARCH_OS))
-	# FIXME: the following tests fail because Debian kfreebsd does not have
-	# dup3(2) or pipe2(2), see #827935 for related discussion.
-	rm -rf testsuite/tests/lib-unix/redirections.ml
-	rm -rf testsuite/tests/lib-unix/dup2.ml
-	rm -rf testsuite/tests/lib-unix/cloexec.ml
-	rm -rf testsuite/tests/lib-unix/test_unix_cmdline.ml
-	rm -rf testsuite/tests/lib-threads/fileio.ml
-	rm -rf testsuite/tests/lib-threads/torture.ml
-	rm -rf testsuite/tests/lib-threads/close.ml
-	rm -rf testsuite/tests/lib-unix/pipe_eof.ml
-	rm -rf testsuite/tests/lib-scanf-2/
-endif
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
