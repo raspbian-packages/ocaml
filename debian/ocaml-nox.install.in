@@ -18,7 +18,7 @@ OPT: usr/bin/ocamldoc.opt
      usr/bin/ocamlmktop.*
      usr/bin/ocamlobjinfo.*
      usr/bin/ocamlprof.*
-debian/ocamlfind/ocaml-native-compilers.conf usr/share/ocaml-findlib/
+OPT: debian/ocamlfind/ocaml-native-compilers.conf usr/share/ocaml-findlib/
      @OCamlStdlibDir@/objinfo_helper
      debian/native-archs @OCamlStdlibDir@
 OPT: usr/bin/ocamlopt
