@@ -96,6 +96,32 @@ ocaml (4.03.0-1) experimental; urgency=medium
 
  -- Ximin Luo <infinity0@debian.org>  Thu, 20 Oct 2016 17:43:52 +0200
 
+ocaml (4.02.3-10) unstable; urgency=medium
+
+  * Add Provides: ocamlbuild to ocaml-nox
+  * Tell dh_installdocs to ignore README.Debian (see #868204)
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 13 Jul 2017 04:40:57 +0200
+
+ocaml (4.02.3-9) unstable; urgency=medium
+
+  * obey hardening LDFLAGS (Closes: #792502). Thanks to Török Edwin
+    for the patch!
+    - add patch 0013-Obey-ldflags.patch
+  * Compute a stable name for preprocessed files (Closes: #838188).
+    Thanks to Johannes Schauer for the patch!
+  * CVE-2015-8869 (Closes: #824139).
+
+ -- Mehdi Dogguy <mehdi@debian.org>  Thu, 22 Dec 2016 00:48:59 +0100
+
+ocaml (4.02.3-8) unstable; urgency=medium
+
+  * Default to PIC on arm, to fix failing armhf tests (Closes: #837359).
+  * Use secure and canonical URIs for Vcs-* fields
+  * Sync Standards-Version's value in debian/control.in
+
+ -- Mehdi Dogguy <mehdi@debian.org>  Sun, 06 Nov 2016 11:29:41 +0100
+
 ocaml (4.02.3-7) unstable; urgency=medium
 
   * d/rules: split install-stamp target into -arch and -indep, to allow

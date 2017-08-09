@@ -50,6 +50,9 @@ export DH_OPTIONS
 export OCAML_OPT_ARCH
 export OCAML_STDLIB_DIR
 
+export DEB_BUILD_MAINT_OPTIONS=hardening=+bindnow
+export CCLINKFLAGS=$(shell dpkg-buildflags --get LDFLAGS)
+
 CONFIGURE_OPTS := \
   --host $(DEB_BUILD_GNU_TYPE)\
   --with-pthread -prefix $(DEB_TEST_BUILD_PREFIX)/usr \
@@ -288,3 +291,7 @@ ifeq (,$(DEB_TEST_BUILD_PREFIX))
 	cd testsuite && make all
 endif
 endif
+
+.PHONY: override_dh_installdocs
+override_dh_installdocs:
+	dh_installdocs --ignore debian/README.Debian
