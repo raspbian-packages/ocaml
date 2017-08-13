@@ -7,6 +7,9 @@ ocaml (4.05.0-8) UNRELEASED; urgency=medium
     * Compute a stable name for preprocessed files (Closes: #838188).
       Thanks to Johannes Schauer for the patch!
 
+  [ Pino Toscano ]
+  * Convert the menu file to a desktop file. (see #741573)
+
  -- Ximin Luo <infinity0@debian.org>  Wed, 09 Aug 2017 14:59:56 +0200
 
 ocaml (4.05.0-7) experimental; urgency=medium

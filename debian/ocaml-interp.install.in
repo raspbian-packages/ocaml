@@ -1,3 +1,4 @@
 usr/bin/ocaml
 usr/share/man/man1/ocaml.1
+debian/ocaml.desktop /usr/share/applications
 debian/ocaml.xpm /usr/share/pixmaps
