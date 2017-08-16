@@ -1,11 +1,15 @@
 ocaml (4.05.0-8) UNRELEASED; urgency=medium
 
+  [ Ximin Luo ]
   * Merge changes from Debian unstable. Relevant ones:
     * Tell dh_installdocs to ignore README.Debian (see #868204)
     * obey hardening LDFLAGS (Closes: #792502). Thanks to Török Edwin
       for the patch!
     * Compute a stable name for preprocessed files (Closes: #838188).
       Thanks to Johannes Schauer for the patch!
+  * Close old bugs.
+    * New upstream release 4.05 closes CVE-2015-8869 (Closes: #824139).
+    * Debian release 4.03.0-3 defaults to PIC on arm (Closes: #837359).
 
   [ Pino Toscano ]
   * Convert the menu file to a desktop file. (see #741573)
