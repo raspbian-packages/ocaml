@@ -135,6 +135,10 @@ OCaml 4.05.0 (13 Jul 2017):
   (Hannes Mehnert, Guillaume Bury,
    review by Daniel Bünzli, Gabriel Scherer, Damien Doligez)
 
+- GPR#1330: when generating dynamically-linkable code on AArch64, always
+  reference symbols (even locally-defined ones) through the GOT.
+  (Mark Shinwell, review by Xavier Leroy)
+
 ### Standard library:
 
 - MPR#6975, GPR#902: Truncate function added to stdlib Buffer module
