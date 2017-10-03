@@ -1,6 +1,7 @@
 ocaml (4.05.0-10) UNRELEASED; urgency=medium
 
   * Drop support for ocamlopt on armel as suggested by upstream.
+  * Replace the ARM PIC patch with one from upstream.
 
  -- Ximin Luo <infinity0@debian.org>  Tue, 03 Oct 2017 23:36:43 +0200
 
