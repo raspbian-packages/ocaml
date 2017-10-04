@@ -1,0 +1,40 @@
+From: Torok Edwin <edwin@etorok.net>
+Date: Wed, 15 Jul 2015 16:33:23 +0300
+Subject: Use CCLINKFLAGS for linking all executables and shared libraries
+
+This allows packagers to set additional linker flags for executables and shared
+libraries created by OCaml, and for the OCaml tools themselves.
+OCaml code can be linked with various C stubs and C libraries that would
+benefit from using hardening link flags, such as -Wl,-z,relro.
+
+Origin: other
+Bug-Debian: https://bugs.debian.org/702349
+Forwarded: no
+Last-Update: <2015-07-15>
+---
+ configure             | 2 ++
+ tools/Makefile.shared | 2 +-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+--- a/configure
++++ b/configure
+@@ -815,6 +815,8 @@
+       shared_libraries_supported=true;;
+   esac
+ fi
++mksharedlib="$mksharedlib $CCLINKFLAGS"
++mkexe="$mkexe $CCLINKFLAGS"
+ 
+ if test -z "$mkmaindll"; then
+   mkmaindll=$mksharedlib
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -316,7 +316,7 @@
+ 
+ objinfo_helper$(EXE): objinfo_helper.c ../config/s.h
+ 	$(BYTECC) $(CCOUT)objinfo_helper$(EXE) $(BYTECCCOMPOPTS) \
+-          $(DEF_SYMBOL_PREFIX) $(LIBBFD_INCLUDE) objinfo_helper.c $(LIBBFD_LINK)
++          $(DEF_SYMBOL_PREFIX) $(LIBBFD_INCLUDE) objinfo_helper.c $(LIBBFD_LINK) $(CCLINKFLAGS)
+ 
+ OBJINFO=../compilerlibs/ocamlcommon.cma \
+         ../compilerlibs/ocamlbytecomp.cma \
