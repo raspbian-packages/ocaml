@@ -1,3 +1,16 @@
+ocaml (4.05.0-10) unstable; urgency=medium
+
+  * Drop support for ocamlopt on armel as suggested by upstream.
+  * Replace the ARM PIC patch with one from upstream.
+
+ -- Ximin Luo <infinity0@debian.org>  Wed, 04 Oct 2017 14:14:39 +0200
+
+ocaml (4.05.0-9) unstable; urgency=medium
+
+  * Upload to unstable. (Closes: #871990)
+
+ -- Ximin Luo <infinity0@debian.org>  Fri, 15 Sep 2017 18:41:19 +0200
+
 ocaml (4.05.0-8) experimental; urgency=medium
 
   [ Ximin Luo ]

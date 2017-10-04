@@ -66,6 +66,11 @@ CONFIGURE_SED := \
   -e "s%LIBDIR=.*$$%LIBDIR=\$$(PREFIX)/lib/ocaml%g" \
   -e "s%STUBLIBDIR=.*$$%STUBLIBDIR=\$$(PREFIX)/lib/ocaml/stublibs%g"
 
+# Upstream recommends dropping support, see https://caml.inria.fr/mantis/view.php?id=7642
+ifneq (,$(filter $(DEB_HOST_ARCH),armel))
+CONFIGURE_OPTS += --no-native-compiler
+endif
+
 %:
 	dh $@
 
