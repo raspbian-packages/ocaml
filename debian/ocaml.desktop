@@ -1,0 +1,8 @@
+[Desktop Entry]
+Exec=ocaml
+Name=OCaml
+GenericName=OCaml Toplevel
+Type=Application
+Terminal=true
+Icon=ocaml
+Categories=Development;ConsoleOnly;
