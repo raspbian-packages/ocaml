@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Link a set of .cmo files and produce a bytecode executable. *)
 
@@ -26,6 +29,7 @@ type error =
   | File_exists of string
   | Cannot_open_dll of string
   | Not_compatible_32
+  | Required_module_unavailable of string
 
 exception Error of error
 
@@ -50,7 +54,9 @@ let add_ccobjs origin l =
     then begin
       if l.lib_custom then Clflags.custom_runtime := true;
       lib_ccobjs := l.lib_ccobjs @ !lib_ccobjs;
-      let replace_origin = Misc.replace_substring ~before:"$CAMLORIGIN" ~after:origin in
+      let replace_origin =
+        Misc.replace_substring ~before:"$CAMLORIGIN" ~after:origin
+      in
       lib_ccopts := List.map replace_origin l.lib_ccopts @ !lib_ccopts;
     end;
     lib_dllibs := l.lib_dllibs @ !lib_dllibs
@@ -80,27 +86,30 @@ let add_ccobjs origin l =
 
 (* First pass: determine which units are needed *)
 
-module IdentSet =
-  Set.Make(struct
-    type t = Ident.t
-    let compare = compare
-  end)
+module IdentSet = Lambda.IdentSet
 
 let missing_globals = ref IdentSet.empty
 
-let is_required (rel, pos) =
+let is_required (rel, _pos) =
   match rel with
     Reloc_setglobal id ->
       IdentSet.mem id !missing_globals
   | _ -> false
 
-let add_required (rel, pos) =
-  match rel with
-    Reloc_getglobal id ->
-      missing_globals := IdentSet.add id !missing_globals
-  | _ -> ()
+let add_required compunit =
+  let add_required_by_reloc (rel, _pos) =
+    match rel with
+      Reloc_getglobal id ->
+        missing_globals := IdentSet.add id !missing_globals
+    | _ -> ()
+  in
+  let add_required_for_effects id =
+    missing_globals := IdentSet.add id !missing_globals
+  in
+  List.iter add_required_by_reloc compunit.cu_reloc;
+  List.iter add_required_for_effects compunit.cu_required_globals
 
-let remove_required (rel, pos) =
+let remove_required (rel, _pos) =
   match rel with
     Reloc_setglobal id ->
       missing_globals := IdentSet.remove id !missing_globals
@@ -123,7 +132,8 @@ let scan_file obj_name tolink =
       seek_in ic compunit_pos;
       let compunit = (input_value ic : compilation_unit) in
       close_in ic;
-      List.iter add_required compunit.cu_reloc;
+      add_required compunit;
+      List.iter remove_required compunit.cu_reloc;
       Link_object(file_name, compunit) :: tolink
     end
     else if buffer = cma_magic_number then begin
@@ -141,8 +151,8 @@ let scan_file obj_name tolink =
             || !Clflags.link_everything
             || List.exists is_required compunit.cu_reloc
             then begin
+              add_required compunit;
               List.iter remove_required compunit.cu_reloc;
-              List.iter add_required compunit.cu_reloc;
               compunit :: reqd
             end else
               reqd)
@@ -317,7 +327,7 @@ let link_bytecode ppf tolink exec_name standalone =
     Bytesections.init_record outchan;
     (* The path to the bytecode interpreter (in use_runtime mode) *)
     if String.length !Clflags.use_runtime > 0 then begin
-      output_string outchan ("#!" ^ (make_absolute !Clflags.use_runtime));
+      output_string outchan (make_absolute !Clflags.use_runtime);
       output_char outchan '\n';
       Bytesections.record outchan "RNTM"
     end;
@@ -515,8 +525,15 @@ let link_bytecode_as_c ppf tolink outfile with_main =
 \n                    caml_data, sizeof(caml_data),\
 \n                    caml_sections, sizeof(caml_sections),\
 \n                    argv);\
+\n}\
+\nvalue caml_startup_exn(char ** argv)\
+\n{\
+\n  return caml_startup_code_exn(caml_code, sizeof(caml_code),\
+\n                               caml_data, sizeof(caml_data),\
+\n                               caml_sections, sizeof(caml_sections),\
+\n                               argv);\
 \n}\n"
-    end;
+      end;
     output_string outchan "\
 \n#ifdef __cplusplus\
 \n}\
@@ -575,6 +592,14 @@ let link ppf objfiles output_name =
     else if !Clflags.output_c_object then "stdlib.cma" :: objfiles
     else "stdlib.cma" :: (objfiles @ ["std_exit.cmo"]) in
   let tolink = List.fold_right scan_file objfiles [] in
+  let missing_modules =
+    IdentSet.filter (fun id -> not (Ident.is_predef_exn id)) !missing_globals
+  in
+  begin
+    match IdentSet.elements missing_modules with
+    | [] -> ()
+    | id :: _ -> raise (Error (Required_module_unavailable (Ident.name id)))
+  end;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs; (* put user's libs last *)
   Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
                                                    (* put user's opts first *)
@@ -643,7 +668,8 @@ let link ppf objfiles output_name =
       link_bytecode_as_c ppf tolink c_file false;
       if not (Filename.check_suffix output_name ".c") then begin
         temps := c_file :: !temps;
-        if Ccomp.compile_file c_file <> 0 then raise(Error Custom_runtime);
+        if Ccomp.compile_file c_file <> 0 then
+          raise(Error Custom_runtime);
         if not (Filename.check_suffix output_name Config.ext_obj) ||
            !Clflags.output_complete_object then begin
           temps := obj_file :: !temps;
@@ -700,6 +726,8 @@ let report_error ppf = function
   | Not_compatible_32 ->
       fprintf ppf "Generated bytecode executable cannot be run\
                   \ on a 32-bit platform"
+  | Required_module_unavailable s ->
+      fprintf ppf "Required module `%s' is unavailable" s
 
 let () =
   Location.register_error_of_exn

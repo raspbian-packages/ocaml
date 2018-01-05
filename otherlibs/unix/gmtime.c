@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
@@ -22,7 +24,7 @@
 static value alloc_tm(struct tm *tm)
 {
   value res;
-  res = alloc_small(9, 0);
+  res = caml_alloc_small(9, 0);
   Field(res,0) = Val_int(tm->tm_sec);
   Field(res,1) = Val_int(tm->tm_min);
   Field(res,2) = Val_int(tm->tm_hour);
@@ -77,8 +79,8 @@ CAMLprim value unix_mktime(value t)
     clock = mktime(&tm);
     if (clock == (time_t) -1) unix_error(ERANGE, "mktime", Nothing);
     tmval = alloc_tm(&tm);
-    clkval = copy_double((double) clock);
-    res = alloc_small(2, 0);
+    clkval = caml_copy_double((double) clock);
+    res = caml_alloc_small(2, 0);
     Field(res, 0) = clkval;
     Field(res, 1) = tmval;
   End_roots ();
@@ -88,6 +90,6 @@ CAMLprim value unix_mktime(value t)
 #else
 
 CAMLprim value unix_mktime(value t)
-{ invalid_argument("mktime not implemented"); }
+{ caml_invalid_argument("mktime not implemented"); }
 
 #endif

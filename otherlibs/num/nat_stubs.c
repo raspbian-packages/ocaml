@@ -1,17 +1,19 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
-/* $Id$ */
+#define CAML_INTERNALS
 
 #include "caml/alloc.h"
 #include "caml/config.h"
@@ -44,7 +46,7 @@ static struct custom_operations nat_operations = {
 CAMLprim value initialize_nat(value unit)
 {
   bng_init();
-  register_custom_operations(&nat_operations);
+  caml_register_custom_operations(&nat_operations);
   return Val_unit;
 }
 
@@ -52,7 +54,7 @@ CAMLprim value create_nat(value size)
 {
   mlsize_t sz = Long_val(size);
 
-  return alloc_custom(&nat_operations, sz * sizeof(value), 0, 1);
+  return caml_alloc_custom(&nat_operations, sz * sizeof(value), 0, 1);
 }
 
 CAMLprim value length_nat(value nat)
@@ -123,7 +125,8 @@ CAMLprim value is_digit_zero(value nat, value ofs)
 CAMLprim value is_digit_normalized(value nat, value ofs)
 {
   return
-    Val_bool(Digit_val(nat, Long_val(ofs)) & ((bngdigit)1 << (BNG_BITS_PER_DIGIT-1)));
+    Val_bool(Digit_val(nat, Long_val(ofs))
+             & ((bngdigit)1 << (BNG_BITS_PER_DIGIT-1)));
 }
 
 CAMLprim value is_digit_odd(value nat, value ofs)
@@ -332,7 +335,7 @@ CAMLprim value lxor_digit_nat(value nat1, value ofs1, value nat2, value ofs2)
    - 32-bit word: number of 32-bit words in nat
    - N 32-bit words (big-endian format)
    For little-endian platforms, the memory layout between 32-bit and 64-bit
-   machines is identical, so we can write the nat using serialize_block_4.
+   machines is identical, so we can write the nat using caml_serialize_block_4.
    For big-endian 64-bit platforms, we need to swap the two 32-bit halves
    of 64-bit words to obtain the correct behavior. */
 
@@ -345,19 +348,19 @@ static void serialize_nat(value nat,
 #ifdef ARCH_SIXTYFOUR
   len = len * 2; /* two 32-bit words per 64-bit digit  */
   if (len >= ((mlsize_t)1 << 32))
-    failwith("output_value: nat too big");
+    caml_failwith("output_value: nat too big");
 #endif
-  serialize_int_4((int32) len);
+  caml_serialize_int_4((int32_t) len);
 #if defined(ARCH_SIXTYFOUR) && defined(ARCH_BIG_ENDIAN)
-  { int32 * p;
+  { int32_t * p;
     mlsize_t i;
     for (i = len, p = Data_custom_val(nat); i > 0; i -= 2, p += 2) {
-      serialize_int_4(p[1]);    /* low 32 bits of 64-bit digit */
-      serialize_int_4(p[0]);    /* high 32 bits of 64-bit digit */
+      caml_serialize_int_4(p[1]);    /* low 32 bits of 64-bit digit */
+      caml_serialize_int_4(p[0]);    /* high 32 bits of 64-bit digit */
     }
   }
 #else
-  serialize_block_4(Data_custom_val(nat), len);
+  caml_serialize_block_4(Data_custom_val(nat), len);
 #endif
   *wsize_32 = len * 4;
   *wsize_64 = len * 4;
@@ -367,25 +370,25 @@ static uintnat deserialize_nat(void * dst)
 {
   mlsize_t len;
 
-  len = deserialize_uint_4();
+  len = caml_deserialize_uint_4();
 #if defined(ARCH_SIXTYFOUR) && defined(ARCH_BIG_ENDIAN)
-  { uint32 * p;
+  { uint32_t * p;
     mlsize_t i;
     for (i = len, p = dst; i > 1; i -= 2, p += 2) {
-      p[1] = deserialize_uint_4();   /* low 32 bits of 64-bit digit */
-      p[0] = deserialize_uint_4();   /* high 32 bits of 64-bit digit */
+      p[1] = caml_deserialize_uint_4();   /* low 32 bits of 64-bit digit */
+      p[0] = caml_deserialize_uint_4();   /* high 32 bits of 64-bit digit */
     }
     if (i > 0){
-      p[1] = deserialize_uint_4();   /* low 32 bits of 64-bit digit */
+      p[1] = caml_deserialize_uint_4();   /* low 32 bits of 64-bit digit */
       p[0] = 0;                      /* high 32 bits of 64-bit digit */
       ++ len;
     }
   }
 #else
-  deserialize_block_4(dst, len);
+  caml_deserialize_block_4(dst, len);
 #if defined(ARCH_SIXTYFOUR)
   if (len & 1){
-    ((uint32 *) dst)[len] = 0;
+    ((uint32_t *) dst)[len] = 0;
     ++ len;
   }
 #endif
@@ -396,7 +399,7 @@ static uintnat deserialize_nat(void * dst)
 static intnat hash_nat(value v)
 {
   bngsize len, i;
-  uint32 h;
+  uint32_t h;
 
   len = bng_num_digits(&Digit_val(v,0), Wosize_val(v) - 1);
   h = 0;
@@ -406,10 +409,10 @@ static intnat hash_nat(value v)
     /* Mix the two 32-bit halves as if we were on a 32-bit platform,
        namely low 32 bits first, then high 32 bits.
        Also, ignore final 32 bits if they are zero. */
-    h = caml_hash_mix_uint32(h, (uint32) d);
+    h = caml_hash_mix_uint32(h, (uint32_t) d);
     d = d >> 32;
     if (d == 0 && i + 1 == len) break;
-    h = caml_hash_mix_uint32(h, (uint32) d);
+    h = caml_hash_mix_uint32(h, (uint32_t) d);
 #else
     h = caml_hash_mix_uint32(h, d);
 #endif

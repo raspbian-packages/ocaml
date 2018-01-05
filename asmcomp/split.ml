@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Renaming of registers at reload points to split live ranges. *)
 
@@ -84,8 +87,8 @@ let identify_sub sub1 sub2 reg =
 let merge_substs sub1 sub2 i =
   match (sub1, sub2) with
     (None, None) -> None
-  | (Some s1, None) -> sub1
-  | (None, Some s2) -> sub2
+  | (Some _, None) -> sub1
+  | (None, Some _) -> sub2
   | (Some s1, Some s2) ->
       Reg.Set.iter (identify_sub s1 s2) (Reg.add_set_array i.live i.arg);
       sub1
@@ -122,8 +125,8 @@ let rec rename i sub =
   match i.desc with
     Iend ->
       (i, sub)
-  | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
-      (instr_cons i.desc (subst_regs i.arg sub) [||] i.next,
+  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
+      (instr_cons_debug i.desc (subst_regs i.arg sub) [||] i.dbg i.next,
        None)
   | Iop Ireload when i.res.(0).loc = Unknown ->
       begin match sub with
@@ -152,9 +155,9 @@ let rec rename i sub =
   | Iswitch(index, cases) ->
       let new_sub_cases = Array.map (fun c -> rename c sub) cases in
       let sub_merge =
-        merge_subst_array (Array.map (fun (n, s) -> s) new_sub_cases) i.next in
+        merge_subst_array (Array.map (fun (_n, s) -> s) new_sub_cases) i.next in
       let (new_next, sub_next) = rename i.next sub_merge in
-      (instr_cons (Iswitch(index, Array.map (fun (n, s) -> n) new_sub_cases))
+      (instr_cons (Iswitch(index, Array.map (fun (n, _s) -> n) new_sub_cases))
                   (subst_regs i.arg sub) [||] new_next,
        sub_next)
   | Iloop(body) ->
@@ -162,16 +165,24 @@ let rec rename i sub =
       let (new_next, sub_next) = rename i.next (merge_substs sub sub_body i) in
       (instr_cons (Iloop(new_body)) [||] [||] new_next,
        sub_next)
-  | Icatch(nfail, body, handler) ->
-      let new_subst = ref None in
-      exit_subst := (nfail, new_subst) :: !exit_subst ;
+  | Icatch(rec_flag, handlers, body) ->
+      let new_subst = List.map (fun (nfail, _) -> nfail, ref None)
+          handlers in
+      let previous_exit_subst = !exit_subst in
+      exit_subst := new_subst @ !exit_subst;
       let (new_body, sub_body) = rename body sub in
-      let sub_entry_handler = !new_subst in
-      exit_subst := List.tl !exit_subst;
-      let (new_handler, sub_handler) = rename handler sub_entry_handler in
-      let (new_next, sub_next) =
-        rename i.next (merge_substs sub_body sub_handler i.next) in
-      (instr_cons (Icatch(nfail, new_body, new_handler)) [||] [||] new_next,
+      let res = List.map2 (fun (_, handler) (_, new_subst) -> rename handler !new_subst)
+          handlers new_subst in
+      exit_subst := previous_exit_subst;
+      let merged_subst =
+        List.fold_left (fun acc (_, sub_handler) ->
+            merge_substs acc sub_handler i.next)
+          sub_body res in
+      let (new_next, sub_next) = rename i.next merged_subst in
+      let new_handlers = List.map2 (fun (nfail, _) (handler, _) ->
+          (nfail, handler)) handlers res in
+      (instr_cons
+         (Icatch(rec_flag, new_handlers, new_body)) [||] [||] new_next,
        sub_next)
   | Iexit nfail ->
       let r = find_exit_subst nfail in
@@ -203,7 +214,7 @@ let fundecl f =
   reset ();
 
   let new_args = Array.copy f.fun_args in
-  let (new_body, sub_body) = rename f.fun_body (Some Reg.Map.empty) in
+  let (new_body, _sub_body) = rename f.fun_body (Some Reg.Map.empty) in
   repres_regs new_args;
   set_repres new_body;
   equiv_classes := Reg.Map.empty;
@@ -211,4 +222,6 @@ let fundecl f =
     fun_args = new_args;
     fun_body = new_body;
     fun_fast = f.fun_fast;
-    fun_dbg  = f.fun_dbg }
+    fun_dbg  = f.fun_dbg;
+    fun_spacetime_shape = f.fun_spacetime_shape;
+  }

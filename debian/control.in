@@ -6,7 +6,8 @@ Uploaders:
  Samuel Mimram <smimram@debian.org>,
  Ralf Treinen <treinen@debian.org>,
  Stéphane Glondu <glondu@debian.org>,
- Mehdi Dogguy <mehdi@debian.org>
+ Mehdi Dogguy <mehdi@debian.org>,
+ Ximin Luo <infinity0@debian.org>
 Build-Depends:
  debhelper (>= 9),
  pkg-config,
@@ -36,7 +37,8 @@ Depends:
  binutils
 Provides:
  ${ocaml:Provides},
- ${F:BestProvides},
+ ocaml-best-compilers (= ${binary:Version}),
+ ${F:NativeProvides},
  libnums-ocaml-dev
 Suggests:
  ocaml-doc,
@@ -44,7 +46,7 @@ Suggests:
 Recommends:
  camlp4,
  file
-Replaces: ocaml-interp (<< 3.11.1-3)
+Replaces: ocaml-interp (<< 3.11.1-3), ocaml-native-compilers (<< 4.04.0-1)
 Breaks:
  dh-ocaml (<< 1.0.0),
  ocaml-interp (<< 3.11.1-3),
@@ -77,7 +79,6 @@ Package: ocaml
 Architecture: any
 Depends:
  ocaml-base-nox,
- ${shlibs:Depends},
  ${misc:Depends},
  ${ocaml:Depends},
  libx11-dev
@@ -110,9 +111,8 @@ Description: ML language implementation with a class-based object system
 Package: ocaml-base-nox
 Architecture: any
 Depends:
- ${shlibs:Depends},
  ${misc:Depends},
- ${ocaml:Depends}
+ ${shlibs:Depends},
 Provides:
  ${ocaml:Provides}
 Replaces: ocaml-interp (<< 3.11.1-3)
@@ -145,26 +145,6 @@ Description: Runtime system for OCaml bytecode executables
  Objective Caml.  You may wish to install the 'ocaml-base-nox' package if
  you do not require any graphical capabilities for your runtime.
 
-Package: ocaml-native-compilers
-Architecture: @OCamlNativeArchs@
-Depends:
- ocaml-nox (= ${binary:Version}),
- gcc, binutils,
- ${shlibs:Depends},
- ${misc:Depends}
-Provides: ocaml-best-compilers
-Replaces: ocaml-nox (<= 3.09.2-3)
-Description: Native code compilers of the OCaml suite (the .opt ones)
- Objective Caml (OCaml) is an implementation of the ML language, based on
- the Caml Light dialect extended with a complete class-based object system
- and a powerful module system in the style of Standard ML.
- .
- This package contains the native code version of the compilers
- (ocamlc.opt, ocamllex.opt, ocamlopt.opt. The normal version of these
- programs are found in the 'ocaml' package. For big source codes,
- these packages can be two to three times faster, but for most normal
- sized sources, the difference won't be noticeable.
-
 Package: ocaml-source
 Architecture: all
 Depends: ${misc:Depends}
@@ -183,7 +163,6 @@ Architecture: any
 Depends:
  ocaml-compiler-libs (= ${binary:Version}),
  ${ocaml:Depends},
- ${shlibs:Depends},
  ${misc:Depends}
 Provides:
  ocaml-interp-${F:OCamlABI}
@@ -199,8 +178,6 @@ Description: OCaml interactive interpreter and standard libraries
 Package: ocaml-compiler-libs
 Architecture: any
 Depends:
- ${ocaml:Depends},
- ${shlibs:Depends},
  ${misc:Depends},
  ocaml-nox-${F:OCamlABI}
 Provides:
@@ -220,7 +197,6 @@ Package: ocaml-mode
 Architecture: all
 Depends:
  emacs | emacsen, emacsen-common (>= 2.0.8),
- ${shlibs:Depends},
  ${misc:Depends}
 Suggests: ocaml
 Description: major mode for editing Objective Caml in Emacs

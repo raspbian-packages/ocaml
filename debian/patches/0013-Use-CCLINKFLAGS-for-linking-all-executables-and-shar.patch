@@ -16,11 +16,9 @@ Last-Update: <2015-07-15>
  tools/Makefile.shared | 2 +-
  2 files changed, 3 insertions(+), 1 deletion(-)
 
-diff --git a/configure b/configure
-index c37a2e5..b58a86d 100755
 --- a/configure
 +++ b/configure
-@@ -768,6 +768,8 @@ if test $with_sharedlibs = "yes"; then
+@@ -815,6 +815,8 @@
        shared_libraries_supported=true;;
    esac
  fi
@@ -29,16 +27,14 @@ index c37a2e5..b58a86d 100755
  
  if test -z "$mkmaindll"; then
    mkmaindll=$mksharedlib
-diff --git a/tools/Makefile.shared b/tools/Makefile.shared
-index 0b90cd3..2d5546e 100644
---- a/tools/Makefile.shared
-+++ b/tools/Makefile.shared
-@@ -287,7 +287,7 @@ endif
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -316,7 +316,7 @@
  
  objinfo_helper$(EXE): objinfo_helper.c ../config/s.h
  	$(BYTECC) $(CCOUT)objinfo_helper$(EXE) $(BYTECCCOMPOPTS) \
--          objinfo_helper.c $(LIBBFD_LINK)
-+          objinfo_helper.c $(LIBBFD_LINK) $(CCLINKFLAGS)
+-          $(DEF_SYMBOL_PREFIX) $(LIBBFD_INCLUDE) objinfo_helper.c $(LIBBFD_LINK)
++          $(DEF_SYMBOL_PREFIX) $(LIBBFD_INCLUDE) objinfo_helper.c $(LIBBFD_LINK) $(CCLINKFLAGS)
  
  OBJINFO=../compilerlibs/ocamlcommon.cma \
          ../compilerlibs/ocamlbytecomp.cma \

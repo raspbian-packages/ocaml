@@ -1,15 +1,19 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../LICENSE.     */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
+
+#define CAML_INTERNALS
 
 /* Print an uncaught exception and abort */
 
@@ -127,6 +131,8 @@ static void default_fatal_uncaught_exception(value exn)
     caml_print_exception_backtrace();
 }
 
+int caml_abort_on_uncaught_exn = 0; /* see afl.c */
+
 void caml_fatal_uncaught_exception(value exn)
 {
   value *handle_uncaught_exception;
@@ -139,5 +145,10 @@ void caml_fatal_uncaught_exception(value exn)
   else
     default_fatal_uncaught_exception(exn);
   /* Terminate the process */
-  exit(2);
+  if (caml_abort_on_uncaught_exn) {
+    abort();
+  } else {
+    CAML_SYS_EXIT(2);
+    exit(2); /* Second exit needed for the Noreturn flag */
+  }
 }

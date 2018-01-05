@@ -6,7 +6,8 @@ Uploaders:
  Samuel Mimram <smimram@debian.org>,
  Ralf Treinen <treinen@debian.org>,
  Stéphane Glondu <glondu@debian.org>,
- Mehdi Dogguy <mehdi@debian.org>
+ Mehdi Dogguy <mehdi@debian.org>,
+ Ximin Luo <infinity0@debian.org>
 Build-Depends:
  debhelper (>= 9),
  pkg-config,
@@ -18,102 +19,18 @@ Build-Depends:
  libx11-dev,
  zlib1g-dev,
  dh-ocaml (>= 1.0.0~)
-Standards-Version: 3.9.8
+Standards-Version: 4.0.0
 Vcs-Git: https://anonscm.debian.org/git/pkg-ocaml-maint/packages/ocaml.git/
 Vcs-Browser: https://anonscm.debian.org/git/pkg-ocaml-maint/packages/ocaml.git/
-Homepage: http://caml.inria.fr/
+Homepage: https://ocaml.org/
 
-Package: ocaml-nox
-Architecture: any
-Depends:
- ocaml-base-nox,
- ${shlibs:Depends},
- ${misc:Depends},
- ${ocaml:Depends},
- libncurses5-dev,
- ocaml-interp (= ${binary:Version}),
- gcc,
- binutils
-Provides:
- ${ocaml:Provides},
- ${F:BestProvides},
- ocamlbuild,
- libnums-ocaml-dev
-Suggests:
- ocaml-doc,
- tuareg-mode | ocaml-mode
-Recommends:
- camlp4,
- file
-Replaces: ocaml-interp (<< 3.11.1-3)
-Breaks:
- dh-ocaml (<< 1.0.0),
- ocaml-interp (<< 3.11.1-3),
- camlp4 (<< 3.10.0),
- camlidl (<< 1.04)
-Description: ML implementation with a class-based object system (no X)
- Objective Caml (OCaml) is an implementation of the ML language, based on
- the Caml Light dialect extended with a complete class-based object system
- and a powerful module system in the style of Standard ML.
- .
- OCaml comprises two compilers. One generates bytecode
- which is then interpreted by a C program. This compiler runs quickly,
- generates compact code with moderate memory requirements, and is
- portable to essentially any 32 or 64 bit Unix platform. Performance of
- generated programs is quite good for a bytecoded implementation:
- almost twice as fast as Caml Light 0.7. This compiler can be used
- either as a standalone, batch-oriented compiler that produces
- standalone programs, or as an interactive, toplevel-based system.
- .
- The other compiler generates high-performance native code for a number
- of processors. Compilation takes longer and generates bigger code, but
- the generated programs deliver excellent performance, while retaining
- the moderate memory requirements of the bytecode compiler. It is not
- available on all arches though.
- .
- This package contains everything needed to develop OCaml applications
- that do not require the graphics library.
-
-Package: ocaml
-Architecture: any
-Depends:
- ocaml-base-nox,
- ${shlibs:Depends},
- ${misc:Depends},
- ${ocaml:Depends},
- libx11-dev
-Provides:
- ${ocaml:Provides}
-Replaces: ocaml-nox (<< 3.11.0-2)
-Description: ML language implementation with a class-based object system
- Objective Caml (OCaml) is an implementation of the ML language, based on
- the Caml Light dialect extended with a complete class-based object system
- and a powerful module system in the style of Standard ML.
- .
- OCaml comprises two compilers. One generates bytecode
- which is then interpreted by a C program. This compiler runs quickly,
- generates compact code with moderate memory requirements, and is
- portable to essentially any 32 or 64 bit Unix platform. Performance of
- generated programs is quite good for a bytecoded implementation:
- almost twice as fast as Caml Light 0.7. This compiler can be used
- either as a standalone, batch-oriented compiler that produces
- standalone programs, or as an interactive, toplevel-based system.
- .
- The other compiler generates high-performance native code for a number
- of processors. Compilation takes longer and generates bigger code, but
- the generated programs deliver excellent performance, while retaining
- the moderate memory requirements of the bytecode compiler. It is not
- available on all arches though.
- .
- This package contains everything needed to develop OCaml applications,
- including the graphics libraries.
-
+# This needs to stay at the top - we symlink docs to the copy in this package,
+# and dh_installdocs installs README.Debian etc into the first package listed.
 Package: ocaml-base-nox
 Architecture: any
 Depends:
- ${shlibs:Depends},
  ${misc:Depends},
- ${ocaml:Depends}
+ ${shlibs:Depends},
 Provides:
  ${ocaml:Provides}
 Replaces: ocaml-interp (<< 3.11.1-3)
@@ -146,25 +63,89 @@ Description: Runtime system for OCaml bytecode executables
  Objective Caml.  You may wish to install the 'ocaml-base-nox' package if
  you do not require any graphical capabilities for your runtime.
 
-Package: ocaml-native-compilers
-Architecture: amd64 arm64 armel armhf hurd-i386 i386 kfreebsd-i386 kfreebsd-amd64 lpia powerpc sparc
+Package: ocaml-nox
+Architecture: any
 Depends:
- ocaml-nox (= ${binary:Version}),
- gcc, binutils,
+ ocaml-base-nox,
  ${shlibs:Depends},
- ${misc:Depends}
-Provides: ocaml-best-compilers
-Replaces: ocaml-nox (<= 3.09.2-3)
-Description: Native code compilers of the OCaml suite (the .opt ones)
+ ${misc:Depends},
+ ${ocaml:Depends},
+ libncurses5-dev,
+ ocaml-interp (= ${binary:Version}),
+ gcc,
+ binutils
+Provides:
+ ${ocaml:Provides},
+ ocaml-best-compilers (= ${binary:Version}),
+ ${F:NativeProvides},
+ libnums-ocaml-dev
+Suggests:
+ ocaml-doc,
+ tuareg-mode | ocaml-mode
+Recommends:
+ camlp4,
+ file
+Replaces: ocaml-interp (<< 3.11.1-3), ocaml-native-compilers (<< 4.04.0-1)
+Breaks:
+ dh-ocaml (<< 1.0.0),
+ ocaml-interp (<< 3.11.1-3),
+ camlp4 (<< 3.10.0),
+ camlidl (<< 1.04)
+Description: ML implementation with a class-based object system (no X)
  Objective Caml (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
  and a powerful module system in the style of Standard ML.
  .
- This package contains the native code version of the compilers
- (ocamlc.opt, ocamllex.opt, ocamlopt.opt. The normal version of these
- programs are found in the 'ocaml' package. For big source codes,
- these packages can be two to three times faster, but for most normal
- sized sources, the difference won't be noticeable.
+ OCaml comprises two compilers. One generates bytecode
+ which is then interpreted by a C program. This compiler runs quickly,
+ generates compact code with moderate memory requirements, and is
+ portable to essentially any 32 or 64 bit Unix platform. Performance of
+ generated programs is quite good for a bytecoded implementation:
+ almost twice as fast as Caml Light 0.7. This compiler can be used
+ either as a standalone, batch-oriented compiler that produces
+ standalone programs, or as an interactive, toplevel-based system.
+ .
+ The other compiler generates high-performance native code for a number
+ of processors. Compilation takes longer and generates bigger code, but
+ the generated programs deliver excellent performance, while retaining
+ the moderate memory requirements of the bytecode compiler. It is not
+ available on all arches though.
+ .
+ This package contains everything needed to develop OCaml applications
+ that do not require the graphics library.
+
+Package: ocaml
+Architecture: any
+Depends:
+ ocaml-base-nox,
+ ${misc:Depends},
+ ${ocaml:Depends},
+ libx11-dev
+Provides:
+ ${ocaml:Provides}
+Replaces: ocaml-nox (<< 3.11.0-2)
+Description: ML language implementation with a class-based object system
+ Objective Caml (OCaml) is an implementation of the ML language, based on
+ the Caml Light dialect extended with a complete class-based object system
+ and a powerful module system in the style of Standard ML.
+ .
+ OCaml comprises two compilers. One generates bytecode
+ which is then interpreted by a C program. This compiler runs quickly,
+ generates compact code with moderate memory requirements, and is
+ portable to essentially any 32 or 64 bit Unix platform. Performance of
+ generated programs is quite good for a bytecoded implementation:
+ almost twice as fast as Caml Light 0.7. This compiler can be used
+ either as a standalone, batch-oriented compiler that produces
+ standalone programs, or as an interactive, toplevel-based system.
+ .
+ The other compiler generates high-performance native code for a number
+ of processors. Compilation takes longer and generates bigger code, but
+ the generated programs deliver excellent performance, while retaining
+ the moderate memory requirements of the bytecode compiler. It is not
+ available on all arches though.
+ .
+ This package contains everything needed to develop OCaml applications,
+ including the graphics libraries.
 
 Package: ocaml-source
 Architecture: all
@@ -184,7 +165,6 @@ Architecture: any
 Depends:
  ocaml-compiler-libs (= ${binary:Version}),
  ${ocaml:Depends},
- ${shlibs:Depends},
  ${misc:Depends}
 Provides:
  ocaml-interp-${F:OCamlABI}
@@ -200,8 +180,6 @@ Description: OCaml interactive interpreter and standard libraries
 Package: ocaml-compiler-libs
 Architecture: any
 Depends:
- ${ocaml:Depends},
- ${shlibs:Depends},
  ${misc:Depends},
  ocaml-nox-${F:OCamlABI}
 Provides:
@@ -221,7 +199,6 @@ Package: ocaml-mode
 Architecture: all
 Depends:
  emacs | emacsen, emacsen-common (>= 2.0.8),
- ${shlibs:Depends},
  ${misc:Depends}
 Suggests: ocaml
 Description: major mode for editing Objective Caml in Emacs

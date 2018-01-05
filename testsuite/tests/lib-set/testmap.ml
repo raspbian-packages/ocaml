@@ -1,15 +1,3 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Gallium, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 2012 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
-
 module M = Map.Make(struct type t = int let compare (x:t) y = compare x y end)
 
 let img x m = try Some(M.find x m) with Not_found -> None
@@ -113,6 +101,58 @@ let test x v s1 s2 =
      with Not_found ->
        M.is_empty s1);
 
+  checkbool "find_first"
+    (let (l, p, r) = M.split x s1 in
+    if p = None && M.is_empty r then
+      try
+        let _ = M.find_first (fun k -> k >= x) s1 in
+        false
+      with Not_found ->
+        true
+    else
+      let (k, v) = M.find_first (fun k -> k >= x) s1 in
+      match p with
+        None -> (k, v) = M.min_binding r
+      | Some v1 -> (k, v) = (x, v1));
+
+  checkbool "find_first_opt"
+    (let (l, p, r) = M.split x s1 in
+    if p = None && M.is_empty r then
+      match M.find_first_opt (fun k -> k >= x) s1 with
+        None -> true
+      | _ -> false
+    else
+      let Some (k, v) = M.find_first_opt (fun k -> k >= x) s1 in
+      match p with
+        None -> (k, v) = M.min_binding r
+      | Some v1 -> (k, v) = (x, v1));
+
+  checkbool "find_last"
+    (let (l, p, r) = M.split x s1 in
+    if p = None && M.is_empty l then
+      try
+        let _ = M.find_last (fun k -> k <= x) s1 in
+        false
+      with Not_found ->
+        true
+    else
+      let (k, v) = M.find_last (fun k -> k <= x) s1 in
+      match p with
+        None -> (k, v) = M.max_binding l
+      | Some v1 -> (k, v) = (x, v1));
+
+  checkbool "find_last_opt"
+    (let (l, p, r) = M.split x s1 in
+    if p = None && M.is_empty l then
+      match M.find_last_opt (fun k -> k <= x) s1 with
+        None -> true
+      | _ -> false
+    else
+      let Some (k, v) = M.find_last_opt (fun k -> k <= x) s1 in
+      match p with
+        None -> (k, v) = M.max_binding l
+      | Some v1 -> (k, v) = (x, v1));
+
   check "split"
     (let (l, p, r) = M.split x s1 in
      fun i ->
@@ -131,4 +171,54 @@ let rmap() =
 
 let _ =
   Random.init 42;
-  for i = 1 to 25000 do test (rkey()) (rdata()) (rmap()) (rmap()) done
+  for i = 1 to 10000 do test (rkey()) (rdata()) (rmap()) (rmap()) done
+
+let () =
+  (* check that removing a binding from a map that is not present in this map
+     (1) doesn't allocate and (2) return the original map *)
+  let m1 = ref M.empty in
+  for i = 1 to 10 do m1 := M.add i (float i) !m1 done;
+  let m2 = ref !m1 in
+
+  let a0 = Gc.allocated_bytes () in
+  let a1 = Gc.allocated_bytes () in
+  for i = 11 to 30 do m2 := M.remove i !m2 done;
+  let a2 = Gc.allocated_bytes () in
+
+  assert (!m2 == !m1);
+  assert(a2 -. a1 = a1 -. a0)
+
+let () =
+  (* check that filtering a map where all bindings are satisfied by
+     the given predicate returns the original map *)
+  let m1 = ref M.empty in
+  for i = 1 to 10 do m1 := M.add i (float i) !m1 done;
+  let m2 = M.filter (fun e _ -> e >= 0) !m1 in
+  assert (m2 == !m1)
+
+let () =
+  (* check that adding a binding "x -> y" to a map that already
+     contains it doesn't allocate and return the original map. *)
+  let m1 = ref M.empty in
+  let tmp = ref None in
+  for i = 1 to 10 do
+    tmp := Some (float i);
+    m1 := M.add i !tmp !m1
+  done;
+  let m2 = ref !m1 in
+
+  let a0 = Gc.allocated_bytes () in
+  let a1 = Gc.allocated_bytes () in
+
+  (* 10 |-> !tmp is already present in !m2 *)
+  m2 := M.add 10 !tmp !m2;
+
+  let a2 = Gc.allocated_bytes () in
+
+  assert (!m2 == !m1);
+  assert(a2 -. a1 = a1 -. a0);
+
+  (* 4 |-> Some 84. is not present in !m2 *)
+  m2 := M.add 4 (Some 84.) !m2;
+
+  assert (not (!m2 == !m1));

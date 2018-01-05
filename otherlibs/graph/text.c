@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include "libgraph.h"
 #include <caml/alloc.h>
@@ -66,7 +68,7 @@ value caml_gr_draw_char(value chr)
 value caml_gr_draw_string(value str)
 {
   caml_gr_check_open();
-  caml_gr_draw_text(String_val(str), string_length(str));
+  caml_gr_draw_text(String_val(str), caml_string_length(str));
   return Val_unit;
 }
 
@@ -76,8 +78,8 @@ value caml_gr_text_size(value str)
   value res;
   caml_gr_check_open();
   if (caml_gr_font == NULL) caml_gr_get_font(DEFAULT_FONT);
-  width = XTextWidth(caml_gr_font, String_val(str), string_length(str));
-  res = alloc_small(2, 0);
+  width = XTextWidth(caml_gr_font, String_val(str), caml_string_length(str));
+  res = caml_alloc_small(2, 0);
   Field(res, 0) = Val_int(width);
   Field(res, 1) = Val_int(caml_gr_font->ascent + caml_gr_font->descent);
   return res;

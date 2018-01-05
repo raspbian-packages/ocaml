@@ -1,6 +1,135 @@
-ocaml (4.02.3-10+rpi1) buster-staging; urgency=medium
+ocaml (4.05.0-10+rpi1) buster-staging; urgency=medium
 
- -- Raspbian forward porter <root@raspbian.org>  Wed, 19 Jul 2017 23:51:55 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Fri, 05 Jan 2018 14:21:36 +0000
+
+ocaml (4.05.0-10) unstable; urgency=medium
+
+  * Drop support for ocamlopt on armel as suggested by upstream.
+  * Replace the ARM PIC patch with one from upstream.
+
+ -- Ximin Luo <infinity0@debian.org>  Wed, 04 Oct 2017 14:14:39 +0200
+
+ocaml (4.05.0-9) unstable; urgency=medium
+
+  * Upload to unstable. (Closes: #871990)
+
+ -- Ximin Luo <infinity0@debian.org>  Fri, 15 Sep 2017 18:41:19 +0200
+
+ocaml (4.05.0-8) experimental; urgency=medium
+
+  [ Ximin Luo ]
+  * Merge changes from Debian unstable. Relevant ones:
+    * Tell dh_installdocs to ignore README.Debian (see #868204)
+    * obey hardening LDFLAGS (Closes: #792502). Thanks to Török Edwin
+      for the patch!
+    * Compute a stable name for preprocessed files (Closes: #838188).
+      Thanks to Johannes Schauer for the patch!
+  * Close old bugs.
+    * New upstream release 4.05 closes CVE-2015-8869 (Closes: #824139).
+    * Debian release 4.03.0-3 defaults to PIC on arm (Closes: #837359).
+
+  [ Pino Toscano ]
+  * Convert the menu file to a desktop file. (see #741573)
+
+ -- Ximin Luo <infinity0@debian.org>  Thu, 14 Sep 2017 12:02:40 +0200
+
+ocaml (4.05.0-7) experimental; urgency=medium
+
+  * Only install findlib/ocaml-native-compilers.conf on native-code arches,
+    fixing ocamlfind behaviour and FTBFS of ocamlbuild.
+
+ -- Ximin Luo <infinity0@debian.org>  Mon, 31 Jul 2017 01:42:31 +0200
+
+ocaml (4.05.0-6) experimental; urgency=medium
+
+  * Mark certain symbols as .hidden in arm64 codegen, fixing FTBFS with
+    binutils 2.29. (Closes: #868860)
+
+ -- Ximin Luo <infinity0@debian.org>  Sat, 29 Jul 2017 11:06:41 +0200
+
+ocaml (4.05.0-5) experimental; urgency=medium
+
+  * Proper fix for kfreebsd-* not having dup3/pipe2.
+
+ -- Ximin Luo <infinity0@debian.org>  Sat, 22 Jul 2017 12:14:04 +0200
+
+ocaml (4.05.0-4) experimental; urgency=medium
+
+  * Fix new natdynlink logic, fixes FTBFS on some more arches.
+
+ -- Ximin Luo <infinity0@debian.org>  Fri, 21 Jul 2017 20:40:30 +0200
+
+ocaml (4.05.0-3) experimental; urgency=medium
+
+  * Fix Makefile $-escaping syntax, fixes FTBFS on a bunch of arches.
+
+ -- Ximin Luo <infinity0@debian.org>  Fri, 21 Jul 2017 19:08:27 +0200
+
+ocaml (4.05.0-2) experimental; urgency=medium
+
+  * Update conditional-install rules for easier maintenance. This fixes FTBFS
+    on arm64 and s390x where libasmrunp.a is not available.
+  * Disable failing dup3/pipe2-related tests on kfreebsd-*.
+  * Close old bug reports. (Closes: #865712)
+
+ -- Ximin Luo <infinity0@debian.org>  Fri, 21 Jul 2017 18:01:04 +0200
+
+ocaml (4.05.0-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Update to latest Standards-Version; no changes required.
+
+ -- Ximin Luo <infinity0@debian.org>  Mon, 17 Jul 2017 16:11:47 +0200
+
+ocaml (4.04.0-2) experimental; urgency=medium
+
+  * Fix the build on non-opt+64 arches for raw_spacetime.
+
+ -- Ximin Luo <infinity0@debian.org>  Sat, 04 Mar 2017 13:13:34 +0100
+
+ocaml (4.04.0-1) experimental; urgency=medium
+
+  [ Mehdi Dogguy ]
+  * Use secure and canonical URIs for Vcs-* fields
+
+  [ Ximin Luo ]
+  * New upstream release.
+  * Merge ocaml-native-compilers into ocaml-nox.
+
+ -- Ximin Luo <infinity0@debian.org>  Fri, 03 Mar 2017 23:57:44 +0100
+
+ocaml (4.03.0-5) experimental; urgency=medium
+
+  * Fix variable substitution in Makefile syntax.
+
+ -- Ximin Luo <infinity0@debian.org>  Thu, 03 Nov 2016 01:39:42 +0100
+
+ocaml (4.03.0-4) experimental; urgency=medium
+
+  * Add a versioned Provides so we can have versioned Build-Depends
+    on ocaml-best-compilers in other packages.
+
+ -- Ximin Luo <infinity0@debian.org>  Wed, 02 Nov 2016 15:26:44 +0100
+
+ocaml (4.03.0-3) experimental; urgency=medium
+
+  * Default to PIC on arm, to fix failing armhf tests.
+
+ -- Ximin Luo <infinity0@debian.org>  Wed, 02 Nov 2016 13:09:29 +0100
+
+ocaml (4.03.0-2) experimental; urgency=medium
+
+  * Add native compilers for ppc64, ppc64el, s390x.
+  * Skip native tests on bytecode-only systems.
+
+ -- Ximin Luo <infinity0@debian.org>  Fri, 28 Oct 2016 02:13:18 +0200
+
+ocaml (4.03.0-1) experimental; urgency=medium
+
+  * Team upload.
+  * New upstream release.
+
+ -- Ximin Luo <infinity0@debian.org>  Thu, 20 Oct 2016 17:43:52 +0200
 
 ocaml (4.02.3-10) unstable; urgency=medium
 

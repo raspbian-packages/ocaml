@@ -1,14 +1,17 @@
-.\"***********************************************************************
-.\"*                                                                     *
-.\"*                                OCaml                                *
-.\"*                                                                     *
-.\"*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *
-.\"*                                                                     *
-.\"*  Copyright 1996 Institut National de Recherche en Informatique et   *
-.\"*  en Automatique.  All rights reserved.  This file is distributed    *
-.\"*  under the terms of the Q Public License version 1.0.               *
-.\"*                                                                     *
-.\"***********************************************************************
+.\"**************************************************************************
+.\"*                                                                        *
+.\"*                                 OCaml                                  *
+.\"*                                                                        *
+.\"*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *
+.\"*                                                                        *
+.\"*   Copyright 1996 Institut National de Recherche en Informatique et     *
+.\"*     en Automatique.                                                    *
+.\"*                                                                        *
+.\"*   All rights reserved.  This file is distributed under the terms of    *
+.\"*   the GNU Lesser General Public License version 2.1, with the          *
+.\"*   special exception on linking described in the file LICENSE.          *
+.\"*                                                                        *
+.\"**************************************************************************
 .\"
 .TH OCAMLOPT 1
 
@@ -41,7 +44,7 @@ command has a command-line interface very close to that
 of
 .BR ocamlc (1).
 It accepts the same types of arguments and processes them
-sequentially:
+sequentially, after all options have been processed:
 
 Arguments ending in .mli are taken to be source files for
 compilation unit interfaces. Interfaces specify the names exported by
@@ -215,6 +218,30 @@ causes the C linker to search for C libraries in
 directory
 .IR dir .
 .TP
+.BI \-color \ mode
+Enable or disable colors in compiler messages (especially warnings and errors).
+The following modes are supported:
+
+.B auto
+use heuristics to enable colors only if the output supports them (an
+ANSI-compatible tty terminal);
+
+.B always
+enable colors unconditionally;
+
+.B never
+disable color output.
+
+The default setting is
+.B auto,
+and the current heuristic
+checks that the "TERM" environment variable exists and is
+not empty or "dumb", and that isatty(stderr) holds.
+
+The environment variable "OCAML_COLOR" is considered if \-color is not
+provided. Its values are auto/always/never as above.
+
+.TP
 .B \-compact
 Optimize the produced code for space rather than for time. This
 results in smaller but slightly slower programs. The default is to
@@ -323,6 +350,12 @@ flag), setting the
 flag forces all
 subsequent links of programs involving that library to link all the
 modules contained in the library.
+When compiling a module (option
+.BR \-c ),
+setting the
+.B \-linkall
+option ensures that this module will
+always be linked if it is put in a library and this library is linked.
 .TP
 .B \-no-alias-deps
 Do not record dependencies for module aliases.
@@ -379,6 +412,13 @@ This can also be used when compiling an interface or implementation
 file, without linking, in which case it sets the name of the cmi or
 cmo file, and also sets the module name to the file name up to the
 first dot.
+.TP
+.B \-opaque
+When compiling a .mli interface file, this has the same effect as the
+.B \-opaque
+option of the bytecode compiler. When compiling a .ml implementation
+file, this produces a .cmx file without cross-module optimization
+information, which reduces recompilation on module change.
 .TP
 .BI \-open \ module
 Opens the given module before processing the interface or
@@ -452,6 +492,15 @@ with
 See
 .IR "The OCaml user's manual" ,
 chapter "Native-code compilation" for more details.
+.TP
+.BI \-plugin \ plugin
+Dynamically load the code of the given
+.I plugin
+(a .cmo, .cma or .cmxs file) in the compiler. The plugin must exist in
+the same kind of code as the compiler (ocamlopt.byte must load bytecode
+plugins, while ocamlopt.opt must load native code plugins), and
+extension adaptation is done automatically for .cma files (to .cmxs files
+if the compiler is compiled in native code).
 .TP
 .BI \-pp \ command
 Cause the compiler to call the given
@@ -536,6 +585,17 @@ Compile or link multithreaded programs, in combination with the
 system threads library described in
 .IR "The OCaml user's manual" .
 .TP
+.B \-unboxed\-types
+When a type is unboxable (i.e. a record with a single argument or a
+concrete datatype with a single constructor of one argument) it will
+be unboxed unless annotated with
+.BR [@@ocaml.boxed] .
+.TP
+.B \-no-unboxed\-types
+When a type is unboxable  it will be boxed unless annotated with
+.BR [@@ocaml.unboxed] .
+This is the default.
+.TP
 .B \-unsafe
 Turn bound checking off for array and string accesses (the
 .BR v.(i) and s.[i]
@@ -603,8 +663,8 @@ compiling your program with later versions of OCaml when they add new
 warnings or modify existing warnings.
 
 The default setting is
-.B \-warn\-error \-a
-(all warnings are non-fatal).
+.B \-warn\-error \-a+31
+(only warning 31 is fatal).
 .TP
 .B \-warn\-help
 Show the description of all available warning numbers.

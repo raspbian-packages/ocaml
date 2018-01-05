@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 2003 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../LICENSE.     */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 2003 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 /* Asm part of the runtime system, AMD64 processor */
 /* Must be preprocessed by cpp */
@@ -67,10 +69,14 @@
 #define CFI_STARTPROC .cfi_startproc
 #define CFI_ENDPROC .cfi_endproc
 #define CFI_ADJUST(n) .cfi_adjust_cfa_offset n
+#define CFI_OFFSET(r, n) .cfi_offset r, n
+#define CFI_SAME_VALUE(r) .cfi_same_value r
 #else
 #define CFI_STARTPROC
 #define CFI_ENDPROC
 #define CFI_ADJUST(n)
+#define CFI_OFFSET(r, n)
+#define CFI_SAME_VALUE(r)
 #endif
 
 #ifdef WITH_FRAME_POINTERS
@@ -184,14 +190,15 @@
 /* Win64 API: callee-save regs are rbx, rbp, rsi, rdi, r12-r15, xmm6-xmm15 */
 
 #define PUSH_CALLEE_SAVE_REGS \
-        pushq   %rbx; CFI_ADJUST (8); \
-        pushq   %rbp; CFI_ADJUST (8); \
-        pushq   %rsi; CFI_ADJUST (8); \
-        pushq   %rdi; CFI_ADJUST (8); \
-        pushq   %r12; CFI_ADJUST (8); \
-        pushq   %r13; CFI_ADJUST (8); \
-        pushq   %r14; CFI_ADJUST (8); \
-        pushq   %r15; CFI_ADJUST (8); \
+        pushq   %rbx; CFI_ADJUST (8); CFI_OFFSET(rbx, -16); \
+        pushq   %rbp; CFI_ADJUST (8); CFI_OFFSET(rbp, -24); \
+                      /* Allows debugger to walk the stack */ \
+        pushq   %rsi; CFI_ADJUST (8); CFI_OFFSET(rsi, -32); \
+        pushq   %rdi; CFI_ADJUST (8); CFI_OFFSET(rdi, -40); \
+        pushq   %r12; CFI_ADJUST (8); CFI_OFFSET(r12, -48); \
+        pushq   %r13; CFI_ADJUST (8); CFI_OFFSET(r13, -56); \
+        pushq   %r14; CFI_ADJUST (8); CFI_OFFSET(r14, -64); \
+        pushq   %r15; CFI_ADJUST (8); CFI_OFFSET(r15, -72); \
         subq    $(8+10*16), %rsp; CFI_ADJUST (8+10*16); \
         movupd  %xmm6, 0*16(%rsp); \
         movupd  %xmm7, 1*16(%rsp); \
@@ -216,36 +223,36 @@
         movupd  8*16(%rsp), %xmm14; \
         movupd  9*16(%rsp), %xmm15; \
         addq    $(8+10*16), %rsp; CFI_ADJUST (-8-10*16); \
-        popq    %r15; CFI_ADJUST(-8); \
-        popq    %r14; CFI_ADJUST(-8); \
-        popq    %r13; CFI_ADJUST(-8); \
-        popq    %r12; CFI_ADJUST(-8); \
-        popq    %rdi; CFI_ADJUST(-8); \
-        popq    %rsi; CFI_ADJUST(-8); \
-        popq    %rbp; CFI_ADJUST(-8); \
-        popq    %rbx; CFI_ADJUST(-8)
+        popq    %r15; CFI_ADJUST(-8); CFI_SAME_VALUE(r15); \
+        popq    %r14; CFI_ADJUST(-8); CFI_SAME_VALUE(r14); \
+        popq    %r13; CFI_ADJUST(-8); CFI_SAME_VALUE(r13); \
+        popq    %r12; CFI_ADJUST(-8); CFI_SAME_VALUE(r12); \
+        popq    %rdi; CFI_ADJUST(-8); CFI_SAME_VALUE(rdi); \
+        popq    %rsi; CFI_ADJUST(-8); CFI_SAME_VALUE(rsi); \
+        popq    %rbp; CFI_ADJUST(-8); CFI_SAME_VALUE(rbp); \
+        popq    %rbx; CFI_ADJUST(-8); CFI_SAME_VALUE(rbx)
 
 #else
 
 /* Unix API: callee-save regs are rbx, rbp, r12-r15 */
 
 #define PUSH_CALLEE_SAVE_REGS \
-        pushq   %rbx; CFI_ADJUST(8); \
-        pushq   %rbp; CFI_ADJUST(8); \
-        pushq   %r12; CFI_ADJUST(8); \
-        pushq   %r13; CFI_ADJUST(8); \
-        pushq   %r14; CFI_ADJUST(8); \
-        pushq   %r15; CFI_ADJUST(8); \
+        pushq   %rbx; CFI_ADJUST(8); CFI_OFFSET(rbx, -16); \
+        pushq   %rbp; CFI_ADJUST(8); CFI_OFFSET(rbp, -24); \
+        pushq   %r12; CFI_ADJUST(8); CFI_OFFSET(r12, -32); \
+        pushq   %r13; CFI_ADJUST(8); CFI_OFFSET(r13, -40); \
+        pushq   %r14; CFI_ADJUST(8); CFI_OFFSET(r14, -48); \
+        pushq   %r15; CFI_ADJUST(8); CFI_OFFSET(r15, -56); \
         subq    $8, %rsp; CFI_ADJUST(8)
 
 #define POP_CALLEE_SAVE_REGS \
         addq    $8, %rsp; CFI_ADJUST(-8); \
-        popq    %r15; CFI_ADJUST(-8); \
-        popq    %r14; CFI_ADJUST(-8); \
-        popq    %r13; CFI_ADJUST(-8); \
-        popq    %r12; CFI_ADJUST(-8); \
-        popq    %rbp; CFI_ADJUST(-8); \
-        popq    %rbx; CFI_ADJUST(-8);
+        popq    %r15; CFI_ADJUST(-8); CFI_SAME_VALUE(r15); \
+        popq    %r14; CFI_ADJUST(-8); CFI_SAME_VALUE(r14); \
+        popq    %r13; CFI_ADJUST(-8); CFI_SAME_VALUE(r13); \
+        popq    %r12; CFI_ADJUST(-8); CFI_SAME_VALUE(r12); \
+        popq    %rbp; CFI_ADJUST(-8); CFI_SAME_VALUE(rbp); \
+        popq    %rbx; CFI_ADJUST(-8); CFI_SAME_VALUE(rbx)
 
 #endif
 
@@ -300,6 +307,9 @@ LBL(caml_call_gc):
     /* Save caml_young_ptr, caml_exception_pointer */
         STORE_VAR(%r15, caml_young_ptr)
         STORE_VAR(%r14, caml_exception_pointer)
+#ifdef WITH_SPACETIME
+        STORE_VAR(%r13, caml_spacetime_trie_node_ptr)
+#endif
     /* Save floating-point registers */
         subq    $(16*8), %rsp; CFI_ADJUST (16*8);
         movsd   %xmm0, 0*8(%rsp)
@@ -425,14 +435,18 @@ LBL(caml_allocN):
         addq    $8, %rsp; CFI_ADJUST (-8)  /* drop desired size */
         ret
 LBL(103):
+        CFI_ADJUST(8)
         RECORD_STACK_FRAME(8)
 #ifdef WITH_FRAME_POINTERS
-        /* Do we need 16-byte alignment here ? */
+        /* ensure 16 byte alignment by subq + enter using 16-bytes, PR#7417 */
+        subq    $8, %rsp; CFI_ADJUST (8)
         ENTER_FUNCTION
 #endif
         call    LBL(caml_call_gc)
 #ifdef WITH_FRAME_POINTERS
+        /* ensure 16 byte alignment by leave + addq using 16-bytes PR#7417 */
         LEAVE_FUNCTION
+        addq    $8, %rsp; CFI_ADJUST (-8)
 #endif
         popq    %rax; CFI_ADJUST(-8)       /* recover desired size */
         jmp     LBL(caml_allocN)
@@ -447,6 +461,11 @@ LBL(caml_c_call):
         popq    %r12; CFI_ADJUST(-8)
         STORE_VAR(%r12, caml_last_return_address)
         STORE_VAR(%rsp, caml_bottom_of_stack)
+#ifdef WITH_SPACETIME
+    /* Record the trie node hole pointer that corresponds to
+       [caml_last_return_address] */
+        STORE_VAR(%r13, caml_spacetime_trie_node_ptr)
+#endif
         subq    $8, %rsp; CFI_ADJUST(8) /* equivalent to pushq %r12 */
 #if !defined(SYS_mingw64) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
@@ -475,10 +494,29 @@ FUNCTION(G(caml_start_program))
     /* Common code for caml_start_program and caml_callback* */
 LBL(caml_start_program):
     /* Build a callback link */
+#ifdef WITH_SPACETIME
+        PUSH_VAR(caml_spacetime_trie_node_ptr)
+#else
         subq    $8, %rsp; CFI_ADJUST (8)        /* stack 16-aligned */
+#endif
         PUSH_VAR(caml_gc_regs)
         PUSH_VAR(caml_last_return_address)
         PUSH_VAR(caml_bottom_of_stack)
+#ifdef WITH_SPACETIME
+        /* Save arguments to caml_callback* */
+        pushq   %rax; CFI_ADJUST (8)
+        pushq   %rbx; CFI_ADJUST (8)
+        pushq   %rdi; CFI_ADJUST (8)
+        pushq   %rsi; CFI_ADJUST (8)
+        /* No need to push %r12: it's callee-save. */
+        movq    %r12, %rdi
+        LEA_VAR(caml_start_program, %rsi)
+        call    GCALL(caml_spacetime_c_to_ocaml)
+        popq    %rsi; CFI_ADJUST (-8)
+        popq    %rdi; CFI_ADJUST (-8)
+        popq    %rbx; CFI_ADJUST (-8)
+        popq    %rax; CFI_ADJUST (-8)
+#endif
     /* Setup alloc ptr and exception ptr */
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
@@ -486,15 +524,16 @@ LBL(caml_start_program):
         lea     LBL(108)(%rip), %r13
         pushq   %r13; CFI_ADJUST(8)
         pushq   %r14; CFI_ADJUST(8)
-        CFI_ADJUST(16)
         movq    %rsp, %r14
+#ifdef WITH_SPACETIME
+        LOAD_VAR(caml_spacetime_trie_node_ptr, %r13)
+#endif
     /* Call the OCaml code */
         call    *%r12
 LBL(107):
     /* Pop the exception handler */
         popq    %r14; CFI_ADJUST(-8)
         popq    %r12; CFI_ADJUST(-8)   /* dummy register */
-        CFI_ADJUST(-16)
 LBL(109):
     /* Update alloc ptr and exception ptr */
         STORE_VAR(%r15,caml_young_ptr)
@@ -503,7 +542,11 @@ LBL(109):
         POP_VAR(caml_bottom_of_stack)
         POP_VAR(caml_last_return_address)
         POP_VAR(caml_gc_regs)
+#ifdef WITH_SPACETIME
+        POP_VAR(caml_spacetime_trie_node_ptr)
+#else
         addq    $8, %rsp; CFI_ADJUST (-8);
+#endif
     /* Restore callee-save registers. */
         POP_CALLEE_SAVE_REGS
     /* Return to caller. */
@@ -539,8 +582,6 @@ CFI_STARTPROC
         popq    %r14
         ret
 LBL(110):
-        STORE_VAR32($0, caml_backtrace_pos)
-LBL(111):
         movq    %rax, %r12            /* Save exception bucket */
         movq    %rax, C_ARG_1         /* arg 1: exception bucket */
 #ifdef WITH_FRAME_POINTERS
@@ -557,15 +598,6 @@ LBL(111):
         PREPARE_FOR_C_CALL            /* no need to cleanup after */
         call    GCALL(caml_stash_backtrace)
         movq    %r12, %rax            /* Recover exception bucket */
-        movq    %r14, %rsp
-        popq    %r14
-        ret
-CFI_ENDPROC
-
-FUNCTION(G(caml_reraise_exn))
-CFI_STARTPROC
-        TESTL_VAR($1, caml_backtrace_active)
-        jne     LBL(111)
         movq    %r14, %rsp
         popq    %r14
         ret
@@ -671,6 +703,22 @@ G(caml_system__frametable):
         .value  -1          /* negative frame size => use callback link */
         .value  0           /* no roots here */
         .align  EIGHT_ALIGN
+        .quad   16
+        .quad   0
+        .string "amd64.S"
+
+#ifdef WITH_SPACETIME
+        .data
+        .globl  G(caml_system__spacetime_shapes)
+        .align  EIGHT_ALIGN
+G(caml_system__spacetime_shapes):
+        .quad   G(caml_start_program)
+        .quad   2           /* indirect call point to OCaml code */
+        .quad   LBL(107)    /* in caml_start_program / caml_callback* */
+        .quad   0           /* end of shapes for caml_start_program */
+        .quad   0           /* end of shape table */
+        .align  EIGHT_ALIGN
+#endif
 
 #if defined(SYS_macosx)
         .literal16

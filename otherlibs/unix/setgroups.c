@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/* Contributed by Stephane Glondu <steph@glondu.net>                   */
-/*                                                                     */
-/*  Copyright 2009 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*  Contributed by Stephane Glondu <steph@glondu.net>                     */
+/*                                                                        */
+/*   Copyright 2009 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
@@ -38,7 +40,7 @@ CAMLprim value unix_setgroups(value groups)
 
   n = setgroups(size, gidset);
 
-  stat_free(gidset);
+  caml_stat_free(gidset);
   if (n == -1) uerror("setgroups", Nothing);
   return Val_unit;
 }
@@ -46,6 +48,6 @@ CAMLprim value unix_setgroups(value groups)
 #else
 
 CAMLprim value unix_setgroups(value groups)
-{ invalid_argument("setgroups not implemented"); }
+{ caml_invalid_argument("setgroups not implemented"); }
 
 #endif

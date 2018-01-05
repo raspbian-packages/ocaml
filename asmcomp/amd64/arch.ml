@@ -1,23 +1,24 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 2000 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 2000 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Machine-specific command-line options *)
 
-let pic_code = ref true
-
 let command_line_options =
-  [ "-fPIC", Arg.Set pic_code,
+  [ "-fPIC", Arg.Set Clflags.pic_code,
       " Generate position-independent machine code (default)";
-    "-fno-PIC", Arg.Clear pic_code,
+    "-fno-PIC", Arg.Clear Clflags.pic_code,
       " Generate position-dependent machine code" ]
 
 (* Specific operations for the AMD64 processor *)
@@ -35,7 +36,6 @@ type specific_operation =
     Ilea of addressing_mode             (* "lea" gives scaled adds *)
   | Istore_int of nativeint * addressing_mode * bool
                                         (* Store an integer constant *)
-  | Istore_symbol of string * addressing_mode * bool (* Store a symbol *)
   | Ioffset_loc of int * addressing_mode (* Add a constant to a location *)
   | Ifloatarithmem of float_operation * addressing_mode
                                        (* Float arith operation with memory *)
@@ -44,6 +44,8 @@ type specific_operation =
   | Ifloatsqrtf of addressing_mode     (* Float square root from memory *)
 and float_operation =
     Ifloatadd | Ifloatsub | Ifloatmul | Ifloatdiv
+
+let spacetime_node_hole_pointer_is_live_before _specific_op = false
 
 (* Sizes, endianness *)
 
@@ -72,11 +74,11 @@ let offset_addressing addr delta =
   | Iindexed2scaled(scale, n) -> Iindexed2scaled(scale, n + delta)
 
 let num_args_addressing = function
-    Ibased(s, n) -> 0
-  | Iindexed n -> 1
-  | Iindexed2 n -> 2
-  | Iscaled(scale, n) -> 1
-  | Iindexed2scaled(scale, n) -> 2
+    Ibased _ -> 0
+  | Iindexed _ -> 1
+  | Iindexed2 _ -> 2
+  | Iscaled _ -> 1
+  | Iindexed2scaled _ -> 2
 
 (* Printing operations and addressing modes *)
 
@@ -106,10 +108,6 @@ let print_specific_operation printreg op ppf arg =
       fprintf ppf "[%a] := %nd %s"
          (print_addressing printreg addr) arg n
          (if is_assign then "(assign)" else "(init)")
-  | Istore_symbol(lbl, addr, is_assign) ->
-      fprintf ppf "[%a] := \"%s\" %s"
-         (print_addressing printreg addr) arg lbl
-         (if is_assign then "(assign)" else "(init)")
   | Ioffset_loc(n, addr) ->
       fprintf ppf "[%a] +:= %i" (print_addressing printreg addr) arg n
   | Isqrtf ->
@@ -128,3 +126,8 @@ let print_specific_operation printreg op ppf arg =
                    (Array.sub arg 1 (Array.length arg - 1))
   | Ibswap i ->
       fprintf ppf "bswap_%i %a" i printreg arg.(0)
+
+let win64 =
+  match Config.system with
+  | "win64" | "mingw64" | "cygwin" -> true
+  | _                   -> false

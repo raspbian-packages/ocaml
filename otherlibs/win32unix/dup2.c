@@ -1,29 +1,31 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <caml/mlvalues.h>
 #include "unixsupport.h"
 
-extern int _dup2(int, int);
-
-CAMLprim value unix_dup2(value fd1, value fd2)
+CAMLprim value unix_dup2(value cloexec, value fd1, value fd2)
 {
   HANDLE oldh, newh;
 
   oldh = Handle_val(fd2);
   if (! DuplicateHandle(GetCurrentProcess(), Handle_val(fd1),
                         GetCurrentProcess(), &newh,
-                        0L, TRUE, DUPLICATE_SAME_ACCESS)) {
+                        0L,
+                        unix_cloexec_p(cloexec) ? FALSE : TRUE,
+                        DUPLICATE_SAME_ACCESS)) {
     win32_maperr(GetLastError());
     return -1;
   }

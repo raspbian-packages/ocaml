@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*             Damien Doligez, projet Para, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../LICENSE.     */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*              Damien Doligez, projet Para, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #ifndef CAML_GC_H
 #define CAML_GC_H
@@ -43,6 +45,27 @@
                     + (color)                                                 \
                     + (tag_t) (tag)))                                         \
       )
+
+#ifdef WITH_PROFINFO
+#define Make_header_with_profinfo(wosize, tag, color, profinfo)               \
+      (Make_header(wosize, tag, color)                                        \
+        | ((((intnat) profinfo) & PROFINFO_MASK) << PROFINFO_SHIFT)           \
+      )
+#else
+#define Make_header_with_profinfo(wosize, tag, color, profinfo) \
+  Make_header(wosize, tag, color)
+#endif
+
+#ifdef WITH_SPACETIME
+struct ext_table;
+extern uintnat caml_spacetime_my_profinfo(struct ext_table**, uintnat);
+#define Make_header_allocated_here(wosize, tag, color)                        \
+      (Make_header_with_profinfo(wosize, tag, color,                          \
+        caml_spacetime_my_profinfo(NULL, wosize))                             \
+      )
+#else
+#define Make_header_allocated_here Make_header
+#endif
 
 #define Is_white_val(val) (Color_val(val) == Caml_white)
 #define Is_gray_val(val) (Color_val(val) == Caml_gray)

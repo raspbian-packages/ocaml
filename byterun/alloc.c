@@ -1,15 +1,19 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*         Xavier Leroy and Damien Doligez, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../LICENSE.     */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*          Xavier Leroy and Damien Doligez, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
+
+#define CAML_INTERNALS
 
 /* 1. Allocation functions doing the same work as the macros in the
       case where [Setup_for_gc] and [Restore_after_gc] are no-ops.
@@ -62,11 +66,30 @@ CAMLexport value caml_alloc_small (mlsize_t wosize, tag_t tag)
   return result;
 }
 
+CAMLexport value caml_alloc_small_with_my_or_given_profinfo (mlsize_t wosize,
+  tag_t tag, uintnat profinfo)
+{
+  if (profinfo == 0) {
+    return caml_alloc_small(wosize, tag);
+  }
+  else {
+    value result;
+
+    Assert (wosize > 0);
+    Assert (wosize <= Max_young_wosize);
+    Assert (tag < 256);
+    Alloc_small_with_profinfo (result, wosize, tag, profinfo);
+    return result;
+  }
+}
+
+/* [n] is a number of words (fields) */
 CAMLexport value caml_alloc_tuple(mlsize_t n)
 {
   return caml_alloc(n, 0);
 }
 
+/* [len] is a number of bytes (chars) */
 CAMLexport value caml_alloc_string (mlsize_t len)
 {
   value result;
@@ -85,6 +108,9 @@ CAMLexport value caml_alloc_string (mlsize_t len)
   return result;
 }
 
+/* [len] is a number of words.
+   [mem] and [max] are relative (without unit).
+*/
 CAMLexport value caml_alloc_final (mlsize_t len, final_fun fun,
                                    mlsize_t mem, mlsize_t max)
 {
@@ -127,6 +153,26 @@ CAMLexport value caml_alloc_array(value (*funct)(char const *),
   }
 }
 
+/* [len] is a number of floats */
+CAMLprim value caml_alloc_float_array(mlsize_t len)
+{
+  mlsize_t wosize = len * Double_wosize;
+  value result;
+  /* For consistency with [caml_make_vect], which can't tell whether it should
+     create a float array or not when the size is zero, the tag is set to
+     zero when the size is zero. */
+  if (wosize == 0)
+    return Atom(0);
+  else if (wosize <= Max_young_wosize){
+    Alloc_small (result, wosize, Double_array_tag);
+  }else {
+    result = caml_alloc_shr (wosize, Double_array_tag);
+    result = caml_check_urgent_gc (result);
+  }
+  return result;
+}
+
+
 CAMLexport value caml_copy_string_array(char const ** arr)
 {
   return caml_alloc_array(caml_copy_string, arr);
@@ -145,6 +191,7 @@ CAMLexport int caml_convert_flag_list(value list, int *flags)
 
 /* For compiling let rec over values */
 
+/* [size] is a [value] representing number of words (fields) */
 CAMLprim value caml_alloc_dummy(value size)
 {
   mlsize_t wosize = Long_val(size);
@@ -153,12 +200,14 @@ CAMLprim value caml_alloc_dummy(value size)
   return caml_alloc (wosize, 0);
 }
 
+/* [size] is a [value] representing number of words (fields) */
 CAMLprim value caml_alloc_dummy_function(value size,value arity)
 {
   /* the arity argument is used by the js_of_ocaml runtime */
   return caml_alloc_dummy(size);
 }
 
+/* [size] is a [value] representing number of floats. */
 CAMLprim value caml_alloc_dummy_float (value size)
 {
   mlsize_t wosize = Long_val(size) * Double_wosize;
@@ -190,7 +239,3 @@ CAMLprim value caml_update_dummy(value dummy, value newval)
   }
   return Val_unit;
 }
-
-
-
-

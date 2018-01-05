@@ -1,15 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*    Valerie Menissier-Morain, projet Cristal, INRIA Rocquencourt     *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the GNU Library General Public License, with    *)
-(*  the special exception on linking described in file ../../LICENSE.  *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*     Valerie Menissier-Morain, projet Cristal, INRIA Rocquencourt       *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (** Operation on arbitrary-precision numbers.
 
@@ -157,14 +159,33 @@ val num_of_string : string -> num
    Raise [Failure "num_of_string"] if the given string is not
    a valid representation of an integer *)
 
+val num_of_string_opt: string -> num option
+(** Convert a string to a number.
+    Return [None] if the given string is not
+    a valid representation of an integer.
+
+    @since 4.05
+*)
+
 (** {6 Coercions between numerical types} *)
 
+(* TODO: document the functions below (truncating behavior and error conditions). *)
+
 val int_of_num : num -> int
+val int_of_num_opt: num -> int option
+(** @since 4.05.0 *)
+
 val num_of_int : int -> num
 val nat_of_num : num -> nat
+val nat_of_num_opt: num -> nat option
+(** @since 4.05.0 *)
+
 val num_of_nat : nat -> num
 val num_of_big_int : big_int -> num
 val big_int_of_num : num -> big_int
+val big_int_of_num_opt: num -> big_int option
+(** @since 4.05.0 *)
+
 val ratio_of_num : num -> ratio
 val num_of_ratio : ratio -> num
 val float_of_num : num -> float

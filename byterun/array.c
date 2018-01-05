@@ -1,25 +1,34 @@
-/***********************************************************************/
-/*                                                                     */
-/*                           OCaml                                     */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../LICENSE.     */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
+
+#define CAML_INTERNALS
 
 /* Operations on arrays */
-
 #include <string.h>
 #include "caml/alloc.h"
 #include "caml/fail.h"
 #include "caml/memory.h"
 #include "caml/misc.h"
 #include "caml/mlvalues.h"
+#include "caml/signals.h"
+/* Why is caml/spacetime.h included conditionnally sometimes and not here ? */
+#include "caml/spacetime.h"
 
+static const mlsize_t mlsize_t_max = -1;
+
+/* returns number of elements (either fields or floats) */
 CAMLexport mlsize_t caml_array_length(value array)
 {
   if (Tag_val(array) == Double_array_tag)
@@ -135,6 +144,7 @@ CAMLprim value caml_array_unsafe_set(value array, value index, value newval)
     return caml_array_unsafe_set_addr(array, index, newval);
 }
 
+/* [len] is a [value] representing number of floats */
 CAMLprim value caml_make_float_vect(value len)
 {
   mlsize_t wosize = Long_val(len) * Double_wosize;
@@ -148,7 +158,7 @@ CAMLprim value caml_make_float_vect(value len)
 #undef Setup_for_gc
 #undef Restore_after_gc
   }else if (wosize > Max_wosize)
-    caml_invalid_argument("Array.make_float");
+    caml_invalid_argument("Array.create_float");
   else {
     result = caml_alloc_shr (wosize, Double_array_tag);
     result = caml_check_urgent_gc (result);
@@ -156,6 +166,8 @@ CAMLprim value caml_make_float_vect(value len)
   return result;
 }
 
+/* [len] is a [value] representing number of words or floats */
+/* Spacetime profiling assumes that this function is only called from OCaml. */
 CAMLprim value caml_make_vect(value len, value init)
 {
   CAMLparam2 (len, init);
@@ -179,12 +191,18 @@ CAMLprim value caml_make_vect(value len, value init)
     }
   } else {
     if (size > Max_wosize) caml_invalid_argument("Array.make");
-    if (size < Max_young_wosize) {
-      res = caml_alloc_small(size, 0);
+    if (size <= Max_young_wosize) {
+      uintnat profinfo;
+      Get_my_profinfo_with_cached_backtrace(profinfo, size);
+      res = caml_alloc_small_with_my_or_given_profinfo(size, 0, profinfo);
       for (i = 0; i < size; i++) Field(res, i) = init;
     }
     else if (Is_block(init) && Is_young(init)) {
-      caml_minor_collection();
+      /* We don't want to create so many major-to-minor references,
+         so [init] is moved to the major heap by doing a minor GC. */
+      CAML_INSTR_INT ("force_minor/make_vect@", 1);
+      caml_request_minor_gc ();
+      caml_gc_dispatch ();
       res = caml_alloc_shr(size, 0);
       for (i = 0; i < size; i++) Field(res, i) = init;
       res = caml_check_urgent_gc (res);
@@ -298,6 +316,7 @@ static value caml_array_gather(intnat num_arrays,
   size = 0;
   isfloat = 0;
   for (i = 0; i < num_arrays; i++) {
+    if (mlsize_t_max - lengths[i] < size) caml_invalid_argument("Array.concat");
     size += lengths[i];
     if (Tag_val(arrays[i]) == Double_array_tag) isfloat = 1;
   }
@@ -307,8 +326,8 @@ static value caml_array_gather(intnat num_arrays,
   }
   else if (isfloat) {
     /* This is an array of floats.  We can use memcpy directly. */
+    if (size > Max_wosize/Double_wosize) caml_invalid_argument("Array.concat");
     wsize = size * Double_wosize;
-    if (wsize > Max_wosize) caml_invalid_argument("Array.concat");
     res = caml_alloc(wsize, Double_array_tag);
     for (i = 0, pos = 0; i < num_arrays; i++) {
       memcpy((double *)res + pos,
@@ -322,7 +341,7 @@ static value caml_array_gather(intnat num_arrays,
     /* Array of values, too big. */
     caml_invalid_argument("Array.concat");
   }
-  else if (size < Max_young_wosize) {
+  else if (size <= Max_young_wosize) {
     /* Array of values, small enough to fit in young generation.
        We can use memcpy directly. */
     res = caml_alloc_small(size, 0);
@@ -337,7 +356,6 @@ static value caml_array_gather(intnat num_arrays,
     /* Array of values, must be allocated in old generation and filled
        using caml_initialize. */
     res = caml_alloc_shr(size, 0);
-    pos = 0;
     for (i = 0, pos = 0; i < num_arrays; i++) {
       for (src = &Field(arrays[i], offsets[i]), count = lengths[i];
            count > 0;
@@ -388,8 +406,17 @@ CAMLprim value caml_array_concat(value al)
     lengths = static_lengths;
   } else {
     arrays = caml_stat_alloc(n * sizeof(value));
-    offsets = caml_stat_alloc(n * sizeof(intnat));
-    lengths = caml_stat_alloc(n * sizeof(value));
+    offsets = malloc(n * sizeof(intnat));
+    if (offsets == NULL) {
+      caml_stat_free(arrays);
+      caml_raise_out_of_memory();
+    }
+    lengths = malloc(n * sizeof(value));
+    if (lengths == NULL) {
+      caml_stat_free(offsets);
+      caml_stat_free(arrays);
+      caml_raise_out_of_memory();
+    }
   }
   /* Build the parameters to caml_array_gather */
   for (i = 0, l = al; l != Val_int(0); l = Field(l, 1), i++) {

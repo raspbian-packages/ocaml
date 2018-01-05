@@ -24,7 +24,9 @@ _ocaml_share_path ?= /usr/share/ocaml
 ifndef _ocaml_share_ocamlinit
 _ocaml_share_ocamlinit = 1
 
+include $(CURDIR)/debian/ocamlvars.mk
 include $(_ocaml_share_path)/ocamlvars.mk
+-include $(CURDIR)/config/Makefile
 
 # list of .in files contained (non-recursively) in debian/ that requires
 # pre-build filling.
@@ -32,14 +34,13 @@ include $(_ocaml_share_path)/ocamlvars.mk
 #  e.g.: OCAML_IN_FILES += debian/patches/foo	# (no .in extension)
 OCAML_IN_FILES ?= $(filter-out debian/control,$(patsubst %.in,%,$(wildcard debian/*.in)))
 
-# WARNING: there are currently duplications with ocamlvars.mk and
-# ocaml.mk, but hopefully they will be removed at some point in the
-# future
-
 OCAMLINIT_SED := \
   -e 's%@OCamlABI@%$(OCAML_ABI)%g' \
   -e 's%@OCamlStdlibDir@%$(OCAML_STDLIB_DIR)%g' \
   -e 's%@OCamlDllDir@%$(OCAML_DLL_DIR)%g'
+
+# When using these prefixs in *.install.in they must appear in the same order
+# as below, with STD: going last since it's processed by gen_modules.pl
 
 ifeq ($(OCAML_HAVE_OCAMLOPT),yes)
   OCAMLINIT_SED += -e 's/^OPT: //' -e '/^BYTE: /d'
@@ -47,14 +48,30 @@ else
   OCAMLINIT_SED += -e '/^OPT: /d' -e 's/^BYTE: //'
 endif
 
-ifeq ($(OCAML_NATDYNLINK),yes)
+# Upstream Makefile is mildly buggy, sets NATDYNLINK for sparc64 with no opt
+# support. This double-if should stay correct in all future situations.
+ifeq ($(OCAML_HAVE_OCAMLOPT) $(NATDYNLINK),yes true)
   OCAMLINIT_SED += -e 's/^DYN: //'
 else
   OCAMLINIT_SED += -e '/^DYN: /d'
+  OCAMLINIT_SED += -e '/\.cmxs$$/d'
 endif
 
+ifeq ($(PROFILING),true)
+  OCAMLINIT_SED += -e 's/^PROFILING: //'
+else
+  OCAMLINIT_SED += -e '/^PROFILING: /d'
+endif
+
+otherlib = \
+OCAMLINIT_SED += $(if $(filter $(1),$(OTHERLIBRARIES)),\
+  -e 's/^OTH: \(.*\b$(1)\.\w\w*$$$$\)/\1/',\
+  -e '/^OTH: .*\b$(1)\.\w\w*$$$$/d')
+# careful, no whitespace after the comma
+$(eval $(call otherlib,raw_spacetime_lib))
+
 ocamlinit: ocamlinit-stamp
-ocamlinit-stamp:
+ocamlinit-stamp: config/Makefile
 	for t in $(OCAML_IN_FILES); do \
 	  sed $(OCAMLINIT_SED) $$t.in > $$t; \
 	done

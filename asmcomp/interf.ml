@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Construction of the interference graph.
    Annotate pseudoregs with interference lists and preference lists. *)
@@ -87,25 +90,27 @@ let build_graph fundecl =
     | Iop(Imove | Ispill | Ireload) ->
         add_interf_move i.arg.(0) i.res.(0) i.live;
         interf i.next
-    | Iop(Itailcall_ind) -> ()
-    | Iop(Itailcall_imm lbl) -> ()
-    | Iop op ->
+    | Iop(Itailcall_ind _) -> ()
+    | Iop(Itailcall_imm _) -> ()
+    | Iop _ ->
         add_interf_set i.res i.live;
         add_interf_self i.res;
         interf i.next
-    | Iifthenelse(tst, ifso, ifnot) ->
+    | Iifthenelse(_tst, ifso, ifnot) ->
         interf ifso;
         interf ifnot;
         interf i.next
-    | Iswitch(index, cases) ->
+    | Iswitch(_index, cases) ->
         for i = 0 to Array.length cases - 1 do
           interf cases.(i)
         done;
         interf i.next
     | Iloop body ->
         interf body; interf i.next
-    | Icatch(_, body, handler) ->
-        interf body; interf handler; interf i.next
+    | Icatch(_rec_flag, handlers, body) ->
+        interf body;
+        List.iter (fun (_, handler) -> interf handler) handlers;
+        interf i.next
     | Iexit _ ->
         ()
     | Itrywith(body, handler) ->
@@ -159,15 +164,15 @@ let build_graph fundecl =
     | Iop(Ireload) ->
         add_pref (weight / 4) i.res.(0) i.arg.(0);
         prefer weight i.next
-    | Iop(Itailcall_ind) -> ()
-    | Iop(Itailcall_imm lbl) -> ()
-    | Iop op ->
+    | Iop(Itailcall_ind _) -> ()
+    | Iop(Itailcall_imm _) -> ()
+    | Iop _ ->
         prefer weight i.next
-    | Iifthenelse(tst, ifso, ifnot) ->
+    | Iifthenelse(_tst, ifso, ifnot) ->
         prefer (weight / 2) ifso;
         prefer (weight / 2) ifnot;
         prefer weight i.next
-    | Iswitch(index, cases) ->
+    | Iswitch(_index, cases) ->
         for i = 0 to Array.length cases - 1 do
           prefer (weight / 2) cases.(i)
         done;
@@ -176,8 +181,18 @@ let build_graph fundecl =
         (* Avoid overflow of weight and spill_cost *)
         prefer (if weight < 1000 then 8 * weight else weight) body;
         prefer weight i.next
-    | Icatch(_, body, handler) ->
-        prefer weight body; prefer weight handler; prefer weight i.next
+    | Icatch(rec_flag, handlers, body) ->
+        prefer weight body;
+        List.iter (fun (_nfail, handler) ->
+            let weight =
+              match rec_flag with
+              | Cmm.Recursive ->
+                  (* Avoid overflow of weight and spill_cost *)
+                  if weight < 1000 then 8 * weight else weight
+              | Cmm.Nonrecursive ->
+                  weight in
+            prefer weight handler) handlers;
+        prefer weight i.next
     | Iexit _ ->
         ()
     | Itrywith(body, handler) ->

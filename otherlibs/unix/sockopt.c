@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with   */
-/*  the special exception on linking described in file ../../LICENSE. */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <caml/mlvalues.h>
 #include <caml/memory.h>
@@ -201,12 +203,12 @@ unix_getsockopt_aux(char * name,
     if (optval.lg.l_onoff == 0) {
       return Val_int(0);        /* None */
     } else {
-      value res = alloc_small(1, 0); /* Some */
+      value res = caml_alloc_small(1, 0); /* Some */
       Field(res, 0) = Val_int(optval.lg.l_linger);
       return res;
     }
   case TYPE_TIMEVAL:
-    return copy_double((double) optval.tv.tv_sec
+    return caml_copy_double((double) optval.tv.tv_sec
                        + (double) optval.tv.tv_usec / 1e6);
   case TYPE_UNIX_ERROR:
     if (optval.i == 0) {
@@ -215,7 +217,7 @@ unix_getsockopt_aux(char * name,
       value err, res;
       err = unix_error_of_code(optval.i);
       Begin_root(err);
-        res = alloc_small(1, 0); /* Some */
+        res = caml_alloc_small(1, 0); /* Some */
         Field(res, 0) = err;
       End_roots();
       return res;
@@ -291,9 +293,9 @@ CAMLprim value unix_setsockopt(value vty, value vsocket, value voption,
 #else
 
 CAMLprim value unix_getsockopt(value vty, value socket, value option)
-{ invalid_argument("getsockopt not implemented"); }
+{ caml_invalid_argument("getsockopt not implemented"); }
 
 CAMLprim value unix_setsockopt(value vty, value socket, value option, value val)
-{ invalid_argument("setsockopt not implemented"); }
+{ caml_invalid_argument("setsockopt not implemented"); }
 
 #endif

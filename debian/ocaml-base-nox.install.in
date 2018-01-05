@@ -1,6 +1,7 @@
      usr/bin/ocamlrun
      usr/share/man/man1/ocamlrun.1
      toplevel/*.mli @OCamlStdlibDir@
+     @OCamlStdlibDir@/topdirs.mli
      @OCamlStdlibDir@/VERSION
      @OCamlDllDir@/dllunix.so
      @OCamlDllDir@/dllcamlstr.so
@@ -11,13 +12,13 @@
      @OCamlStdlibDir@/ld.conf
      debian/ld.conf @OCamlStdlibDir@
      @OCamlStdlibDir@/unix.cma
-DYN: @OCamlStdlibDir@/unix.cmxs
+     @OCamlStdlibDir@/unix.cmxs
      @OCamlStdlibDir@/str.cma
-DYN: @OCamlStdlibDir@/str.cmxs
+     @OCamlStdlibDir@/str.cmxs
      @OCamlStdlibDir@/bigarray.cma
-DYN: @OCamlStdlibDir@/bigarray.cmxs
+     @OCamlStdlibDir@/bigarray.cmxs
      @OCamlStdlibDir@/nums.cma
-DYN: @OCamlStdlibDir@/nums.cmxs
+     @OCamlStdlibDir@/nums.cmxs
      @OCamlStdlibDir@/arg.cmi
      @OCamlStdlibDir@/array.cmi
      @OCamlStdlibDir@/arrayLabels.cmi
@@ -50,6 +51,9 @@ DYN: @OCamlStdlibDir@/nums.cmxs
      @OCamlStdlibDir@/printf.cmi
      @OCamlStdlibDir@/queue.cmi
      @OCamlStdlibDir@/random.cmi
+OTH: @OCamlStdlibDir@/raw_spacetime_lib.cmi
+OTH: @OCamlStdlibDir@/raw_spacetime_lib.cma
+OTH: @OCamlStdlibDir@/raw_spacetime_lib.cmxs
      @OCamlStdlibDir@/scanf.cmi
      @OCamlStdlibDir@/set.cmi
      @OCamlStdlibDir@/sort.cmi

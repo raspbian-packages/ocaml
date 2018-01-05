@@ -1,15 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*    Valerie Menissier-Morain, projet Cristal, INRIA Rocquencourt     *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the GNU Library General Public License, with    *)
-(*  the special exception on linking described in file ../../LICENSE.  *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*     Valerie Menissier-Morain, projet Cristal, INRIA Rocquencourt       *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 open Int_misc
 open Nat
@@ -28,14 +30,6 @@ let num_of_big_int bi =
  if le_big_int bi biggest_INT && ge_big_int bi least_INT
  then Int (int_of_big_int bi)
  else Big_int bi
-
-let numerator_num = function
-  Ratio r -> ignore (normalize_ratio r); num_of_big_int (numerator_ratio r)
-| n -> n
-
-let denominator_num = function
-  Ratio r -> ignore (normalize_ratio r); num_of_big_int (denominator_ratio r)
-| n -> Int 1
 
 let normalize_num = function
   Int i -> Int i
@@ -156,8 +150,8 @@ let div_num n1 n2 =
 let ( // ) = div_num
 
 let floor_num = function
-  Int i as n -> n
-| Big_int bi as n -> n
+  Int _ as n -> n
+| Big_int _ as n -> n
 | Ratio r -> num_of_big_int (floor_ratio r)
 
 (* Coercion with ratio type *)
@@ -179,7 +173,7 @@ A correct but slow implementation is:
         if b >= 0 then floor_num (div_num a b)
                   else minus_num (floor_num (div_num a (minus_num b)))
 
-      mod_num a b = 
+      mod_num a b =
         sub_num a (mult_num b (quo_num a b))
 
   However, this definition is vastly inefficient (cf PR #3473):
@@ -197,7 +191,7 @@ let quo_num n1 n2 =
       Int (if r >= 0 then q else if i2 > 0 then q - 1 else q + 1)
   | Int i1, Big_int bi2 ->
       num_of_big_int (div_big_int (big_int_of_int i1) bi2)
-  | Int i1, Ratio r2 -> 
+  | Int i1, Ratio r2 ->
       num_of_big_int (report_sign_ratio r2
                          (floor_ratio (div_int_ratio i1 (abs_ratio r2))))
   | Big_int bi1, Int i2 ->
@@ -282,18 +276,18 @@ let is_integer_num = function
 
 (* integer_num, floor_num, round_num, ceiling_num rendent des nums *)
 let integer_num = function
-  Int i as n -> n
-| Big_int bi as n -> n
+  Int _ as n -> n
+| Big_int _ as n -> n
 | Ratio r -> num_of_big_int (integer_ratio r)
 
 and round_num = function
-  Int i as n -> n
-| Big_int bi as n -> n
+  Int _ as n -> n
+| Big_int _ as n -> n
 | Ratio r -> num_of_big_int (round_ratio r)
 
 and ceiling_num = function
-  Int i as n -> n
-| Big_int bi as n -> n
+  Int _ as n -> n
+| Big_int _ as n -> n
 | Ratio r -> num_of_big_int (ceiling_ratio r)
 
 (* Comparisons on nums *)
@@ -360,6 +354,11 @@ let int_of_num = function
 | Big_int bi -> int_of_big_int bi
 | Ratio r -> int_of_ratio r
 
+let int_of_num_opt = function
+  Int i -> Some i
+| Big_int bi -> int_of_big_int_opt bi
+| Ratio r -> (try Some (int_of_ratio r) with Failure _ -> None)
+
 and num_of_int i =
   if i = monster_int
   then Big_int (big_int_of_int i)
@@ -376,11 +375,17 @@ and num_of_nat nat =
   then Int (nth_digit_nat nat 0)
   else Big_int (big_int_of_nat nat)
 
+let nat_of_num_opt x =
+  try Some (nat_of_num x) with Failure _ -> None
+
 (* Coercion with big_int type *)
 let big_int_of_num = function
   Int i -> big_int_of_int i
 | Big_int bi -> bi
 | Ratio r -> big_int_of_ratio r
+
+let big_int_of_num_opt x =
+  try Some (big_int_of_num x) with Failure _ -> None
 
 let string_of_big_int_for_num bi =
   if !approx_printing_flag
@@ -389,14 +394,13 @@ let string_of_big_int_for_num bi =
 
 (* Coercion with string type *)
 
-(* XL: suppression de sys_string_of_num *)
-
 let string_of_normalized_num = function
   Int i -> string_of_int i
 | Big_int bi -> string_of_big_int_for_num bi
 | Ratio r -> string_of_ratio r
 let string_of_num n =
     string_of_normalized_num (cautious_normalize_num_when_printing n)
+
 let num_of_string s =
   try
     let flag = !normalize_ratio_flag in
@@ -409,13 +413,14 @@ let num_of_string s =
   with Failure _ ->
     failwith "num_of_string"
 
+let num_of_string_opt s =
+  try Some (num_of_string s) with Failure _ -> None
+
 (* Coercion with float type *)
 let float_of_num = function
   Int i -> float i
 | Big_int bi -> float_of_big_int bi
 | Ratio r -> float_of_ratio r
-
-(* XL: suppression de num_of_float, float_num *)
 
 let succ_num = function
   Int i -> if i = biggest_int

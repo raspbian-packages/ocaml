@@ -1,19 +1,26 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*           Xavier Leroy, projet Cristal, INRIA Rocquencourt          */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../LICENSE.     */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt            */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
+
+#define CAML_INTERNALS
 
 /* Win32-specific stuff */
 
-#include <windows.h>
+#define WIN32_LEAN_AND_MEAN
+#include <wtypes.h>
+#include <winbase.h>
+#include <winsock2.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -25,19 +32,100 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include "caml/alloc.h"
 #include "caml/address_class.h"
 #include "caml/fail.h"
+#include "caml/io.h"
 #include "caml/memory.h"
 #include "caml/misc.h"
 #include "caml/osdeps.h"
 #include "caml/signals.h"
 #include "caml/sys.h"
 
+#include "caml/config.h"
+#ifdef SUPPORT_DYNAMIC_LINKING
 #include <flexdll.h>
+#endif
 
 #ifndef S_ISREG
 #define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
 #endif
+
+/* Very old Microsoft headers don't include intptr_t */
+#if defined(_MSC_VER) && !defined(_UINTPTR_T_DEFINED)
+typedef unsigned int uintptr_t;
+#define _UINTPTR_T_DEFINED
+#endif
+
+CAMLnoreturn_start
+static void caml_win32_sys_error (int errnum)
+CAMLnoreturn_end;
+
+static void caml_win32_sys_error(int errnum)
+{
+  char buffer[512];
+  value msg;
+  if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                    NULL,
+                    errnum,
+                    0,
+                    buffer,
+                    sizeof(buffer),
+                    NULL)) {
+    msg = caml_copy_string(buffer);
+  } else {
+    msg = caml_alloc_sprintf("unknown error #%d", errnum);
+  }
+  caml_raise_sys_error(msg);
+}
+
+int caml_read_fd(int fd, int flags, void * buf, int n)
+{
+  int retcode;
+  if ((flags & CHANNEL_FLAG_FROM_SOCKET) == 0) {
+    caml_enter_blocking_section();
+    retcode = read(fd, buf, n);
+    /* Large reads from console can fail with ENOMEM.  Reduce requested size
+       and try again. */
+    if (retcode == -1 && errno == ENOMEM && n > 16384) {
+      retcode = read(fd, buf, 16384);
+    }
+    caml_leave_blocking_section();
+    if (retcode == -1) caml_sys_io_error(NO_ARG);
+  } else {
+    caml_enter_blocking_section();
+    retcode = recv((SOCKET) _get_osfhandle(fd), buf, n, 0);
+    caml_leave_blocking_section();
+    if (retcode == -1) caml_win32_sys_error(WSAGetLastError());
+  }
+  return retcode;
+}
+
+int caml_write_fd(int fd, int flags, void * buf, int n)
+{
+  int retcode;
+  if ((flags & CHANNEL_FLAG_FROM_SOCKET) == 0) {
+#if defined(NATIVE_CODE) && defined(WITH_SPACETIME)
+  if (flags & CHANNEL_FLAG_BLOCKING_WRITE) {
+    retcode = write(fd, buf, n);
+  } else {
+#endif
+    caml_enter_blocking_section();
+    retcode = write(fd, buf, n);
+    caml_leave_blocking_section();
+#if defined(NATIVE_CODE) && defined(WITH_SPACETIME)
+  }
+#endif
+    if (retcode == -1) caml_sys_io_error(NO_ARG);
+  } else {
+    caml_enter_blocking_section();
+    retcode = send((SOCKET) _get_osfhandle(fd), buf, n, 0);
+    caml_leave_blocking_section();
+    if (retcode == -1) caml_win32_sys_error(WSAGetLastError());
+  }
+  CAMLassert (retcode > 0);
+  return retcode;
+}
 
 char * caml_decompose_path(struct ext_table * tbl, char * path)
 {
@@ -122,6 +210,8 @@ char * caml_search_dll_in_path(struct ext_table * path, char * name)
   return res;
 }
 
+#ifdef SUPPORT_DYNAMIC_LINKING
+
 void * caml_dlopen(char * libname, int for_execution, int global)
 {
   void *handle;
@@ -154,6 +244,34 @@ char * caml_dlerror(void)
 {
   return flexdll_dlerror();
 }
+
+#else
+
+void * caml_dlopen(char * libname, int for_execution, int global)
+{
+  return NULL;
+}
+
+void caml_dlclose(void * handle)
+{
+}
+
+void * caml_dlsym(void * handle, char * name)
+{
+  return NULL;
+}
+
+void * caml_globalsym(char * name)
+{
+  return NULL;
+}
+
+char * caml_dlerror(void)
+{
+  return "dynamic loading not supported on this platform";
+}
+
+#endif
 
 /* Proper emulation of signal(), including ctrl-C and ctrl-break */
 
@@ -246,10 +364,15 @@ static void expand_pattern(char * pat)
     return;
   }
   prefix = caml_strdup(pat);
+  /* We need to stop at the first directory or drive boundary, because the
+   * _findata_t structure contains the filename, not the leading directory. */
   for (i = strlen(prefix); i > 0; i--) {
     char c = prefix[i - 1];
     if (c == '\\' || c == '/' || c == ':') { prefix[i] = 0; break; }
   }
+  /* No separator was found, it's a filename pattern without a leading directory. */
+  if (i == 0)
+    prefix[0] = 0;
   do {
     name = caml_strconcat(2, prefix, ffblk.name);
     store_argument(name);
@@ -319,7 +442,8 @@ void caml_signal_thread(void * lpParam)
   char *endptr;
   HANDLE h;
   /* Get an hexa-code raw handle through the environment */
-  h = (HANDLE) strtol(getenv("CAMLSIGPIPE"), &endptr, 16);
+  h = (HANDLE) (uintptr_t)
+    strtol(caml_secure_getenv("CAMLSIGPIPE"), &endptr, 16);
   while (1) {
     DWORD numread;
     BOOL ret;
@@ -477,7 +601,7 @@ int caml_win32_random_seed (intnat data[16])
 }
 
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && __STDC_SECURE_LIB__ >= 200411L
 
 static void invalid_parameter_handler(const wchar_t* expression,
    const wchar_t* function,
@@ -499,17 +623,47 @@ void caml_install_invalid_parameter_handler()
 
 /* Recover executable name  */
 
-int caml_executable_name(char * name, int name_len)
+char * caml_executable_name(void)
 {
-  int retcode;
-
-  int ret = GetModuleFileName(NULL, name, name_len);
-  if (0 == ret || ret >= name_len) return -1;
-  return 0;
+  char * name;
+  DWORD namelen, ret;
+  
+  namelen = 256;
+  while (1) {
+    name = caml_stat_alloc(namelen);
+    ret = GetModuleFileName(NULL, name, namelen);
+    if (ret == 0) { caml_stat_free(name); return NULL; }
+    if (ret < namelen) break;
+    caml_stat_free(name);
+    if (namelen >= 1024*1024) return NULL; /* avoid runaway and overflow */
+    namelen *= 2;
+  }
+  return name;
 }
 
 /* snprintf emulation */
 
+#ifdef LACKS_VSCPRINTF
+/* No _vscprintf until Visual Studio .NET 2002 and sadly no version number
+   in the CRT headers until Visual Studio 2005 so forced to predicate this
+   on the compiler version instead */
+int _vscprintf(const char * format, va_list args)
+{
+  int n;
+  int sz = 5;
+  char* buf = (char*)malloc(sz);
+  n = _vsnprintf(buf, sz, format, args);
+  while (n < 0 || n > sz) {
+    sz += 512;
+    buf = (char*)realloc(buf, sz);
+    n = _vsnprintf(buf, sz, format, args);
+  }
+  free(buf);
+  return n;
+}
+#endif
+
+#if defined(_WIN32) && !defined(_UCRT)
 int caml_snprintf(char * buf, size_t size, const char * format, ...)
 {
   int len;
@@ -533,4 +687,11 @@ int caml_snprintf(char * buf, size_t size, const char * format, ...)
   len = _vscprintf(format, args);
   va_end(args);
   return len;
+}
+#endif
+
+char *caml_secure_getenv (char const *var)
+{
+  /* Win32 doesn't have a notion of setuid bit, so getenv is safe. */
+  return CAML_SYS_GETENV (var);
 }

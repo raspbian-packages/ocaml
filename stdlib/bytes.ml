@@ -1,34 +1,42 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the GNU Library General Public License, with    *)
-(*  the special exception on linking described in file ../LICENSE.     *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Byte sequence operations *)
 
-external length : bytes -> int = "%string_length"
+(* WARNING: Some functions in this file are duplicated in string.ml for
+   efficiency reasons. When you modify the one in this file you need to
+   modify its duplicate in string.ml.
+   These functions have a "duplicated" comment above their definition.
+*)
+
+external length : bytes -> int = "%bytes_length"
 external string_length : string -> int = "%string_length"
-external get : bytes -> int -> char = "%string_safe_get"
-external set : bytes -> int -> char -> unit = "%string_safe_set"
-external create : int -> bytes = "caml_create_string"
-external unsafe_get : bytes -> int -> char = "%string_unsafe_get"
-external unsafe_set : bytes -> int -> char -> unit = "%string_unsafe_set"
+external get : bytes -> int -> char = "%bytes_safe_get"
+external set : bytes -> int -> char -> unit = "%bytes_safe_set"
+external create : int -> bytes = "caml_create_bytes"
+external unsafe_get : bytes -> int -> char = "%bytes_unsafe_get"
+external unsafe_set : bytes -> int -> char -> unit = "%bytes_unsafe_set"
 external unsafe_fill : bytes -> int -> int -> char -> unit
-                     = "caml_fill_string" "noalloc"
-external unsafe_to_string : bytes -> string = "%identity"
-external unsafe_of_string : string -> bytes = "%identity"
+                     = "caml_fill_bytes" [@@noalloc]
+external unsafe_to_string : bytes -> string = "%bytes_to_string"
+external unsafe_of_string : string -> bytes = "%bytes_of_string"
 
 external unsafe_blit : bytes -> int -> bytes -> int -> int -> unit
-                     = "caml_blit_string" "noalloc"
+                     = "caml_blit_bytes" [@@noalloc]
 external unsafe_blit_string : string -> int -> bytes -> int -> int -> unit
-                     = "caml_blit_string" "noalloc"
+                     = "caml_blit_string" [@@noalloc]
 
 let make n c =
   let s = create n in
@@ -42,7 +50,7 @@ let init n f =
   done;
   s
 
-let empty = create 0;;
+let empty = create 0
 
 let copy s =
   let len = length s in
@@ -64,8 +72,16 @@ let sub s ofs len =
 
 let sub_string b ofs len = unsafe_to_string (sub b ofs len)
 
+(* addition with an overflow check *)
+let (++) a b =
+  let c = a + b in
+  match a < 0, b < 0, c < 0 with
+  | true , true , false
+  | false, false, true  -> invalid_arg "Bytes.extend" (* overflow *)
+  | _ -> c
+
 let extend s left right =
-  let len = length s + left + right in
+  let len = length s ++ left ++ right in
   let r = create len in
   let (srcoff, dstoff) = if left < 0 then -left, 0 else 0, left in
   let cpylen = min (length s - srcoff) (len - dstoff) in
@@ -89,29 +105,36 @@ let blit_string s1 ofs1 s2 ofs2 len =
   then invalid_arg "String.blit / Bytes.blit_string"
   else unsafe_blit_string s1 ofs1 s2 ofs2 len
 
+(* duplicated in string.ml *)
 let iter f a =
   for i = 0 to length a - 1 do f(unsafe_get a i) done
 
+(* duplicated in string.ml *)
 let iteri f a =
   for i = 0 to length a - 1 do f i (unsafe_get a i) done
 
-let concat sep l =
-  match l with
-    [] -> empty
+let ensure_ge (x:int) y = if x >= y then x else invalid_arg "Bytes.concat"
+
+let rec sum_lengths acc seplen = function
+  | [] -> acc
+  | hd :: [] -> length hd + acc
+  | hd :: tl -> sum_lengths (ensure_ge (length hd + seplen + acc) acc) seplen tl
+
+let rec unsafe_blits dst pos sep seplen = function
+    [] -> dst
+  | hd :: [] ->
+    unsafe_blit hd 0 dst pos (length hd); dst
   | hd :: tl ->
-      let num = ref 0 and len = ref 0 in
-      List.iter (fun s -> incr num; len := !len + length s) l;
-      let r = create (!len + length sep * (!num - 1)) in
-      unsafe_blit hd 0 r 0 (length hd);
-      let pos = ref(length hd) in
-      List.iter
-        (fun s ->
-          unsafe_blit sep 0 r !pos (length sep);
-          pos := !pos + length sep;
-          unsafe_blit s 0 r !pos (length s);
-          pos := !pos + length s)
-        tl;
-      r
+    unsafe_blit hd 0 dst pos (length hd);
+    unsafe_blit sep 0 dst (pos + length hd) seplen;
+    unsafe_blits dst (pos + length hd + seplen) sep seplen tl
+
+let concat sep = function
+    [] -> empty
+  | l -> let seplen = length sep in
+          unsafe_blits
+            (create (sum_lengths 0 seplen l))
+            0 sep seplen l
 
 let cat s1 s2 =
   let l1 = length s1 in
@@ -120,9 +143,8 @@ let cat s1 s2 =
   unsafe_blit s1 0 r 0 l1;
   unsafe_blit s2 0 r l1 l2;
   r
-;;
 
-external is_printable: char -> bool = "caml_is_printable"
+
 external char_code: char -> int = "%identity"
 external char_chr: int -> char = "%identity"
 
@@ -150,15 +172,16 @@ let escaped s =
   for i = 0 to length s - 1 do
     n := !n +
       (match unsafe_get s i with
-       | '"' | '\\' | '\n' | '\t' | '\r' | '\b' -> 2
-       | c -> if is_printable c then 1 else 4)
+       | '\"' | '\\' | '\n' | '\t' | '\r' | '\b' -> 2
+       | ' ' .. '~' -> 1
+       | _ -> 4)
   done;
   if !n = length s then copy s else begin
     let s' = create !n in
     n := 0;
     for i = 0 to length s - 1 do
       begin match unsafe_get s i with
-      | ('"' | '\\') as c ->
+      | ('\"' | '\\') as c ->
           unsafe_set s' !n '\\'; incr n; unsafe_set s' !n c
       | '\n' ->
           unsafe_set s' !n '\\'; incr n; unsafe_set s' !n 'n'
@@ -168,19 +191,16 @@ let escaped s =
           unsafe_set s' !n '\\'; incr n; unsafe_set s' !n 'r'
       | '\b' ->
           unsafe_set s' !n '\\'; incr n; unsafe_set s' !n 'b'
+      | (' ' .. '~') as c -> unsafe_set s' !n c
       | c ->
-          if is_printable c then
-            unsafe_set s' !n c
-          else begin
-            let a = char_code c in
-            unsafe_set s' !n '\\';
-            incr n;
-            unsafe_set s' !n (char_chr (48 + a / 100));
-            incr n;
-            unsafe_set s' !n (char_chr (48 + (a / 10) mod 10));
-            incr n;
-            unsafe_set s' !n (char_chr (48 + a mod 10))
-          end
+          let a = char_code c in
+          unsafe_set s' !n '\\';
+          incr n;
+          unsafe_set s' !n (char_chr (48 + a / 100));
+          incr n;
+          unsafe_set s' !n (char_chr (48 + (a / 10) mod 10));
+          incr n;
+          unsafe_set s' !n (char_chr (48 + a mod 10));
       end;
       incr n
     done;
@@ -203,8 +223,8 @@ let mapi f s =
     r
   end
 
-let uppercase s = map Char.uppercase s
-let lowercase s = map Char.lowercase s
+let uppercase_ascii s = map Char.uppercase_ascii s
+let lowercase_ascii s = map Char.lowercase_ascii s
 
 let apply1 f s =
   if length s = 0 then s else begin
@@ -213,50 +233,97 @@ let apply1 f s =
     r
   end
 
-let capitalize s = apply1 Char.uppercase s
-let uncapitalize s = apply1 Char.lowercase s
+let capitalize_ascii s = apply1 Char.uppercase_ascii s
+let uncapitalize_ascii s = apply1 Char.lowercase_ascii s
 
+(* duplicated in string.ml *)
 let rec index_rec s lim i c =
   if i >= lim then raise Not_found else
-  if unsafe_get s i = c then i else index_rec s lim (i + 1) c;;
+  if unsafe_get s i = c then i else index_rec s lim (i + 1) c
 
-let index s c = index_rec s (length s) 0 c;;
+(* duplicated in string.ml *)
+let index s c = index_rec s (length s) 0 c
 
+(* duplicated in string.ml *)
+let rec index_rec_opt s lim i c =
+  if i >= lim then None else
+  if unsafe_get s i = c then Some i else index_rec_opt s lim (i + 1) c
+
+(* duplicated in string.ml *)
+let index_opt s c = index_rec_opt s (length s) 0 c
+
+(* duplicated in string.ml *)
 let index_from s i c =
   let l = length s in
   if i < 0 || i > l then invalid_arg "String.index_from / Bytes.index_from" else
-  index_rec s l i c;;
+  index_rec s l i c
 
+(* duplicated in string.ml *)
+let index_from_opt s i c =
+  let l = length s in
+  if i < 0 || i > l then invalid_arg "String.index_from_opt / Bytes.index_from_opt" else
+  index_rec_opt s l i c
+
+(* duplicated in string.ml *)
 let rec rindex_rec s i c =
   if i < 0 then raise Not_found else
-  if unsafe_get s i = c then i else rindex_rec s (i - 1) c;;
+  if unsafe_get s i = c then i else rindex_rec s (i - 1) c
 
-let rindex s c = rindex_rec s (length s - 1) c;;
+(* duplicated in string.ml *)
+let rindex s c = rindex_rec s (length s - 1) c
 
+(* duplicated in string.ml *)
 let rindex_from s i c =
   if i < -1 || i >= length s then
     invalid_arg "String.rindex_from / Bytes.rindex_from"
   else
     rindex_rec s i c
-;;
 
+(* duplicated in string.ml *)
+let rec rindex_rec_opt s i c =
+  if i < 0 then None else
+  if unsafe_get s i = c then Some i else rindex_rec_opt s (i - 1) c
+
+(* duplicated in string.ml *)
+let rindex_opt s c = rindex_rec_opt s (length s - 1) c
+
+(* duplicated in string.ml *)
+let rindex_from_opt s i c =
+  if i < -1 || i >= length s then
+    invalid_arg "String.rindex_from_opt / Bytes.rindex_from_opt"
+  else
+    rindex_rec_opt s i c
+
+
+(* duplicated in string.ml *)
 let contains_from s i c =
   let l = length s in
   if i < 0 || i > l then
     invalid_arg "String.contains_from / Bytes.contains_from"
   else
     try ignore (index_rec s l i c); true with Not_found -> false
-;;
 
-let contains s c = contains_from s 0 c;;
 
+(* duplicated in string.ml *)
+let contains s c = contains_from s 0 c
+
+(* duplicated in string.ml *)
 let rcontains_from s i c =
   if i < 0 || i >= length s then
     invalid_arg "String.rcontains_from / Bytes.rcontains_from"
   else
     try ignore (rindex_rec s i c); true with Not_found -> false
-;;
+
 
 type t = bytes
 
 let compare (x: t) (y: t) = Pervasives.compare x y
+external equal : t -> t -> bool = "caml_bytes_equal"
+
+(* Deprecated functions implemented via other deprecated functions *)
+[@@@ocaml.warning "-3"]
+let uppercase s = map Char.uppercase s
+let lowercase s = map Char.lowercase s
+
+let capitalize s = apply1 Char.uppercase s
+let uncapitalize s = apply1 Char.lowercase s

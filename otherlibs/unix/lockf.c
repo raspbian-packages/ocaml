@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <errno.h>
 #include <fcntl.h>
@@ -44,9 +46,9 @@ CAMLprim value unix_lockf(value fd, value cmd, value span)
     break;
   case 1: /* F_LOCK */
     l.l_type = F_WRLCK;
-    enter_blocking_section();
+    caml_enter_blocking_section();
     ret = fcntl(fildes, F_SETLKW, &l);
-    leave_blocking_section();
+    caml_leave_blocking_section();
     break;
   case 2: /* F_TLOCK */
     l.l_type = F_WRLCK;
@@ -66,9 +68,9 @@ CAMLprim value unix_lockf(value fd, value cmd, value span)
     break;
   case 4: /* F_RLOCK */
     l.l_type = F_RDLCK;
-    enter_blocking_section();
+    caml_enter_blocking_section();
     ret = fcntl(fildes, F_SETLKW, &l);
-    leave_blocking_section();
+    caml_leave_blocking_section();
     break;
   case 5: /* F_TRLOCK */
     l.l_type = F_RDLCK;
@@ -108,7 +110,7 @@ CAMLprim value unix_lockf(value fd, value cmd, value span)
 #else
 
 CAMLprim value unix_lockf(value fd, value cmd, value span)
-{ invalid_argument("lockf not implemented"); }
+{ caml_invalid_argument("lockf not implemented"); }
 
 #endif
 #endif

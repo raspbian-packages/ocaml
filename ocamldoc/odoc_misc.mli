@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                             OCamldoc                                *)
-(*                                                                     *)
-(*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
-(*                                                                     *)
-(*  Copyright 2001 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Maxence Guesdon, projet Cristal, INRIA Rocquencourt        *)
+(*                                                                        *)
+(*   Copyright 2001 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (** Miscellaneous functions *)
 
@@ -112,8 +115,8 @@ val search_string_backward : pat: string -> s: string -> int
 val remove_option : Types.type_expr -> Types.type_expr
 
 (** Return [true] if the given label is optional.*)
-val is_optional : string -> bool
+val is_optional : Asttypes.arg_label -> bool
 
 (** Return the label name for the given label,
    i.e. removes the beginning '?' if present.*)
-val label_name : string -> string
+val label_name : Asttypes.arg_label -> string

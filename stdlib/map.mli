@@ -1,15 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the GNU Library General Public License, with    *)
-(*  the special exception on linking described in file ../LICENSE.     *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (** Association tables over ordered types.
 
@@ -45,6 +47,7 @@ module type OrderedType =
   sig
     type t
       (** The type of the map keys. *)
+
     val compare : t -> t -> int
       (** A total ordering function over the keys.
           This is a two-argument function [f] such that
@@ -77,7 +80,11 @@ module type S =
     val add: key -> 'a -> 'a t -> 'a t
     (** [add x y m] returns a map containing the same bindings as
        [m], plus a binding of [x] to [y]. If [x] was already bound
-       in [m], its previous binding disappears. *)
+       in [m] to a value that is physically equal to [y],
+       [m] is returned unchanged (the result of the function is
+       then physically equal to [m]). Otherwise, the previous binding
+       of [x] in [m] disappears.
+       @before 4.03 Physical equality was not ensured. *)
 
     val singleton: key -> 'a -> 'a t
     (** [singleton x y] returns the one-element map that contains a binding [y]
@@ -87,15 +94,35 @@ module type S =
 
     val remove: key -> 'a t -> 'a t
     (** [remove x m] returns a map containing the same bindings as
-       [m], except for [x] which is unbound in the returned map. *)
+       [m], except for [x] which is unbound in the returned map.
+       If [x] was not in [m], [m] is returned unchanged
+       (the result of the function is then physically equal to [m]).
+       @before 4.03 Physical equality was not ensured. *)
 
     val merge:
          (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
     (** [merge f m1 m2] computes a map whose keys is a subset of keys of [m1]
         and of [m2]. The presence of each such binding, and the corresponding
         value, is determined with the function [f].
+        In terms of the [find_opt] operation, we have
+        [find_opt x (merge f m1 m2) = f (find_opt x m1) (find_opt x m2)]
+        for any key [x], provided that [f None None = None].
         @since 3.12.0
      *)
+
+    val union: (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+    (** [union f m1 m2] computes a map whose keys is the union of keys
+        of [m1] and of [m2].  When the same binding is defined in both
+        arguments, the function [f] is used to combine them.
+        This is a special case of [merge]: [union f m1 m2] is equivalent
+        to [merge f' m1 m2], where
+        - [f' None None = None]
+        - [f' (Some v) None = Some v]
+        - [f' None (Some v) = Some v]
+        - [f' (Some v1) (Some v2) = f v1 v2]
+
+        @since 4.03.0
+    *)
 
     val compare: ('a -> 'a -> int) -> 'a t -> 'a t -> int
     (** Total ordering between maps.  The first argument is a total ordering
@@ -126,14 +153,17 @@ module type S =
 
     val exists: (key -> 'a -> bool) -> 'a t -> bool
     (** [exists p m] checks if at least one binding of the map
-        satisfy the predicate [p].
+        satisfies the predicate [p].
         @since 3.12.0
      *)
 
     val filter: (key -> 'a -> bool) -> 'a t -> 'a t
     (** [filter p m] returns the map with all the bindings in [m]
-        that satisfy predicate [p].
+        that satisfy predicate [p]. If [p] satisfies every binding in [m],
+        [m] is returned unchanged (the result of the function is then
+        physically equal to [m])
         @since 3.12.0
+       @before 4.03 Physical equality was not ensured.
      *)
 
     val partition: (key -> 'a -> bool) -> 'a t -> 'a t * 'a t
@@ -164,10 +194,23 @@ module type S =
         @since 3.12.0
      *)
 
+    val min_binding_opt: 'a t -> (key * 'a) option
+    (** Return the smallest binding of the given map
+       (with respect to the [Ord.compare] ordering), or [None]
+       if the map is empty.
+        @since 4.05
+     *)
+
     val max_binding: 'a t -> (key * 'a)
     (** Same as {!Map.S.min_binding}, but returns the largest binding
         of the given map.
         @since 3.12.0
+     *)
+
+    val max_binding_opt: 'a t -> (key * 'a) option
+    (** Same as {!Map.S.min_binding_opt}, but returns the largest binding
+        of the given map.
+        @since 4.05
      *)
 
     val choose: 'a t -> (key * 'a)
@@ -175,6 +218,13 @@ module type S =
        the map is empty. Which binding is chosen is unspecified,
        but equal bindings will be chosen for equal maps.
         @since 3.12.0
+     *)
+
+    val choose_opt: 'a t -> (key * 'a) option
+    (** Return one binding of the given map, or [None] if
+       the map is empty. Which binding is chosen is unspecified,
+       but equal bindings will be chosen for equal maps.
+        @since 4.05
      *)
 
     val split: key -> 'a t -> 'a t * 'a option * 'a t
@@ -191,6 +241,46 @@ module type S =
     val find: key -> 'a t -> 'a
     (** [find x m] returns the current binding of [x] in [m],
        or raises [Not_found] if no such binding exists. *)
+
+    val find_opt: key -> 'a t -> 'a option
+    (** [find_opt x m] returns [Some v] if the current binding of [x]
+        in [m] is [v], or [None] if no such binding exists.
+        @since 4.05
+    *)
+
+    val find_first: (key -> bool) -> 'a t -> key * 'a
+    (** [find_first f m], where [f] is a monotonically increasing function,
+       returns the binding of [m] with the lowest key [k] such that [f k],
+       or raises [Not_found] if no such key exists.
+
+       For example, [find_first (fun k -> Ord.compare k x >= 0) m] will return
+       the first binding [k, v] of [m] where [Ord.compare k x >= 0]
+       (intuitively: [k >= x]), or raise [Not_found] if [x] is greater than any
+       element of [m].
+
+        @since 4.05
+       *)
+
+    val find_first_opt: (key -> bool) -> 'a t -> (key * 'a) option
+    (** [find_first_opt f m], where [f] is a monotonically increasing function,
+       returns an option containing the binding of [m] with the lowest key [k]
+       such that [f k], or [None] if no such key exists.
+        @since 4.05
+       *)
+
+    val find_last: (key -> bool) -> 'a t -> key * 'a
+    (** [find_last f m], where [f] is a monotonically decreasing function,
+       returns the binding of [m] with the highest key [k] such that [f k],
+       or raises [Not_found] if no such key exists.
+        @since 4.05
+       *)
+
+    val find_last_opt: (key -> bool) -> 'a t -> (key * 'a) option
+    (** [find_last_opt f m], where [f] is a monotonically decreasing function,
+       returns an option containing the binding of [m] with the highest key [k]
+       such that [f k], or [None] if no such key exists.
+        @since 4.05
+       *)
 
     val map: ('a -> 'b) -> 'a t -> 'b t
     (** [map f m] returns a map with same domain as [m], where the

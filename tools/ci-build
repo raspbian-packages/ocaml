@@ -1,36 +1,71 @@
 #!/bin/sh
-#########################################################################
-#                                                                       #
-#                                 OCaml                                 #
-#                                                                       #
-#          Damien Doligez, projet Gallium, INRIA Rocquencourt           #
-#                                                                       #
-#   Copyright 2014 Institut National de Recherche en Informatique et    #
-#   en Automatique.  All rights reserved.  This file is distributed     #
-#   under the terms of the Q Public License version 1.0.                #
-#                                                                       #
-#########################################################################
+#**************************************************************************
+#*                                                                        *
+#*                                 OCaml                                  *
+#*                                                                        *
+#*          Damien Doligez, projet Gallium, INRIA Rocquencourt            *
+#*                                                                        *
+#*   Copyright 2014 Institut National de Recherche en Informatique et     *
+#*     en Automatique.                                                    *
+#*                                                                        *
+#*   All rights reserved.  This file is distributed under the terms of    *
+#*   the GNU Lesser General Public License version 2.1, with the          *
+#*   special exception on linking described in the file LICENSE.          *
+#*                                                                        *
+#**************************************************************************
 
 # This script is run on our continuous-integration servers to recompile
 # from scratch and run the test suite.
 
+# To know the slave's architecture, this script looks at the OCAML_ARCH
+# environment variable. For a given node NODe, this variable can be defined
+# in Jenkins at the following address:
+# https://ci.inria.fr/ocaml/computer/NODE/configure
+
 # arguments:
-# 1. architecture: bsd, macos, linux, cygwin, mingw, mingw64, msvc, msvc64
-# 2. for windows, directory in which to build (trunk, 4.02, etc)
-# 3. options:
-#    -conf configure-option
-#    -patch1 file-name       apply patch with -p1
+# -conf configure-option  add configure-option to configure cmd line
+# -patch1 file-name       apply patch with -p1
+# -no-native              do not build "opt" and "opt.opt"
 
 error () {
   echo "$1" >&2
   exit 3
 }
 
+arch_error() {
+  configure_url="https://ci.inria.fr/ocaml/computer/${NODE_NAME}/configure"
+  msg="Unknown architecture. Make sure the OCAML_ARCH environemnt"
+  msg="$msg variable has been defined."
+  msg="$msg\nSee ${configure_url}"
+  error "$msg"
+}
+
+# Kill a task on Windows
+# Errors are ignored
+kill_task()
+{
+  task=$1
+  taskkill /f /im ${task} || true
+}
+
+quote1 () {
+  printf "'%s'" "`printf %s "$1" | sed -e "s/'/'\\\\\\\\''/g"`";
+}
+
+#########################################################################
+# be verbose
+set -x
+
+#########################################################################
+# Save the current directory (on cygwin, /etc/profile changes it)
+jenkinsdir="$(pwd)"
+echo jenkinsdir=${jenkinsdir}
+
 #########################################################################
 # If we are called from a Windows batch script, we must set up the
 # Unix environment variables (e.g. PATH).
 
-case "$1" in
+case "${OCAML_ARCH}" in
   bsd|macos|linux) ;;
   cygwin|mingw|mingw64)
     . /etc/profile
@@ -46,7 +81,7 @@ case "$1" in
     . "$HOME/.profile"
     . "$HOME/.msenv64"
   ;;
-  *) error "unknown architecture: $1";;
+  *) arch_error;;
 esac
 
 #########################################################################
@@ -54,90 +89,120 @@ esac
 # be verbose and stop on error
 set -ex
 
-# parse command line
-# Configure options are not allowed to have spaces or special characters
-# for the moment. We'll fix that when needed.
-arch="$1"
-branch="$2"
-confoptions=""
-shift 2
-while [ $# -gt 0 ]; do
-  case $1 in
-    -conf) confoptions="$confoptions $2"; shift 2;;
-    -patch1) patch -f -p1 <"$2"; shift 2;;
-    *) error "unknown option $1";;
-  esac
-done
-
 #########################################################################
 # set up variables
 
 # default values
 make=make
 instdir="$HOME/ocaml-tmp-install"
-workdir=.
-docheckout=false
-nt=
+configure=unix
+confoptions="${OCAML_CONFIGURE_OPTIONS}"
+make_native=true
+cleanup=false
 
-case "$arch" in
-  bsd)
-    make=gmake
+case "${OCAML_ARCH}" in
+  bsd) make=gmake ;;
+  macos) ;;
+  linux)
+    confoptions="${confoptions} -with-instrumented-runtime"
   ;;
-  macos) ;;  # FIXME to be checked
-  linux) ;;
   cygwin)
-    workdir="$HOME/jenkins-workspace/$branch"
-    docheckout=true
-  ;;
+    cleanup=true;;
   mingw)
-    instdir=/cygdrive/c/ocamlmgw
-    workdir="$HOME/jenkins-workspace/$branch"
-    docheckout=true
-    nt=.nt
+    instdir='C:/ocamlmgw'
+    configure=nt
+    cleanup=true
   ;;
   mingw64)
-    instdir=/cygdrive/c/ocamlmgw64
-    workdir="$HOME/jenkins-workspace/$branch"
-    docheckout=true
-    nt=.nt
+    instdir='C:/ocamlmgw64'
+    configure=nt
+    cleanup=true
   ;;
   msvc)
-    instdir=/cygdrive/c/ocamlms
-    workdir="$HOME/jenkins-workspace/$branch"
-    docheckout=true
-    nt=.nt
+    instdir='C:/ocamlms'
+    configure=nt
+    cleanup=true
   ;;
   msvc64)
-    instdir=/cygdrive/c/ocamlms64
-    workdir="$HOME/jenkins-workspace/$branch"
-    docheckout=true
-    nt=.nt
+    instdir='C:/ocamlms64'
+    configure=nt
+    cleanup=true
   ;;
-  *) error "unknown architecture: $arch";;
+  *) arch_error;;
 esac
 
+# Make sure two builds won't use the same install directory
+instdir="$instdir-$$"
+
 #########################################################################
+# On Windows, cleanup processes that may remain from previous run
 
-cd "$workdir"
-
-$make -f Makefile$nt distclean || :
-
-if $docheckout; then
-  svn update --accept theirs-full
+if $cleanup; then
+  tasks="tee ocamlrun program"
+  for task in ${tasks}; do kill_task ${task}.exe; done
 fi
 
-case $nt in
-  "") ./configure -prefix "$instdir" $confoptions;;
-  .nt)
+#########################################################################
+# Go to the right directory
+
+pwd
+cd "$jenkinsdir"
+
+#########################################################################
+# parse optional command-line arguments (has to be done after the "cd")
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    -conf) confoptions="$confoptions `quote1 "$2"`"; shift;;
+    -patch1) patch -f -p1 <"$2"; shift;;
+    -no-native) make_native=false;;
+    *) error "unknown option $1";;
+  esac
+  shift
+done
+
+#########################################################################
+# Do the work
+
+# Tell gcc to use only ASCII in its diagnostic outputs.
+export LC_ALL=C
+
+$make distclean || :
+
+# `make distclean` does not clean the files from previous versions that
+# are not produced by the current version, so use `git clean` in addition.
+git clean -f -d -x
+
+case $configure in
+  unix)
+    confoptions="$confoptions -with-debug-runtime"
+    if $flambda; then
+      confoptions="$confoptions -flambda"
+    fi
+    eval "./configure -prefix '$instdir' $confoptions"
+  ;;
+  nt)
     cp config/m-nt.h config/m.h
     cp config/s-nt.h config/s.h
-    cp config/Makefile.$arch config/Makefile
+    cp config/Makefile.${OCAML_ARCH} config/Makefile
+    sed -i "s%PREFIX=\(.\+\)%PREFIX=${instdir}%" config/Makefile
+    sed -i 's%RUNTIMED=.\+%RUNTIMED=true%' config/Makefile
+    if $flambda; then
+      sed -i 's%FLAMBDA=.\+%FLAMBDA=true%' config/Makefile
+    fi
   ;;
   *) error "internal error";;
 esac
 
-$make -f Makefile$nt world.opt
-$make -f Makefile$nt install
+$make coldstart
+$make core
+$make coreboot
+$make world
+if $make_native; then
+  $make opt
+  $make opt.opt
+fi
+$make install
 
 rm -rf "$instdir"
 cd testsuite

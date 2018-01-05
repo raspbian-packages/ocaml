@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Basic operations on core types *)
 
@@ -43,6 +46,7 @@ val newmarkedgenvar: unit -> type_expr
 
 val is_Tvar: type_expr -> bool
 val is_Tunivar: type_expr -> bool
+val is_Tconstr: type_expr -> bool
 val dummy_method: label
 val default_mty: module_type option -> module_type
 
@@ -77,9 +81,10 @@ val proxy: type_expr -> type_expr
            or a row variable *)
 
 (**** Utilities for private abbreviations with fixed rows ****)
+val row_of_type: type_expr -> type_expr
 val has_constr_row: type_expr -> bool
 val is_row_name: string -> bool
-val is_constr_row: type_expr -> bool
+val is_constr_row: allow_ident:bool -> type_expr -> bool
 
 (**** Utilities for type traversal ****)
 
@@ -162,15 +167,15 @@ val forget_abbrev:
 
 (**** Utilities for labels ****)
 
-val is_optional : label -> bool
-val label_name : label -> label
+val is_optional : arg_label -> bool
+val label_name : arg_label -> label
 
 (* Returns the label name with first character '?' or '~' as appropriate. *)
-val prefixed_label_name : label -> label
+val prefixed_label_name : arg_label -> label
 
 val extract_label :
-    label -> (label * 'a) list ->
-    label * 'a * (label * 'a) list * (label * 'a) list
+    label -> (arg_label * 'a) list ->
+    arg_label * 'a * (arg_label * 'a) list * (arg_label * 'a) list
     (* actual label, value, before list, after list *)
 
 (**** Utilities for backtracking ****)
@@ -183,6 +188,10 @@ val backtrack: snapshot -> unit
         (* Backtrack to a given snapshot. Only possible if you have
            not already backtracked to a previous snapshot.
            Calls [cleanup_abbrev] internally *)
+val undo_compress: snapshot -> unit
+        (* Backtrack only path compression. Only meaningful if you have
+           not already backtracked to a previous snapshot.
+           Does not call [cleanup_abbrev] *)
 
 (* Functions to use when modifying a type (only Ctype?) *)
 val link_type: type_expr -> type_expr -> unit
@@ -203,3 +212,10 @@ val log_type: type_expr -> unit
 
 (**** Forward declarations ****)
 val print_raw: (Format.formatter -> type_expr -> unit) ref
+
+val iter_type_expr_kind: (type_expr -> unit) -> (type_kind -> unit)
+
+val iter_type_expr_cstr_args: (type_expr -> unit) ->
+  (constructor_arguments -> unit)
+val map_type_expr_cstr_args: (type_expr -> type_expr) ->
+  (constructor_arguments -> constructor_arguments)

@@ -1,21 +1,22 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                             OCamldoc                                *)
-(*                                                                     *)
-(*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
-(*                                                                     *)
-(*  Copyright 2001 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Maxence Guesdon, projet Cristal, INRIA Rocquencourt        *)
+(*                                                                        *)
+(*   Copyright 2001 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (** Global variables. *)
 
 (* Tell ocaml compiler not to generate files. *)
 let _ = Clflags.dont_write_files := true
-
-open Clflags
 
 type source_file =
     Impl_file of string
@@ -27,6 +28,7 @@ let include_dirs = Clflags.include_dirs
 let errors = ref 0
 
 let warn_error = ref false
+let show_missed_crossref = ref false
 
 let pwarning s =
   if !Odoc_config.print_warnings then prerr_endline (Odoc_messages.warning^": "^s);

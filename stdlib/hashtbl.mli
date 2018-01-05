@@ -1,15 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the GNU Library General Public License, with    *)
-(*  the special exception on linking described in file ../LICENSE.     *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (** Hash tables and hash functions.
 
@@ -85,6 +87,11 @@ val find : ('a, 'b) t -> 'a -> 'b
 (** [Hashtbl.find tbl x] returns the current binding of [x] in [tbl],
    or raises [Not_found] if no such binding exists. *)
 
+val find_opt : ('a, 'b) t -> 'a -> 'b option
+(** [Hashtbl.find_opt tbl x] returns the current binding of [x] in [tbl],
+    or [None] if no such binding exists.
+    @since 4.05 *)
+
 val find_all : ('a, 'b) t -> 'a -> 'b list
 (** [Hashtbl.find_all tbl x] returns the list of all data
    associated with [x] in [tbl].
@@ -120,7 +127,21 @@ val iter : ('a -> 'b -> unit) -> ('a, 'b) t -> unit
    in which the bindings are enumerated is reproducible between
    successive runs of the program, and even between minor versions
    of OCaml.  For randomized hash tables, the order of enumeration
-   is entirely random. *)
+   is entirely random.
+
+   The behavior is not defined if the hash table is modified
+   by [f] during the iteration.
+*)
+
+val filter_map_inplace: ('a -> 'b -> 'b option) -> ('a, 'b) t -> unit
+(** [Hashtbl.filter_map_inplace f tbl] applies [f] to all bindings in
+    table [tbl] and update each binding depending on the result of
+    [f].  If [f] returns [None], the binding is discarded.  If it
+    returns [Some new_val], the binding is update to associate the key
+    to [new_val].
+
+    Other comments for {!Hashtbl.iter} apply as well.
+    @since 4.03.0 *)
 
 val fold : ('a -> 'b -> 'c -> 'c) -> ('a, 'b) t -> 'c -> 'c
 (** [Hashtbl.fold f tbl init] computes
@@ -138,7 +159,11 @@ val fold : ('a -> 'b -> 'c -> 'c) -> ('a, 'b) t -> 'c -> 'c
    in which the bindings are enumerated is reproducible between
    successive runs of the program, and even between minor versions
    of OCaml.  For randomized hash tables, the order of enumeration
-   is entirely random. *)
+   is entirely random.
+
+   The behavior is not defined if the hash table is modified
+   by [f] during the iteration.
+*)
 
 val length : ('a, 'b) t -> int
 (** [Hashtbl.length tbl] returns the number of bindings in [tbl].
@@ -165,6 +190,12 @@ val randomize : unit -> unit
 
     @since 4.00.0 *)
 
+val is_randomized : unit -> bool
+(** return if the tables are currently created in randomized mode by default
+
+    @since 4.03.0 *)
+
+(** @since 4.00.0 *)
 type statistics = {
   num_bindings: int;
     (** Number of bindings present in the table.
@@ -203,7 +234,7 @@ val stats : ('a, 'b) t -> statistics
       module IntHashtbl = Hashtbl.Make(IntHash)
 
       let h = IntHashtbl.create 17 in
-      IntHashtbl.add h 12 "hello";;
+      IntHashtbl.add h 12 "hello"
     ]}
 
     This creates a new module [IntHashtbl], with a new type ['a
@@ -219,9 +250,11 @@ val stats : ('a, 'b) t -> statistics
 module type HashedType =
   sig
     type t
-      (** The type of the hashtable keys. *)
+    (** The type of the hashtable keys. *)
+
     val equal : t -> t -> bool
-      (** The equality predicate used to compare keys. *)
+    (** The equality predicate used to compare keys. *)
+
     val hash : t -> int
       (** A hashing function on keys. It must be such that if two keys are
           equal according to [equal], then they have identical hash values
@@ -244,18 +277,25 @@ module type S =
     type 'a t
     val create : int -> 'a t
     val clear : 'a t -> unit
-    val reset : 'a t -> unit
+    val reset : 'a t -> unit (** @since 4.00.0 *)
+
     val copy : 'a t -> 'a t
     val add : 'a t -> key -> 'a -> unit
     val remove : 'a t -> key -> unit
     val find : 'a t -> key -> 'a
+    val find_opt : 'a t -> key -> 'a option
+    (** @since 4.05.0 *)
+
     val find_all : 'a t -> key -> 'a list
     val replace : 'a t -> key -> 'a -> unit
     val mem : 'a t -> key -> bool
     val iter : (key -> 'a -> unit) -> 'a t -> unit
+    val filter_map_inplace: (key -> 'a -> 'a option) -> 'a t -> unit
+    (** @since 4.03.0 *)
+
     val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
     val length : 'a t -> int
-    val stats: 'a t -> statistics
+    val stats: 'a t -> statistics (** @since 4.00.0 *)
   end
 (** The output signature of the functor {!Hashtbl.Make}. *)
 
@@ -274,9 +314,11 @@ module Make (H : HashedType) : S with type key = H.t
 module type SeededHashedType =
   sig
     type t
-      (** The type of the hashtable keys. *)
+    (** The type of the hashtable keys. *)
+
     val equal: t -> t -> bool
-      (** The equality predicate used to compare keys. *)
+    (** The equality predicate used to compare keys. *)
+
     val hash: int -> t -> int
       (** A seeded hashing function on keys.  The first argument is
           the seed.  It must be the case that if [equal x y] is true,
@@ -298,10 +340,15 @@ module type SeededS =
     val add : 'a t -> key -> 'a -> unit
     val remove : 'a t -> key -> unit
     val find : 'a t -> key -> 'a
+    val find_opt : 'a t -> key -> 'a option (** @since 4.05.0 *)
+
     val find_all : 'a t -> key -> 'a list
     val replace : 'a t -> key -> 'a -> unit
     val mem : 'a t -> key -> bool
     val iter : (key -> 'a -> unit) -> 'a t -> unit
+    val filter_map_inplace: (key -> 'a -> 'a option) -> 'a t -> unit
+    (** @since 4.03.0 *)
+
     val fold : (key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
     val length : 'a t -> int
     val stats: 'a t -> statistics

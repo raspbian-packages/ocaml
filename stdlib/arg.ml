@@ -1,15 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*             Damien Doligez, projet Para, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the GNU Library General Public License, with    *)
-(*  the special exception on linking described in file ../LICENSE.     *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*              Damien Doligez, projet Para, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 type key = string
 type doc = string
@@ -34,6 +36,13 @@ type spec =
                                   call the function with the symbol. *)
   | Rest of (string -> unit)   (* Stop interpreting keywords and call the
                                   function with each remaining argument *)
+  | Expand of (string -> string array) (* If the remaining arguments to process
+                                          are of the form
+                                          [["-foo"; "arg"] @ rest] where "foo" is
+                                          registered as [Expand f], then the
+                                          arguments [f "arg" @ rest] are
+                                          processed. Only allowed in
+                                          [parse_and_expand_argv_dynamic]. *)
 
 exception Bad of string
 exception Help of string
@@ -44,22 +53,28 @@ type error =
   | Missing of string
   | Message of string
 
-exception Stop of error;; (* used internally *)
+exception Stop of error (* used internally *)
 
 open Printf
 
 let rec assoc3 x l =
   match l with
   | [] -> raise Not_found
-  | (y1, y2, y3) :: t when y1 = x -> y2
+  | (y1, y2, _) :: _ when y1 = x -> y2
   | _ :: t -> assoc3 x t
-;;
+
+
+let split s =
+  let i = String.index s '=' in
+  let len = String.length s in
+  String.sub s 0 i, String.sub s (i+1) (len-(i+1))
+
 
 let make_symlist prefix sep suffix l =
   match l with
   | [] -> "<none>"
   | h::t -> (List.fold_left (fun x y -> x ^ sep ^ y) (prefix ^ h) t) ^ suffix
-;;
+
 
 let print_spec buf (key, spec, doc) =
   if String.length doc > 0 then
@@ -68,9 +83,9 @@ let print_spec buf (key, spec, doc) =
         bprintf buf "  %s %s%s\n" key (make_symlist "{" "|" "}" l) doc
     | _ ->
         bprintf buf "  %s %s\n" key doc
-;;
 
-let help_action () = raise (Stop (Unknown "-help"));;
+
+let help_action () = raise (Stop (Unknown "-help"))
 
 let add_help speclist =
   let add1 =
@@ -83,31 +98,46 @@ let add_help speclist =
             ["--help", Unit help_action, " Display this list of options"]
   in
   speclist @ (add1 @ add2)
-;;
+
 
 let usage_b buf speclist errmsg =
   bprintf buf "%s\n" errmsg;
-  List.iter (print_spec buf) (add_help speclist);
-;;
+  List.iter (print_spec buf) (add_help speclist)
+
 
 let usage_string speclist errmsg =
   let b = Buffer.create 200 in
   usage_b b speclist errmsg;
-  Buffer.contents b;
-;;
+  Buffer.contents b
+
 
 let usage speclist errmsg =
-  eprintf "%s" (usage_string speclist errmsg);
-;;
+  eprintf "%s" (usage_string speclist errmsg)
 
-let current = ref 0;;
 
-let parse_argv_dynamic ?(current=current) argv speclist anonfun errmsg =
-  let l = Array.length argv in
-  let b = Buffer.create 200 in
+let current = ref 0
+
+let bool_of_string_opt x =
+  try Some (bool_of_string x)
+  with Invalid_argument _ -> None
+
+let int_of_string_opt x =
+  try Some (int_of_string x)
+  with Failure _ -> None
+
+let float_of_string_opt x =
+  try Some (float_of_string x)
+  with Failure _ -> None
+
+let parse_and_expand_argv_dynamic_aux allow_expand current argv speclist anonfun errmsg =
   let initpos = !current in
-  let stop error =
-    let progname = if initpos < l then argv.(initpos) else "(?)" in
+  let convert_error error =
+    (* convert an internal error to a Bad/Help exception
+       *or* add the program name as a prefix and the usage message as a suffix
+       to an user-raised Bad exception.
+    *)
+    let b = Buffer.create 200 in
+    let progname = if initpos < (Array.length !argv) then !argv.(initpos) else "(?)" in
     begin match error with
       | Unknown "-help" -> ()
       | Unknown "--help" -> ()
@@ -118,117 +148,159 @@ let parse_argv_dynamic ?(current=current) argv speclist anonfun errmsg =
       | Wrong (opt, arg, expected) ->
           bprintf b "%s: wrong argument '%s'; option '%s' expects %s.\n"
                   progname arg opt expected
-      | Message s ->
+      | Message s -> (* user error message *)
           bprintf b "%s: %s.\n" progname s
     end;
     usage_b b !speclist errmsg;
     if error = Unknown "-help" || error = Unknown "--help"
-    then raise (Help (Buffer.contents b))
-    else raise (Bad (Buffer.contents b))
+    then Help (Buffer.contents b)
+    else Bad (Buffer.contents b)
   in
   incr current;
-  while !current < l do
-    let s = argv.(!current) in
-    if String.length s >= 1 && s.[0] = '-' then begin
-      let action =
-        try assoc3 s !speclist
-        with Not_found -> stop (Unknown s)
-      in
-      begin try
+  while !current < (Array.length !argv) do
+    begin try
+      let s = !argv.(!current) in
+      if String.length s >= 1 && s.[0] = '-' then begin
+        let action, follow =
+          try assoc3 s !speclist, None
+          with Not_found ->
+          try
+            let keyword, arg = split s in
+            assoc3 keyword !speclist, Some arg
+          with Not_found -> raise (Stop (Unknown s))
+        in
+        let no_arg () =
+          match follow with
+          | None -> ()
+          | Some arg -> raise (Stop (Wrong (s, arg, "no argument"))) in
+        let get_arg () =
+          match follow with
+          | None ->
+              if !current + 1 < (Array.length !argv) then !argv.(!current + 1)
+              else raise (Stop (Missing s))
+          | Some arg -> arg
+        in
+        let consume_arg () =
+          match follow with
+          | None -> incr current
+          | Some _ -> ()
+        in
         let rec treat_action = function
         | Unit f -> f ();
-        | Bool f when !current + 1 < l ->
-            let arg = argv.(!current + 1) in
-            begin try f (bool_of_string arg)
-            with Invalid_argument "bool_of_string" ->
-                   raise (Stop (Wrong (s, arg, "a boolean")))
+        | Bool f ->
+            let arg = get_arg () in
+            begin match bool_of_string_opt arg with
+            | None -> raise (Stop (Wrong (s, arg, "a boolean")))
+            | Some s -> f s
             end;
-            incr current;
-        | Set r -> r := true;
-        | Clear r -> r := false;
-        | String f when !current + 1 < l ->
-            f argv.(!current + 1);
-            incr current;
-        | Symbol (symb, f) when !current + 1 < l ->
-            let arg = argv.(!current + 1) in
+            consume_arg ();
+        | Set r -> no_arg (); r := true;
+        | Clear r -> no_arg (); r := false;
+        | String f ->
+            let arg = get_arg () in
+            f arg;
+            consume_arg ();
+        | Symbol (symb, f) ->
+            let arg = get_arg () in
             if List.mem arg symb then begin
-              f argv.(!current + 1);
-              incr current;
+              f arg;
+              consume_arg ();
             end else begin
               raise (Stop (Wrong (s, arg, "one of: "
                                           ^ (make_symlist "" " " "" symb))))
             end
-        | Set_string r when !current + 1 < l ->
-            r := argv.(!current + 1);
-            incr current;
-        | Int f when !current + 1 < l ->
-            let arg = argv.(!current + 1) in
-            begin try f (int_of_string arg)
-            with Failure "int_of_string" ->
-                   raise (Stop (Wrong (s, arg, "an integer")))
+        | Set_string r ->
+            r := get_arg ();
+            consume_arg ();
+        | Int f ->
+            let arg = get_arg () in
+            begin match int_of_string_opt arg with
+            | None -> raise (Stop (Wrong (s, arg, "an integer")))
+            | Some x -> f x
             end;
-            incr current;
-        | Set_int r when !current + 1 < l ->
-            let arg = argv.(!current + 1) in
-            begin try r := (int_of_string arg)
-            with Failure "int_of_string" ->
-                   raise (Stop (Wrong (s, arg, "an integer")))
+            consume_arg ();
+        | Set_int r ->
+            let arg = get_arg () in
+            begin match int_of_string_opt arg with
+            | None -> raise (Stop (Wrong (s, arg, "an integer")))
+            | Some x -> r := x
             end;
-            incr current;
-        | Float f when !current + 1 < l ->
-            let arg = argv.(!current + 1) in
-            begin try f (float_of_string arg);
-            with Failure "float_of_string" ->
-                   raise (Stop (Wrong (s, arg, "a float")))
+            consume_arg ();
+        | Float f ->
+            let arg = get_arg () in
+            begin match float_of_string_opt arg with
+            | None -> raise (Stop (Wrong (s, arg, "a float")))
+            | Some x -> f x
             end;
-            incr current;
-        | Set_float r when !current + 1 < l ->
-            let arg = argv.(!current + 1) in
-            begin try r := (float_of_string arg);
-            with Failure "float_of_string" ->
-                   raise (Stop (Wrong (s, arg, "a float")))
+            consume_arg ();
+        | Set_float r ->
+            let arg = get_arg () in
+            begin match float_of_string_opt arg with
+            | None -> raise (Stop (Wrong (s, arg, "a float")))
+            | Some x -> r := x
             end;
-            incr current;
+            consume_arg ();
         | Tuple specs ->
             List.iter treat_action specs;
         | Rest f ->
-            while !current < l - 1 do
-              f argv.(!current + 1);
-              incr current;
+            while !current < (Array.length !argv) - 1 do
+              f !argv.(!current + 1);
+              consume_arg ();
             done;
-        | _ -> raise (Stop (Missing s))
+        | Expand f ->
+            if not allow_expand then
+              raise (Invalid_argument "Arg.Expand is is only allowed with Arg.parse_and_expand_argv_dynamic");
+            let arg = get_arg () in
+            let newarg = f arg in
+            consume_arg ();
+            let before = Array.sub !argv 0 (!current + 1)
+            and after = Array.sub !argv (!current + 1) ((Array.length !argv) - !current - 1) in
+            argv:= Array.concat [before;newarg;after];
         in
-        treat_action action
-      with Bad m -> stop (Message m);
-         | Stop e -> stop e;
-      end;
-      incr current;
-    end else begin
-      (try anonfun s with Bad m -> stop (Message m));
-      incr current;
+        treat_action action end
+      else anonfun s
+    with | Bad m -> raise (convert_error (Message m));
+         | Stop e -> raise (convert_error e);
     end;
-  done;
-;;
+    incr current
+  done
+
+let parse_and_expand_argv_dynamic current argv speclist anonfun errmsg =
+  parse_and_expand_argv_dynamic_aux true current argv speclist anonfun errmsg
+
+let parse_argv_dynamic ?(current=current) argv speclist anonfun errmsg =
+  parse_and_expand_argv_dynamic_aux false current (ref argv) speclist anonfun errmsg
+
 
 let parse_argv ?(current=current) argv speclist anonfun errmsg =
-  parse_argv_dynamic ~current:current argv (ref speclist) anonfun errmsg;
-;;
+  parse_argv_dynamic ~current:current argv (ref speclist) anonfun errmsg
+
 
 let parse l f msg =
   try
-    parse_argv Sys.argv l f msg;
+    parse_argv Sys.argv l f msg
   with
-  | Bad msg -> eprintf "%s" msg; exit 2;
-  | Help msg -> printf "%s" msg; exit 0;
-;;
+  | Bad msg -> eprintf "%s" msg; exit 2
+  | Help msg -> printf "%s" msg; exit 0
+
 
 let parse_dynamic l f msg =
   try
-    parse_argv_dynamic Sys.argv l f msg;
+    parse_argv_dynamic Sys.argv l f msg
   with
-  | Bad msg -> eprintf "%s" msg; exit 2;
-  | Help msg -> printf "%s" msg; exit 0;
-;;
+  | Bad msg -> eprintf "%s" msg; exit 2
+  | Help msg -> printf "%s" msg; exit 0
+
+let parse_expand l f msg =
+  try
+    let argv = ref Sys.argv in
+    let spec = ref l in
+    let current = ref (!current) in
+    parse_and_expand_argv_dynamic current argv spec f msg
+  with
+  | Bad msg -> eprintf "%s" msg; exit 2
+  | Help msg -> printf "%s" msg; exit 0
+
 
 let second_word s =
   let len = String.length s in
@@ -239,13 +311,13 @@ let second_word s =
   in
   try loop (String.index s ' ')
   with Not_found -> len
-;;
+
 
 let max_arg_len cur (kwd, spec, doc) =
   match spec with
   | Symbol _ -> max cur (String.length kwd)
   | _ -> max cur (String.length kwd + second_word doc)
-;;
+
 
 let add_padding len ksd =
   match ksd with
@@ -253,7 +325,7 @@ let add_padding len ksd =
       (* Do not pad undocumented options, so that they still don't show up when
        * run through [usage] or [parse]. *)
       ksd
-  | (kwd, (Symbol (l, _) as spec), msg) ->
+  | (kwd, (Symbol _ as spec), msg) ->
       let cutcol = second_word msg in
       let spaces = String.make ((max 0 (len - cutcol)) + 3) ' ' in
       (kwd, spec, "\n" ^ spaces ^ msg)
@@ -268,11 +340,55 @@ let add_padding len ksd =
         let prefix = String.sub msg 0 cutcol in
         let suffix = String.sub msg cutcol (String.length msg - cutcol) in
         (kwd, spec, prefix ^ spaces ^ suffix)
-;;
+
 
 let align ?(limit=max_int) speclist =
   let completed = add_help speclist in
   let len = List.fold_left max_arg_len 0 completed in
   let len = min len limit in
   List.map (add_padding len) completed
-;;
+
+let trim_cr s =
+  let len = String.length s in
+  if len > 0 && String.get s (len - 1) = '\r' then
+    String.sub s 0 (len - 1)
+  else
+    s
+
+let read_aux trim sep file =
+  let ic = open_in_bin file in
+  let buf = Buffer.create 200 in
+  let words = ref [] in
+  let stash () =
+    let word =  (Buffer.contents buf) in
+    let word = if trim then trim_cr word else word in
+    words := word :: !words;
+    Buffer.clear buf
+  in
+  let rec read () =
+    try
+      let c = input_char ic in
+      if c = sep then begin
+        stash (); read ()
+      end else begin
+        Buffer.add_char buf c; read ()
+      end
+    with End_of_file ->
+      if Buffer.length buf > 0 then
+        stash () in
+  read ();
+  close_in ic;
+  Array.of_list (List.rev !words)
+
+let read_arg = read_aux true '\n'
+
+let read_arg0 = read_aux false '\x00'
+
+let write_aux sep file args =
+  let oc = open_out_bin file in
+  Array.iter (fun s -> fprintf oc "%s%c" s sep) args;
+  close_out oc
+
+let write_arg = write_aux '\n'
+
+let write_arg0 = write_aux '\x00'

@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <stddef.h>
 #include <caml/mlvalues.h>
@@ -48,7 +50,7 @@ static struct custom_operations win_handle_ops = {
 
 value win_alloc_handle(HANDLE h)
 {
-  value res = alloc_custom(&win_handle_ops, sizeof(struct filedescr), 0, 1);
+  value res = caml_alloc_custom(&win_handle_ops, sizeof(struct filedescr), 0, 1);
   Handle_val(res) = h;
   Descr_kind_val(res) = KIND_HANDLE;
   CRT_fd_val(res) = NO_CRT_FD;
@@ -58,7 +60,7 @@ value win_alloc_handle(HANDLE h)
 
 value win_alloc_socket(SOCKET s)
 {
-  value res = alloc_custom(&win_handle_ops, sizeof(struct filedescr), 0, 1);
+  value res = caml_alloc_custom(&win_handle_ops, sizeof(struct filedescr), 0, 1);
   Socket_val(res) = s;
   Descr_kind_val(res) = KIND_SOCKET;
   CRT_fd_val(res) = NO_CRT_FD;
@@ -170,44 +172,80 @@ void win32_maperr(DWORD errcode)
 }
 
 /* Windows socket errors */
-
+#undef EWOULDBLOCK
 #define EWOULDBLOCK             -WSAEWOULDBLOCK
+#undef EINPROGRESS
 #define EINPROGRESS             -WSAEINPROGRESS
+#undef EALREADY
 #define EALREADY                -WSAEALREADY
+#undef ENOTSOCK
 #define ENOTSOCK                -WSAENOTSOCK
+#undef EDESTADDRREQ
 #define EDESTADDRREQ            -WSAEDESTADDRREQ
+#undef EMSGSIZE
 #define EMSGSIZE                -WSAEMSGSIZE
+#undef EPROTOTYPE
 #define EPROTOTYPE              -WSAEPROTOTYPE
+#undef ENOPROTOOPT
 #define ENOPROTOOPT             -WSAENOPROTOOPT
+#undef EPROTONOSUPPORT
 #define EPROTONOSUPPORT         -WSAEPROTONOSUPPORT
+#undef ESOCKTNOSUPPORT
 #define ESOCKTNOSUPPORT         -WSAESOCKTNOSUPPORT
+#undef EOPNOTSUPP
 #define EOPNOTSUPP              -WSAEOPNOTSUPP
+#undef EPFNOSUPPORT
 #define EPFNOSUPPORT            -WSAEPFNOSUPPORT
+#undef EAFNOSUPPORT
 #define EAFNOSUPPORT            -WSAEAFNOSUPPORT
+#undef EADDRINUSE
 #define EADDRINUSE              -WSAEADDRINUSE
+#undef EADDRNOTAVAIL
 #define EADDRNOTAVAIL           -WSAEADDRNOTAVAIL
+#undef ENETDOWN
 #define ENETDOWN                -WSAENETDOWN
+#undef ENETUNREACH
 #define ENETUNREACH             -WSAENETUNREACH
+#undef ENETRESET
 #define ENETRESET               -WSAENETRESET
+#undef ECONNABORTED
 #define ECONNABORTED            -WSAECONNABORTED
+#undef ECONNRESET
 #define ECONNRESET              -WSAECONNRESET
+#undef ENOBUFS
 #define ENOBUFS                 -WSAENOBUFS
+#undef EISCONN
 #define EISCONN                 -WSAEISCONN
+#undef ENOTCONN
 #define ENOTCONN                -WSAENOTCONN
+#undef ESHUTDOWN
 #define ESHUTDOWN               -WSAESHUTDOWN
+#undef ETOOMANYREFS
 #define ETOOMANYREFS            -WSAETOOMANYREFS
+#undef ETIMEDOUT
 #define ETIMEDOUT               -WSAETIMEDOUT
+#undef ECONNREFUSED
 #define ECONNREFUSED            -WSAECONNREFUSED
+#undef ELOOP
 #define ELOOP                   -WSAELOOP
+#undef EHOSTDOWN
 #define EHOSTDOWN               -WSAEHOSTDOWN
+#undef EHOSTUNREACH
 #define EHOSTUNREACH            -WSAEHOSTUNREACH
+#undef EPROCLIM
 #define EPROCLIM                -WSAEPROCLIM
+#undef EUSERS
 #define EUSERS                  -WSAEUSERS
+#undef EDQUOT
 #define EDQUOT                  -WSAEDQUOT
+#undef ESTALE
 #define ESTALE                  -WSAESTALE
+#undef EREMOTE
 #define EREMOTE                 -WSAEREMOTE
 
+#undef EOVERFLOW
 #define EOVERFLOW -ERROR_ARITHMETIC_OVERFLOW
+#undef EACCESS
 #define EACCESS EACCES
 
 int error_table[] = {
@@ -234,7 +272,7 @@ value unix_error_of_code (int errcode)
   errconstr =
       cst_to_constr(errcode, error_table, sizeof(error_table)/sizeof(int), -1);
   if (errconstr == Val_int(-1)) {
-    err = alloc_small(1, 0);
+    err = caml_alloc_small(1, 0);
     Field(err, 0) = Val_int(errcode);
   } else {
     err = errconstr;
@@ -249,27 +287,41 @@ void unix_error(int errcode, char *cmdname, value cmdarg)
   int errconstr;
 
   Begin_roots3 (name, err, arg);
-    arg = cmdarg == Nothing ? copy_string("") : cmdarg;
-    name = copy_string(cmdname);
+    arg = cmdarg == Nothing ? caml_copy_string("") : cmdarg;
+    name = caml_copy_string(cmdname);
     err = unix_error_of_code (errcode);
     if (unix_error_exn == NULL) {
       unix_error_exn = caml_named_value("Unix.Unix_error");
       if (unix_error_exn == NULL)
-        invalid_argument("Exception Unix.Unix_error not initialized,"
+        caml_invalid_argument("Exception Unix.Unix_error not initialized,"
                          " please link unix.cma");
     }
-    res = alloc_small(4, 0);
+    res = caml_alloc_small(4, 0);
     Field(res, 0) = *unix_error_exn;
     Field(res, 1) = err;
     Field(res, 2) = name;
     Field(res, 3) = arg;
   End_roots();
-  mlraise(res);
+  caml_raise(res);
 }
 
-void uerror(cmdname, cmdarg)
-     char * cmdname;
-     value cmdarg;
+void uerror(char * cmdname, value cmdarg)
 {
   unix_error(errno, cmdname, cmdarg);
+}
+
+void caml_unix_check_path(value path, char * cmdname)
+{
+  if (! caml_string_is_c_safe(path)) unix_error(ENOENT, cmdname, path);
+}
+
+int unix_cloexec_default = 0;
+
+int unix_cloexec_p(value cloexec)
+{
+  /* [cloexec] is a [bool option].  */
+  if (Is_block(cloexec))
+    return Bool_val(Field(cloexec, 0));
+  else
+    return unix_cloexec_default;
 }

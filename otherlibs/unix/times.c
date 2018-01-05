@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
@@ -38,7 +40,7 @@ CAMLprim value unix_times(value unit)
   value res;
   struct rusage ru;
 
-  res = alloc_small(4 * Double_wosize, Double_array_tag);
+  res = caml_alloc_small(4 * Double_wosize, Double_array_tag);
 
   getrusage (RUSAGE_SELF, &ru);
   Store_double_field (res, 0, ru.ru_utime.tv_sec + ru.ru_utime.tv_usec / 1e6);
@@ -54,7 +56,7 @@ CAMLprim value unix_times(value unit)
   struct tms buffer;
 
   times(&buffer);
-  res = alloc_small(4 * Double_wosize, Double_array_tag);
+  res = caml_alloc_small(4 * Double_wosize, Double_array_tag);
   Store_double_field(res, 0, (double) buffer.tms_utime / CLK_TCK);
   Store_double_field(res, 1, (double) buffer.tms_stime / CLK_TCK);
   Store_double_field(res, 2, (double) buffer.tms_cutime / CLK_TCK);

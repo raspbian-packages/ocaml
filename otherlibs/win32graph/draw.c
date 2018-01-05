@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*  Developed by Jacob Navia, based on code by J-M Geffroy and X Leroy */
-/*                                                                     */
-/*  Copyright 2001 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*   Developed by Jacob Navia, based on code by J-M Geffroy and X Leroy   */
+/*                                                                        */
+/*   Copyright 2001 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <math.h>
 #include "caml/mlvalues.h"
@@ -193,7 +195,8 @@ CAMLprim value caml_gr_draw_arc(value *argv, int argc)
                              argv[4], argv[5], FALSE);
 }
 
-CAMLprim value caml_gr_draw_arc_nat(vx, vy, vrx, vry, vstart, vend)
+CAMLprim value caml_gr_draw_arc_nat(value vx, value vy, value vrx, value vry,
+                                    value vstart, value vend)
 {
   return gr_draw_or_fill_arc(vx, vy, vrx, vry, vstart, vend, FALSE);
 }
@@ -260,7 +263,7 @@ static value gr_draw_or_fill_arc(value vx, value vy, value vrx, value vry,
         r_x = Int_val(vrx);
         r_y = Int_val(vry);
         if ((r_x < 0) || (r_y < 0))
-                invalid_argument("draw_arc: radius must be positive");
+                caml_invalid_argument("draw_arc: radius must be positive");
         x     = Int_val(vx);
         y     = Int_val(vy);
         start = Int_val(vstart);
@@ -301,15 +304,6 @@ static value gr_draw_or_fill_arc(value vx, value vy, value vrx, value vry,
         }
         return Val_unit;
 }
-
-CAMLprim value caml_gr_show_bitmap(value filename,int x,int y)
-{
-        AfficheBitmap(filename,grwindow.gcBitmap,x,Wcvt(y));
-        AfficheBitmap(filename,grwindow.gc,x,Wcvt(y));
-        return Val_unit;
-}
-
-
 
 CAMLprim value caml_gr_get_mousex(value unit)
 {
@@ -364,7 +358,7 @@ CAMLprim value caml_gr_draw_char(value chr)
 CAMLprim value caml_gr_draw_string(value str)
 {
         gr_check_open();
-        caml_gr_draw_text(str, string_length(str));
+        caml_gr_draw_text(str, caml_string_length(str));
         return Val_unit;
 }
 
@@ -373,12 +367,12 @@ CAMLprim value caml_gr_text_size(value str)
         SIZE extent;
         value res;
 
-        mlsize_t len = string_length(str);
+        mlsize_t len = caml_string_length(str);
         if (len > 32767) len = 32767;
 
         GetTextExtentPoint(grwindow.gc,String_val(str), len,&extent);
 
-        res = alloc_tuple(2);
+        res = caml_alloc_tuple(2);
         Field(res, 0) = Val_long(extent.cx);
         Field(res, 1) = Val_long(extent.cy);
 
@@ -420,7 +414,8 @@ CAMLprim value caml_gr_fill_arc(value *argv, int argc)
                              argv[4], argv[5], TRUE);
 }
 
-CAMLprim value caml_gr_fill_arc_nat(vx, vy, vrx, vry, vstart, vend)
+CAMLprim value caml_gr_fill_arc_nat(value vx, value vy, value vrx, value vry,
+                                    value vstart, value vend)
 {
   return gr_draw_or_fill_arc(vx, vy, vrx, vry, vstart, vend, TRUE);
 }
@@ -468,7 +463,7 @@ CAMLprim value caml_gr_create_image(value vw, value vh)
         cbm = CreateCompatibleBitmap(grwindow.gc, w, h);
         if (cbm == NULL)
                 gr_fail("create_image: cannot create bitmap", 0);
-        res = alloc_custom(&image_ops, sizeof(struct image),
+        res = caml_alloc_custom(&image_ops, sizeof(struct image),
                 w * h, Max_image_mem);
         if (res) {
                 Width (res) = w;
@@ -500,7 +495,8 @@ CAMLprim value caml_gr_draw_image(value i, value x, value y)
         if (Mask(i) == NULL) {
                 if (grremember_mode) {
                         oldBmp = SelectObject(grwindow.tempDC,Data(i));
-                        BitBlt(grwindow.gcBitmap,xdst, ydst, Width(i), Height(i),
+                        BitBlt(grwindow.gcBitmap,xdst, ydst, Width(i),
+                               Height(i),
                                 grwindow.tempDC, 0, 0, SRCCOPY);
                         SelectObject(grwindow.tempDC,oldBmp);
                 }
@@ -514,11 +510,13 @@ CAMLprim value caml_gr_draw_image(value i, value x, value y)
         else {
                 if (grremember_mode) {
                         oldBmp = SelectObject(grwindow.tempDC,Mask(i));
-                        BitBlt(grwindow.gcBitmap,xdst, ydst, Width(i), Height(i),
-                                grwindow.tempDC, 0, 0, SRCAND);
+                        BitBlt(grwindow.gcBitmap,xdst, ydst, Width(i),
+                               Height(i),
+                               grwindow.tempDC, 0, 0, SRCAND);
                         SelectObject(grwindow.tempDC,Data(i));
-                        BitBlt(grwindow.gcBitmap,xdst, ydst, Width(i), Height(i),
-                                grwindow.tempDC, 0, 0, SRCPAINT);
+                        BitBlt(grwindow.gcBitmap,xdst, ydst, Width(i),
+                               Height(i),
+                               grwindow.tempDC, 0, 0, SRCPAINT);
                         SelectObject(grwindow.tempDC,oldBmp);
                 }
                 if (grdisplay_mode) {
@@ -567,7 +565,8 @@ CAMLprim value caml_gr_make_image(value matrix)
                                 int red = (col >> 16) & 0xFF;
                                 int green = (col >> 8) & 0xFF;
                                 int blue = col & 0xFF;
-                                SetPixel(grwindow.tempDC,j, i, RGB(red, green, blue));
+                                SetPixel(grwindow.tempDC,j, i,
+                                         RGB(red, green, blue));
                         }
                 }
         }
@@ -579,8 +578,9 @@ CAMLprim value caml_gr_make_image(value matrix)
                 oldBmp = SelectObject(grwindow.tempDC,Mask(img));
                 for (i = 0; i < height; i++) {
                         for (j = 0; j < width; j++) {
-                                int col = Long_val (Field (Field (matrix, i), j));
-                                SetPixel(grwindow.tempDC,j, i, col == -1 ? 0xFFFFFF : 0);
+                                int col = Long_val (Field (Field (matrix,i),j));
+                                SetPixel(grwindow.tempDC,j, i,
+                                         col == -1 ? 0xFFFFFF : 0);
                         }
                 }
                 SelectObject(grwindow.tempDC,oldBmp);
@@ -595,10 +595,10 @@ static value alloc_int_vect(mlsize_t size)
 
         if (size == 0) return Atom(0);
         if (size <= Max_young_wosize) {
-                res = alloc(size, 0);
+                res = caml_alloc(size, 0);
         }
         else {
-                res = alloc_shr(size, 0);
+                res = caml_alloc_shr(size, 0);
         }
         for (i = 0; i < size; i++) {
                 Field(res, i) = Val_long(0);
@@ -617,7 +617,7 @@ CAMLprim value caml_gr_dump_image (value img)
         Begin_roots2(img, matrix)
                 matrix = alloc_int_vect (height);
         for (i = 0; i < height; i++) {
-                modify (&Field (matrix, i), alloc_int_vect (width));
+                caml_modify (&Field (matrix, i), alloc_int_vect (width));
         }
         End_roots();
 

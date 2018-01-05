@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
@@ -29,7 +31,7 @@ CAMLprim value unix_string_of_inet_addr(value a)
   union sock_addr_union sa;
   int len;
   int retcode;
-  if (string_length(a) == 16) {
+  if (caml_string_length(a) == 16) {
     memset(&sa.s_inet6, 0, sizeof(struct sockaddr_in6));
     sa.s_inet6.sin6_family = AF_INET6;
     sa.s_inet6.sin6_addr = GET_INET6_ADDR(a);
@@ -48,7 +50,7 @@ CAMLprim value unix_string_of_inet_addr(value a)
     res = buffer;
 #else
   char buffer[64];
-  if (string_length(a) == 16)
+  if (caml_string_length(a) == 16)
     res = (char *)
       inet_ntop(AF_INET6, (const void *) &GET_INET6_ADDR(a),
                 buffer, sizeof(buffer));
@@ -61,12 +63,12 @@ CAMLprim value unix_string_of_inet_addr(value a)
   res = inet_ntoa(GET_INET_ADDR(a));
 #endif
   if (res == NULL) uerror("string_of_inet_addr", Nothing);
-  return copy_string(res);
+  return caml_copy_string(res);
 }
 
 #else
 
 CAMLprim value unix_string_of_inet_addr(value a)
-{ invalid_argument("string_of_inet_addr not implemented"); }
+{ caml_invalid_argument("string_of_inet_addr not implemented"); }
 
 #endif

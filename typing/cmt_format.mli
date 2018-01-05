@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*                  Fabrice Le Fessant, INRIA Saclay                   *)
-(*                                                                     *)
-(*  Copyright 2012 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                   Fabrice Le Fessant, INRIA Saclay                     *)
+(*                                                                        *)
+(*   Copyright 2012 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (** cmt and cmti files format. *)
 
@@ -80,7 +83,7 @@ val read : string -> Cmi_format.cmi_infos option * cmt_infos option
 val read_cmt : string -> cmt_infos
 val read_cmi : string -> Cmi_format.cmi_infos
 
-(** [save_cmt modname filename binary_annots sourcefile initial_env sg]
+(** [save_cmt filename modname binary_annots sourcefile initial_env cmi]
     writes a cmt(i) file.  *)
 val save_cmt :
   string ->  (* filename.cmt to generate *)
@@ -88,8 +91,7 @@ val save_cmt :
   binary_annots ->
   string option ->  (* source file *)
   Env.t -> (* initial env *)
-  Types.signature option -> (* if a .cmi was generated,
-                               the signature saved there *)
+  Cmi_format.cmi_infos option -> (* if a .cmi was generated *)
   unit
 
 (* Miscellaneous functions *)

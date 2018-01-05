@@ -6,11 +6,9 @@ Subject: Compute a stable name for preprocessed files
  driver/pparse.ml | 11 ++++++++++-
  1 file changed, 10 insertions(+), 1 deletion(-)
 
-diff --git a/driver/pparse.ml b/driver/pparse.ml
-index b67c180..321d0cc 100644
 --- a/driver/pparse.ml
 +++ b/driver/pparse.ml
-@@ -18,10 +18,19 @@ type error =
+@@ -21,10 +21,19 @@
  
  exception Error of error
  

@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*                  Fabrice Le Fessant, INRIA Saclay                   *)
-(*                                                                     *)
-(*  Copyright 2012 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                   Fabrice Le Fessant, INRIA Saclay                     *)
+(*                                                                        *)
+(*   Copyright 2012 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 let gen_annot = ref false
 let gen_ml = ref false
@@ -22,6 +25,12 @@ let arg_list = [
   "-src", Arg.Set gen_ml,
     " : convert .cmt or .cmti back to source code (without comments)";
   "-info", Arg.Set print_info_arg, " : print information on the file";
+  "-args", Arg.Expand Arg.read_arg,
+    " <file> Read additional newline separated command line arguments \n\
+    \      from <file>";
+  "-args0", Arg.Expand Arg.read_arg0,
+    "<file> Read additional NUL separated command line arguments from \n\
+    \      <file>";
   ]
 
 let arg_usage =
@@ -76,7 +85,7 @@ let print_info cmt =
 let _ =
   Clflags.annotations := true;
 
-  Arg.parse arg_list  (fun filename ->
+  Arg.parse_expand arg_list  (fun filename ->
     if
       Filename.check_suffix filename ".cmt" ||
         Filename.check_suffix filename ".cmti"

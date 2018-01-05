@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Insertion of moves to suggest possible spilling / reloading points
    before register allocation. *)
@@ -69,7 +72,7 @@ let add_superpressure_regs op live_regs res_regs spilled =
     (fun r ->
       if Reg.Set.mem r spilled then () else begin
         match r.loc with
-          Stack s -> ()
+          Stack _ -> ()
         | _ -> let c = Proc.register_class r in
                pressure.(c) <- pressure.(c) + 1
       end)
@@ -129,8 +132,6 @@ let find_reload_at_exit k =
   with
   | Not_found -> Misc.fatal_error "Spill.find_reload_at_exit"
 
-let reload_at_break = ref Reg.Set.empty
-
 let rec reload i before =
   incr current_date;
   record_use i.arg;
@@ -138,10 +139,10 @@ let rec reload i before =
   match i.desc with
     Iend ->
       (i, before)
-  | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
+  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
       (add_reloads (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
-  | Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) ->
+  | Iop(Icall_ind _ | Icall_imm _ | Iextcall { alloc = true; }) ->
       (* All regs live across must be spilled *)
       let (new_next, finally) = reload i.next i.live in
       (add_reloads (Reg.inter_set_array before i.arg)
@@ -198,11 +199,13 @@ let rec reload i before =
        finally)
   | Iloop(body) ->
       let date_start = !current_date in
+      let destroyed_at_fork_start = !destroyed_at_fork in
       let at_head = ref before in
       let final_body = ref body in
       begin try
         while true do
           current_date := date_start;
+          destroyed_at_fork := destroyed_at_fork_start;
           let (new_body, new_at_head) = reload body !at_head in
           let merged_at_head = Reg.Set.union !at_head new_at_head in
           if Reg.Set.equal merged_at_head !at_head then begin
@@ -216,16 +219,41 @@ let rec reload i before =
       let (new_next, finally) = reload i.next Reg.Set.empty in
       (instr_cons (Iloop(!final_body)) i.arg i.res new_next,
        finally)
-  | Icatch(nfail, body, handler) ->
-      let new_set = ref Reg.Set.empty in
-      reload_at_exit := (nfail, new_set) :: !reload_at_exit ;
+  | Icatch(rec_flag, handlers, body) ->
+      let new_sets = List.map
+          (fun (nfail, _) -> nfail, ref Reg.Set.empty) handlers in
+      let previous_reload_at_exit = !reload_at_exit in
+      reload_at_exit := new_sets @ !reload_at_exit ;
       let (new_body, after_body) = reload body before in
-      let at_exit = !new_set in
-      reload_at_exit := List.tl !reload_at_exit ;
-      let (new_handler, after_handler) = reload handler at_exit in
-      let (new_next, finally) =
-        reload i.next (Reg.Set.union after_body after_handler) in
-      (instr_cons (Icatch(nfail, new_body, new_handler)) i.arg i.res new_next,
+      let rec fixpoint () =
+        let at_exits = List.map (fun (nfail, set) -> (nfail, !set)) new_sets in
+        let res =
+          List.map2 (fun (nfail', handler) (nfail, at_exit) ->
+              assert(nfail = nfail');
+              reload handler at_exit) handlers at_exits in
+        match rec_flag with
+        | Cmm.Nonrecursive ->
+            res
+        | Cmm.Recursive ->
+            let equal = List.for_all2 (fun (nfail', at_exit) (nfail, new_set) ->
+                assert(nfail = nfail');
+                Reg.Set.equal at_exit !new_set)
+                at_exits new_sets in
+            if equal
+            then res
+            else fixpoint ()
+      in
+      let res = fixpoint () in
+      reload_at_exit := previous_reload_at_exit;
+      let union = List.fold_left
+          (fun acc (_, after_handler) -> Reg.Set.union acc after_handler)
+          after_body res in
+      let (new_next, finally) = reload i.next union in
+      let new_handlers = List.map2
+          (fun (nfail, _) (new_handler, _) -> nfail, new_handler)
+          handlers res in
+      (instr_cons
+         (Icatch(rec_flag, new_handlers, new_body)) i.arg i.res new_next,
        finally)
   | Iexit nfail ->
       let set = find_reload_at_exit nfail in
@@ -261,11 +289,15 @@ let rec reload i before =
    NB ter: is it the same thing for catch bodies ?
 *)
 
+(* CR mshinwell for pchambart: Try to test the new algorithms for dealing
+   with Icatch. *)
 
 let spill_at_exit = ref []
 let find_spill_at_exit k =
   try
-    List.assoc k !spill_at_exit
+    let used, set = List.assoc k !spill_at_exit in
+    used := true;
+    set
   with
   | Not_found -> Misc.fatal_error "Spill.find_spill_at_exit"
 
@@ -283,7 +315,7 @@ let rec spill i finally =
   match i.desc with
     Iend ->
       (i, finally)
-  | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
+  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
       (i, Reg.Set.empty)
   | Iop Ireload ->
       let (new_next, after) = spill i.next finally in
@@ -295,8 +327,8 @@ let rec spill i finally =
       let before1 = Reg.diff_set_array after i.res in
       let before =
         match i.desc with
-          Iop Icall_ind | Iop(Icall_imm _) | Iop(Iextcall _)
-        | Iop(Iintop Icheckbound) | Iop(Iintop_imm(Icheckbound, _)) ->
+          Iop Icall_ind _ | Iop(Icall_imm _) | Iop(Iextcall _)
+        | Iop(Iintop (Icheckbound _)) | Iop(Iintop_imm((Icheckbound _), _)) ->
             Reg.Set.union before1 !spill_at_raise
         | _ ->
             before1 in
@@ -308,7 +340,7 @@ let rec spill i finally =
       let (new_ifso, before_ifso) = spill ifso at_join in
       let (new_ifnot, before_ifnot) = spill ifnot at_join in
       if
-        !inside_loop || !inside_arm
+        !inside_loop || !inside_arm || !inside_catch
       then
         (instr_cons (Iifthenelse(test, new_ifso, new_ifnot))
                      i.arg i.res new_next,
@@ -362,16 +394,46 @@ let rec spill i finally =
       inside_loop := saved_inside_loop;
       (instr_cons (Iloop(!final_body)) i.arg i.res new_next,
        !at_head)
-  | Icatch(nfail, body, handler) ->
+  | Icatch(rec_flag, handlers, body) ->
       let (new_next, at_join) = spill i.next finally in
-      let (new_handler, at_exit) = spill handler at_join in
       let saved_inside_catch = !inside_catch in
       inside_catch := true ;
-      spill_at_exit := (nfail, at_exit) :: !spill_at_exit ;
-      let (new_body, before) = spill body at_join in
-      spill_at_exit := List.tl !spill_at_exit;
+      let previous_spill_at_exit = !spill_at_exit in
+      let spill_at_exit_add at_exits = List.map2
+          (fun (nfail,_) at_exit -> nfail, (ref false, at_exit))
+          handlers at_exits
+      in
+      let rec fixpoint at_exits =
+        let spill_at_exit_add = spill_at_exit_add at_exits in
+        spill_at_exit := spill_at_exit_add @ !spill_at_exit;
+        let res =
+          List.map (fun (_, handler) -> spill handler at_join) handlers
+        in
+        spill_at_exit := previous_spill_at_exit;
+        match rec_flag with
+        | Cmm.Nonrecursive ->
+            res
+        | Cmm.Recursive ->
+            let equal =
+              List.for_all2
+                (fun (_new_handler, new_at_exit) (_, (used, at_exit)) ->
+                   Reg.Set.equal at_exit new_at_exit || not !used)
+                res spill_at_exit_add in
+            if equal
+            then res
+            else fixpoint (List.map snd res)
+      in
+      let res = fixpoint (List.map (fun _ -> Reg.Set.empty) handlers) in
       inside_catch := saved_inside_catch ;
-      (instr_cons (Icatch(nfail, new_body, new_handler)) i.arg i.res new_next,
+      let spill_at_exit_add = spill_at_exit_add (List.map snd res) in
+      spill_at_exit := spill_at_exit_add @ !spill_at_exit;
+      let (new_body, before) = spill body at_join in
+      spill_at_exit := previous_spill_at_exit;
+      let new_handlers = List.map2
+          (fun (nfail, _) (handler, _) -> nfail, handler)
+          handlers res in
+      (instr_cons (Icatch(rec_flag, new_handlers, new_body))
+         i.arg i.res new_next,
        before)
   | Iexit nfail ->
       (i, find_spill_at_exit nfail)
@@ -392,7 +454,8 @@ let rec spill i finally =
 let reset () =
   spill_env := Reg.Map.empty;
   use_date := Reg.Map.empty;
-  current_date := 0
+  current_date := 0;
+  destroyed_at_fork := []
 
 let fundecl f =
   reset ();
@@ -403,8 +466,11 @@ let fundecl f =
     add_spills (Reg.inter_set_array tospill_at_entry f.fun_args) body2 in
   spill_env := Reg.Map.empty;
   use_date := Reg.Map.empty;
+  destroyed_at_fork := [];
   { fun_name = f.fun_name;
     fun_args = f.fun_args;
     fun_body = new_body;
     fun_fast = f.fun_fast;
-    fun_dbg  = f.fun_dbg }
+    fun_dbg  = f.fun_dbg;
+    fun_spacetime_shape = f.fun_spacetime_shape;
+  }

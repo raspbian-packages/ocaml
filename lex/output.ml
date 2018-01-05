@@ -1,14 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the Q Public License version 1.0.               *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Output the DFA tables and its entry points *)
 
@@ -47,44 +50,45 @@ let output_byte_array oc v =
 let output_tables oc tbl =
   output_string oc "let __ocaml_lex_tables = {\n";
 
-  fprintf oc "  Lexing.lex_base = \n%a;\n" output_array tbl.tbl_base;
-  fprintf oc "  Lexing.lex_backtrk = \n%a;\n" output_array tbl.tbl_backtrk;
-  fprintf oc "  Lexing.lex_default = \n%a;\n" output_array tbl.tbl_default;
-  fprintf oc "  Lexing.lex_trans = \n%a;\n" output_array tbl.tbl_trans;
-  fprintf oc "  Lexing.lex_check = \n%a;\n" output_array tbl.tbl_check;
-  fprintf oc "  Lexing.lex_base_code = \n%a;\n" output_array tbl.tbl_base_code;
+  fprintf oc "  Lexing.lex_base =\n%a;\n" output_array tbl.tbl_base;
+  fprintf oc "  Lexing.lex_backtrk =\n%a;\n" output_array tbl.tbl_backtrk;
+  fprintf oc "  Lexing.lex_default =\n%a;\n" output_array tbl.tbl_default;
+  fprintf oc "  Lexing.lex_trans =\n%a;\n" output_array tbl.tbl_trans;
+  fprintf oc "  Lexing.lex_check =\n%a;\n" output_array tbl.tbl_check;
+  fprintf oc "  Lexing.lex_base_code =\n%a;\n" output_array tbl.tbl_base_code;
 
-  fprintf oc "  Lexing.lex_backtrk_code = \n%a;\n"
+  fprintf oc "  Lexing.lex_backtrk_code =\n%a;\n"
     output_array tbl.tbl_backtrk_code;
-  fprintf oc "  Lexing.lex_default_code = \n%a;\n"
+  fprintf oc "  Lexing.lex_default_code =\n%a;\n"
     output_array tbl.tbl_default_code;
-  fprintf oc "  Lexing.lex_trans_code = \n%a;\n"
+  fprintf oc "  Lexing.lex_trans_code =\n%a;\n"
     output_array tbl.tbl_trans_code;
-  fprintf oc "  Lexing.lex_check_code = \n%a;\n"
+  fprintf oc "  Lexing.lex_check_code =\n%a;\n"
     output_array tbl.tbl_check_code;
-  fprintf oc "  Lexing.lex_code = \n%a;\n" output_byte_array tbl.tbl_code;
+  fprintf oc "  Lexing.lex_code =\n%a;\n" output_byte_array tbl.tbl_code;
 
   output_string oc "}\n\n"
 
 
 (* Output the entries *)
 
-let output_entry sourcefile ic oc has_refill oci e =
+let output_entry ic oc has_refill oci e =
   let init_num, init_moves = e.auto_initial_state in
-  fprintf oc "%s %alexbuf =\
-\n  %a%a  __ocaml_lex_%s_rec %alexbuf %d\n"
+  fprintf oc
+    "%s %alexbuf =\
+   \n  %a%a __ocaml_lex_%s_rec %alexbuf %d\n"
     e.auto_name
-    output_args  e.auto_args
+    output_args e.auto_args
     (fun oc x ->
       if x > 0 then
-        fprintf oc "lexbuf.Lexing.lex_mem <- Array.make %d (-1) ; " x)
+        fprintf oc "lexbuf.Lexing.lex_mem <- Array.make %d (-1);" x)
     e.auto_mem_size
     (output_memory_actions "  ") init_moves
     e.auto_name
     output_args e.auto_args
     init_num;
   fprintf oc "and __ocaml_lex_%s_rec %alexbuf __ocaml_lex_state =\n"
-    e.auto_name output_args e.auto_args ;
+    e.auto_name output_args e.auto_args;
   fprintf oc "  match Lexing.%sengine"
           (if e.auto_mem_size == 0 then "" else "new_");
   fprintf oc " __ocaml_lex_tables __ocaml_lex_state lexbuf with\n    ";
@@ -98,13 +102,13 @@ let output_entry sourcefile ic oc has_refill oci e =
     e.auto_actions;
   if has_refill then
     fprintf oc
-      "  | __ocaml_lex_state -> __ocaml_lex_refill \
-     \n      (fun lexbuf -> lexbuf.Lexing.refill_buff lexbuf; \
+      "  | __ocaml_lex_state -> __ocaml_lex_refill\
+     \n      (fun lexbuf -> lexbuf.Lexing.refill_buff lexbuf;\
      \n         __ocaml_lex_%s_rec %alexbuf __ocaml_lex_state) lexbuf\n\n"
       e.auto_name output_args e.auto_args
   else
     fprintf oc
-      "  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; \
+      "  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;\
      \n      __ocaml_lex_%s_rec %alexbuf __ocaml_lex_state\n\n"
       e.auto_name output_args e.auto_args
 
@@ -112,7 +116,7 @@ let output_entry sourcefile ic oc has_refill oci e =
 
 exception Table_overflow
 
-let output_lexdef sourcefile ic oc oci header rh tables entry_points trailer =
+let output_lexdef ic oc oci header rh tables entry_points trailer =
   if not !Common.quiet_mode then
     Printf.printf "%d states, %d transitions, table size %d bytes\n"
       (Array.length tables.tbl_base)
@@ -128,7 +132,7 @@ let output_lexdef sourcefile ic oc oci header rh tables entry_points trailer =
           Array.length tables.tbl_check_code) +
     Array.length tables.tbl_code) in
   if size_groups > 0 && not !Common.quiet_mode then
-    Printf.printf "%d additional bytes used for bindings\n" size_groups ;
+    Printf.printf "%d additional bytes used for bindings\n" size_groups;
   flush stdout;
   if Array.length tables.tbl_trans > 0x8000 then raise Table_overflow;
   copy_chunk ic oc oci header false;
@@ -138,11 +142,11 @@ let output_lexdef sourcefile ic oc oci header rh tables entry_points trailer =
     [] -> ()
   | entry1 :: entries ->
     output_string oc "let rec ";
-    output_entry sourcefile ic oc has_refill oci entry1;
+    output_entry ic oc has_refill oci entry1;
       List.iter
         (fun e ->
            output_string oc "and ";
-           output_entry sourcefile ic oc has_refill oci e)
+           output_entry ic oc has_refill oci e)
         entries;
       output_string oc ";;\n\n";
   end;

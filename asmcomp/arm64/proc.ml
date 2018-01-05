@@ -1,16 +1,19 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Gallium, INRIA Rocquencourt         *)
-(*                  Benedikt Meurer, University of Siegen              *)
-(*                                                                     *)
-(*    Copyright 2013 Institut National de Recherche en Informatique    *)
-(*    et en Automatique. Copyright 2012 Benedikt Meurer. All rights    *)
-(*    reserved.  This file is distributed  under the terms of the Q    *)
-(*    Public License version 1.0.                                      *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Gallium, INRIA Rocquencourt           *)
+(*                 Benedikt Meurer, University of Siegen                  *)
+(*                                                                        *)
+(*   Copyright 2013 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*   Copyright 2012 Benedikt Meurer.                                      *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (* Description of the ARM processor in 64-bit mode *)
 
@@ -59,8 +62,8 @@ let num_register_classes = 2
 
 let register_class r =
   match r.typ with
-  | (Int | Addr)  -> 0
-  | Float         -> 1
+  | Val | Int | Addr  -> 0
+  | Float -> 1
 
 let num_available_registers =
   [| 23; 32 |] (* first 23 int regs allocatable; all float regs allocatable *)
@@ -101,6 +104,8 @@ let reg_d7 = phys_reg 107
 let stack_slot slot ty =
   Reg.at_location ty (Stack slot)
 
+let loc_spacetime_node_hole = Reg.dummy  (* Spacetime unsupported *)
+
 (* Calling conventions *)
 
 let calling_conventions
@@ -111,7 +116,7 @@ let calling_conventions
   let ofs = ref 0 in
   for i = 0 to Array.length arg - 1 do
     match arg.(i).typ with
-      Int | Addr as ty ->
+    | Val | Int | Addr as ty ->
         if !int <= last_int then begin
           loc.(i) <- phys_reg !int;
           incr int
@@ -132,13 +137,15 @@ let calling_conventions
 
 let incoming ofs = Incoming ofs
 let outgoing ofs = Outgoing ofs
-let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
+let not_supported _ofs = fatal_error "Proc.loc_results: cannot call"
 
 (* OCaml calling convention:
      first integer args in r0...r15
      first float args in d0...d15
      remaining args on stack.
    Return values in r0...r15 or d0...d15. *)
+
+let max_arguments_for_tailcalls = 16
 
 let loc_arguments arg =
   calling_conventions 0 15 100 115 outgoing arg
@@ -154,7 +161,11 @@ let loc_results res =
    Return values in r0...r1 or d0. *)
 
 let loc_external_arguments arg =
-  calling_conventions 0 7 100 107 outgoing arg
+  let arg =
+    Array.map (fun regs -> assert (Array.length regs = 1); regs.(0)) arg
+  in
+  let loc, alignment = calling_conventions 0 7 100 107 outgoing arg in
+  Array.map (fun reg -> [|reg|]) loc, alignment
 let loc_external_results res =
   let (loc, _) = calling_conventions 0 1 100 100 not_supported res in loc
 
@@ -162,7 +173,7 @@ let loc_exn_bucket = phys_reg 0
 
 (* Volatile registers: none *)
 
-let regs_are_volatile rs = false
+let regs_are_volatile _rs = false
 
 (* Registers destroyed by operations *)
 
@@ -175,9 +186,9 @@ let destroyed_at_c_call =
      124;125;126;127;128;129;130;131])
 
 let destroyed_at_oper = function
-  | Iop(Icall_ind | Icall_imm _) | Iop(Iextcall(_, true)) ->
+  | Iop(Icall_ind _ | Icall_imm _) | Iop(Iextcall { alloc = true; }) ->
       all_phys_regs
-  | Iop(Iextcall(_, false)) ->
+  | Iop(Iextcall { alloc = false; }) ->
       destroyed_at_c_call
   | Iop(Ialloc _) ->
       [| reg_x15 |]
@@ -190,12 +201,12 @@ let destroyed_at_raise = all_phys_regs
 (* Maximal register pressure *)
 
 let safe_register_pressure = function
-  | Iextcall(_, _) -> 8
+  | Iextcall _ -> 8
   | Ialloc _ -> 25
   | _ -> 26
 
 let max_register_pressure = function
-  | Iextcall(_, _) -> [| 10; 8 |]
+  | Iextcall _ -> [| 10; 8 |]
   | Ialloc _ -> [| 25; 32 |]
   | Iintoffloat | Ifloatofint
   | Iload(Single, _) | Istore(Single, _, _) -> [| 26; 31 |]
@@ -205,9 +216,9 @@ let max_register_pressure = function
    registers). *)
 
 let op_is_pure = function
-  | Icall_ind | Icall_imm _ | Itailcall_ind | Itailcall_imm _
+  | Icall_ind _ | Icall_imm _ | Itailcall_ind _ | Itailcall_imm _
   | Iextcall _ | Istackoffset _ | Istore _ | Ialloc _
-  | Iintop(Icheckbound) | Iintop_imm(Icheckbound, _)
+  | Iintop(Icheckbound _) | Iintop_imm(Icheckbound _, _)
   | Ispecific(Ishiftcheckbound _) -> false
   | _ -> true
 

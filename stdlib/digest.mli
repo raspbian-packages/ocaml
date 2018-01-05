@@ -1,15 +1,17 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                                OCaml                                *)
-(*                                                                     *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
-(*                                                                     *)
-(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
-(*  en Automatique.  All rights reserved.  This file is distributed    *)
-(*  under the terms of the GNU Library General Public License, with    *)
-(*  the special exception on linking described in file ../LICENSE.     *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 (** MD5 message digest.
 
@@ -32,6 +34,10 @@ val compare : t -> t -> int
     function [compare] allows the module [Digest] to be passed as
     argument to the functors {!Set.Make} and {!Map.Make}.
     @since 4.00.0 *)
+
+val equal : t -> t -> bool
+(** The equal function for 16-character digest.
+    @since 4.03.0 *)
 
 val string : string -> t
 (** Return the digest of the given string. *)
@@ -67,7 +73,9 @@ val input : in_channel -> t
 (** Read a digest from the given input channel. *)
 
 val to_hex : t -> string
-(** Return the printable hexadecimal representation of the given digest. *)
+(** Return the printable hexadecimal representation of the given digest.
+    Raise [Invalid_argument] if the argument is not exactly 16 bytes.
+ *)
 
 val from_hex : string -> t
 (** Convert a hexadecimal representation back into the corresponding digest.

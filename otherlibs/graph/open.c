@@ -1,15 +1,17 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../../LICENSE.  */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
 
 #include <string.h>
 #include <fcntl.h>
@@ -232,7 +234,7 @@ value caml_gr_id_of_window(Window win)
   char tmp[256];
 
   sprintf(tmp, "%lu", (unsigned long)win);
-  return copy_string( tmp );
+  return caml_copy_string( tmp );
 }
 
 value caml_gr_window_id(void)
@@ -243,7 +245,7 @@ value caml_gr_window_id(void)
 
 value caml_gr_set_window_title(value n)
 {
-  if (window_name != NULL) stat_free(window_name);
+  if (window_name != NULL) caml_stat_free(window_name);
   window_name = caml_strdup(String_val(n));
   if (caml_gr_initialized) {
     XStoreName(caml_gr_display, caml_gr_window.win, window_name);
@@ -371,11 +373,11 @@ void caml_gr_fail(char *fmt, char *arg)
   if (graphic_failure_exn == NULL) {
     graphic_failure_exn = caml_named_value("Graphics.Graphic_failure");
     if (graphic_failure_exn == NULL)
-      invalid_argument("Exception Graphics.Graphic_failure not initialized,"
+      caml_invalid_argument("Exception Graphics.Graphic_failure not initialized,"
                        " must link graphics.cma");
   }
   sprintf(buffer, fmt, arg);
-  raise_with_string(*graphic_failure_exn, buffer);
+  caml_raise_with_string(*graphic_failure_exn, buffer);
 }
 
 void caml_gr_check_open(void)

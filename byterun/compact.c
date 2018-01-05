@@ -1,15 +1,19 @@
-/***********************************************************************/
-/*                                                                     */
-/*                                OCaml                                */
-/*                                                                     */
-/*             Damien Doligez, projet Para, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  en Automatique.  All rights reserved.  This file is distributed    */
-/*  under the terms of the GNU Library General Public License, with    */
-/*  the special exception on linking described in file ../LICENSE.     */
-/*                                                                     */
-/***********************************************************************/
+/**************************************************************************/
+/*                                                                        */
+/*                                 OCaml                                  */
+/*                                                                        */
+/*              Damien Doligez, projet Para, INRIA Rocquencourt           */
+/*                                                                        */
+/*   Copyright 1996 Institut National de Recherche en Informatique et     */
+/*     en Automatique.                                                    */
+/*                                                                        */
+/*   All rights reserved.  This file is distributed under the terms of    */
+/*   the GNU Lesser General Public License version 2.1, with the          */
+/*   special exception on linking described in the file LICENSE.          */
+/*                                                                        */
+/**************************************************************************/
+
+#define CAML_INTERNALS
 
 #include <string.h>
 
@@ -24,6 +28,7 @@
 #include "caml/mlvalues.h"
 #include "caml/roots.h"
 #include "caml/weak.h"
+#include "caml/compact.h"
 
 extern uintnat caml_percent_free;                   /* major_gc.c */
 extern void caml_shrink_heap (char *);              /* memory.c */
@@ -44,10 +49,16 @@ extern void caml_shrink_heap (char *);              /* memory.c */
   XXX (see [caml_register_global_roots])
   XXX Should be able to fix it to only assume 2-byte alignment.
 */
-#define Make_ehd(s,t,c) (((s) << 10) | (t) << 2 | (c))
+#ifdef WITH_PROFINFO
+#define Make_ehd(s,t,c,p) \
+  (((s) << 10) | (t) << 2 | (c) | ((p) << PROFINFO_SHIFT))
+#else
+#define Make_ehd(s,t,c,p) (((s) << 10) | (t) << 2 | (c))
+#endif
 #define Whsize_ehd(h) Whsize_hd (h)
 #define Wosize_ehd(h) Wosize_hd (h)
 #define Tag_ehd(h) (((h) >> 2) & 0xFF)
+#define Profinfo_ehd(hd) Profinfo_hd(hd)
 #define Ecolor(w) ((w) & 3)
 
 typedef uintnat word;
@@ -86,7 +97,7 @@ static void invert_pointer_at (word *p)
           Hd_val (q) = (header_t) ((word) p | 2);
           /* Change block header's tag to Infix_tag, and change its size
              to point to the infix list. */
-          *hp = Make_ehd (Wosize_bhsize (q - val), Infix_tag, 3);
+          *hp = Make_ehd (Wosize_bhsize (q - val), Infix_tag, 3, (uintnat) 0);
         }else{                            Assert (Tag_ehd (*hp) == Infix_tag);
           /* Point the last of this infix list to the current first infix
              list of the block. */
@@ -94,7 +105,7 @@ static void invert_pointer_at (word *p)
           /* Point the head of this infix list to the above. */
           Hd_val (q) = (header_t) ((word) p | 2);
           /* Change block header's size to point to this infix list. */
-          *hp = Make_ehd (Wosize_bhsize (q - val), Infix_tag, 3);
+          *hp = Make_ehd (Wosize_bhsize (q - val), Infix_tag, 3, (uintnat) 0);
         }
       }
       break;
@@ -106,7 +117,7 @@ static void invert_pointer_at (word *p)
   }
 }
 
-static void invert_root (value v, value *p)
+void invert_root (value v, value *p)
 {
   invert_pointer_at ((word *) p);
 }
@@ -123,8 +134,8 @@ static void init_compact_allocate (void)
   compact_fl = caml_heap_start;
 }
 
+/* [size] is a number of bytes and includes the header size */
 static char *compact_allocate (mlsize_t size)
-                                      /* in bytes, including header */
 {
   char *chunk, *adr;
 
@@ -166,10 +177,10 @@ static void do_compaction (void)
 
         if (Is_blue_hd (hd)){
           /* Free object.  Give it a string tag. */
-          Hd_hp (p) = Make_ehd (sz, String_tag, 3);
+          Hd_hp (p) = Make_ehd (sz, String_tag, 3, (uintnat) 0);
         }else{                                      Assert (Is_white_hd (hd));
           /* Live object.  Keep its tag. */
-          Hd_hp (p) = Make_ehd (sz, Tag_hd (hd), 3);
+          Hd_hp (p) = Make_ehd (sz, Tag_hd (hd), 3, Profinfo_hd (hd));
         }
         p += Whsize_wosize (sz);
       }
@@ -185,8 +196,9 @@ static void do_compaction (void)
     /* Invert roots first because the threads library needs some heap
        data structures to find its roots.  Fortunately, it doesn't need
        the headers (see above). */
-    caml_do_roots (invert_root);
-    caml_final_do_weak_roots (invert_root);
+    caml_do_roots (invert_root, 1);
+    /* The values to be finalised are not roots but should still be inverted */
+    caml_final_invert_finalisable_values ();
 
     ch = caml_heap_start;
     while (ch != NULL){
@@ -221,7 +233,7 @@ static void do_compaction (void)
     }
     /* Invert weak pointers. */
     {
-      value *pp = &caml_weak_list_head;
+      value *pp = &caml_ephe_list_head;
       value p;
       word q;
       size_t sz, i;
@@ -233,7 +245,7 @@ static void do_compaction (void)
         while (Ecolor (q) == 0) q = * (word *) q;
         sz = Wosize_ehd (q);
         for (i = 1; i < sz; i++){
-          if (Field (p,i) != caml_weak_none){
+          if (Field (p,i) != caml_ephe_none){
             invert_pointer_at ((word *) &(Field (p,i)));
           }
         }
@@ -261,12 +273,17 @@ static void do_compaction (void)
           size_t sz;
           tag_t t;
           char *newadr;
+#ifdef WITH_PROFINFO
+          uintnat profinfo;
+#endif
           word *infixes = NULL;
 
           while (Ecolor (q) == 0) q = * (word *) q;
           sz = Whsize_ehd (q);
           t = Tag_ehd (q);
-
+#ifdef WITH_PROFINFO
+          profinfo = Profinfo_ehd (q);
+#endif
           if (t == Infix_tag){
             /* Get the original header of this block. */
             infixes = p + sz;
@@ -283,7 +300,8 @@ static void do_compaction (void)
             * (word *) q = (word) Val_hp (newadr);
             q = next;
           }
-          *p = Make_header (Wosize_whsize (sz), t, Caml_white);
+          *p = Make_header_with_profinfo (Wosize_whsize (sz), t, Caml_white,
+            profinfo);
 
           if (infixes != NULL){
             /* Rebuild the infix headers and revert the infix pointers. */
@@ -297,6 +315,9 @@ static void do_compaction (void)
                 * (word *) q = (word) Val_hp ((word *) newadr + (infixes - p));
                 q = next;
               }                    Assert (Ecolor (q) == 1 || Ecolor (q) == 3);
+              /* No need to preserve any profinfo value on the [Infix_tag]
+                 headers; the Spacetime profiling heap snapshot code doesn't
+                 look at them. */
               *infixes = Make_header (infixes - p, Infix_tag, Caml_white);
               infixes = (word *) q;
             }
@@ -397,9 +418,16 @@ uintnat caml_percent_max;  /* used in gc_ctrl.c and memory.c */
 
 void caml_compact_heap (void)
 {
-  uintnat target_words, target_size, live;
+  uintnat target_wsz, live;
+  CAML_INSTR_SETUP(tmr, "compact");
+
+  CAMLassert (caml_young_ptr == caml_young_alloc_end);
+  CAMLassert (caml_ref_table.ptr == caml_ref_table.base);
+  CAMLassert (caml_ephe_ref_table.ptr == caml_ephe_ref_table.base);
+  CAMLassert (caml_custom_table.ptr == caml_custom_table.base);
 
   do_compaction ();
+  CAML_INSTR_TIME (tmr, "compact/main");
   /* Compaction may fail to shrink the heap to a reasonable size
      because it deals in complete chunks: if a very large chunk
      is at the beginning of the heap, everything gets moved to
@@ -414,28 +442,36 @@ void caml_compact_heap (void)
      See PR#5389
   */
   /* We compute:
-     freewords = caml_fl_cur_size                  (exact)
+     freewords = caml_fl_cur_wsz                   (exact)
      heapwords = Wsize_bsize (caml_heap_size)      (exact)
      live = heapwords - freewords
      wanted = caml_percent_free * (live / 100 + 1) (same as in do_compaction)
-     target_words = live + wanted
+     target_wsz = live + wanted
      We add one page to make sure a small difference in counting sizes
      won't make [do_compaction] keep the second block (and break all sorts
      of invariants).
 
-     We recompact if target_size < heap_size / 2
+     We recompact if target_wsz < heap_size / 2
   */
-  live = Wsize_bsize (caml_stat_heap_size) - caml_fl_cur_size;
-  target_words = live + caml_percent_free * (live / 100 + 1)
+  live = caml_stat_heap_wsz - caml_fl_cur_wsz;
+  target_wsz = live + caml_percent_free * (live / 100 + 1)
                  + Wsize_bsize (Page_size);
-  target_size = caml_round_heap_chunk_size (Bsize_wsize (target_words));
-  if (target_size < caml_stat_heap_size / 2){
+  target_wsz = caml_clip_heap_chunk_wsz (target_wsz);
+
+#ifdef HAS_HUGE_PAGES
+  if (caml_use_huge_pages
+      && Bsize_wsize (caml_stat_heap_wsz) <= HUGE_PAGE_SIZE)
+    return;
+#endif
+
+  if (target_wsz < caml_stat_heap_wsz / 2){
+    /* Recompact. */
     char *chunk;
 
-    caml_gc_message (0x10, "Recompacting heap (target=%luk)\n",
-                     target_size / 1024);
+    caml_gc_message (0x10, "Recompacting heap (target=%luk words)\n",
+                     target_wsz / 1024);
 
-    chunk = caml_alloc_for_heap (target_size);
+    chunk = caml_alloc_for_heap (Bsize_wsize (target_wsz));
     if (chunk == NULL) return;
     /* PR#5757: we need to make the new blocks blue, or they won't be
        recognized as free by the recompaction. */
@@ -448,24 +484,25 @@ void caml_compact_heap (void)
     Chunk_next (chunk) = caml_heap_start;
     caml_heap_start = chunk;
     ++ caml_stat_heap_chunks;
-    caml_stat_heap_size += Chunk_size (chunk);
-    if (caml_stat_heap_size > caml_stat_top_heap_size){
-      caml_stat_top_heap_size = caml_stat_heap_size;
+    caml_stat_heap_wsz += Wsize_bsize (Chunk_size (chunk));
+    if (caml_stat_heap_wsz > caml_stat_top_heap_wsz){
+      caml_stat_top_heap_wsz = caml_stat_heap_wsz;
     }
     do_compaction ();
     Assert (caml_stat_heap_chunks == 1);
     Assert (Chunk_next (caml_heap_start) == NULL);
-    Assert (caml_stat_heap_size == Chunk_size (chunk));
+    Assert (caml_stat_heap_wsz == Wsize_bsize (Chunk_size (chunk)));
+    CAML_INSTR_TIME (tmr, "compact/recompact");
   }
 }
 
 void caml_compact_heap_maybe (void)
 {
-  /* Estimated free words in the heap:
-         FW = fl_size_at_change + 3 * (caml_fl_cur_size
-                                       - caml_fl_size_at_phase_change)
-         FW = 3 * caml_fl_cur_size - 2 * caml_fl_size_at_phase_change
-     Estimated live words:      LW = caml_stat_heap_size - FW
+  /* Estimated free+garbage words in the heap:
+         FW = fl_size_at_phase_change + 3 * (caml_fl_cur_wsz
+                                             - caml_fl_wsz_at_phase_change)
+         FW = 3 * caml_fl_cur_wsz - 2 * caml_fl_wsz_at_phase_change
+     Estimated live words:      LW = caml_stat_heap_wsz - FW
      Estimated free percentage: FP = 100 * FW / LW
      We compact the heap if FP > caml_percent_max
   */
@@ -473,33 +510,46 @@ void caml_compact_heap_maybe (void)
                                           Assert (caml_gc_phase == Phase_idle);
   if (caml_percent_max >= 1000000) return;
   if (caml_stat_major_collections < 3) return;
+  if (caml_stat_heap_wsz <= 2 * caml_clip_heap_chunk_wsz (0)) return;
 
-  fw = 3.0 * caml_fl_cur_size - 2.0 * caml_fl_size_at_phase_change;
-  if (fw < 0) fw = caml_fl_cur_size;
+#ifdef HAS_HUGE_PAGES
+  if (caml_use_huge_pages
+      && Bsize_wsize (caml_stat_heap_wsz) <= HUGE_PAGE_SIZE)
+    return;
+#endif
 
-  if (fw >= Wsize_bsize (caml_stat_heap_size)){
+  fw = 3.0 * caml_fl_cur_wsz - 2.0 * caml_fl_wsz_at_phase_change;
+  if (fw < 0) fw = caml_fl_cur_wsz;
+
+  if (fw >= caml_stat_heap_wsz){
     fp = 1000000.0;
   }else{
-    fp = 100.0 * fw / (Wsize_bsize (caml_stat_heap_size) - fw);
+    fp = 100.0 * fw / (caml_stat_heap_wsz - fw);
     if (fp > 1000000.0) fp = 1000000.0;
   }
   caml_gc_message (0x200, "FL size at phase change = %"
-                          ARCH_INTNAT_PRINTF_FORMAT "u\n",
-                   (uintnat) caml_fl_size_at_phase_change);
+                          ARCH_INTNAT_PRINTF_FORMAT "u words\n",
+                   (uintnat) caml_fl_wsz_at_phase_change);
+  caml_gc_message (0x200, "FL current size = %"
+                          ARCH_INTNAT_PRINTF_FORMAT "u words\n",
+                   (uintnat) caml_fl_cur_wsz);
   caml_gc_message (0x200, "Estimated overhead = %"
                           ARCH_INTNAT_PRINTF_FORMAT "u%%\n",
                    (uintnat) fp);
   if (fp >= caml_percent_max){
     caml_gc_message (0x200, "Automatic compaction triggered.\n", 0);
+    caml_empty_minor_heap ();  /* minor heap must be empty for compaction */
     caml_finish_major_cycle ();
 
-    /* We just did a complete GC, so we can measure the overhead exactly. */
-    fw = caml_fl_cur_size;
-    fp = 100.0 * fw / (Wsize_bsize (caml_stat_heap_size) - fw);
+    fw = caml_fl_cur_wsz;
+    fp = 100.0 * fw / (caml_stat_heap_wsz - fw);
     caml_gc_message (0x200, "Measured overhead: %"
                             ARCH_INTNAT_PRINTF_FORMAT "u%%\n",
                      (uintnat) fp);
+    if (fp >= caml_percent_max)
+         caml_compact_heap ();
+    else
+         caml_gc_message (0x200, "Automatic compaction aborted.\n", 0);
 
-    caml_compact_heap ();
   }
 }
