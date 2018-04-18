@@ -1,3 +1,10 @@
+ocaml (4.05.0-11) UNRELEASED; urgency=medium
+
+  * Dropped "Recommends: camlp4" from ocaml-nox since that package is
+    being deprecated. (Closes: #895994)
+
+ -- Ralf Treinen <treinen@debian.org>  Wed, 18 Apr 2018 22:38:46 +0200
+
 ocaml (4.05.0-10) unstable; urgency=medium
 
   * Drop support for ocamlopt on armel as suggested by upstream.
