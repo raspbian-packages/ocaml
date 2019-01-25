@@ -1,9 +1,15 @@
-ocaml (4.05.0-11) UNRELEASED; urgency=medium
+ocaml (4.05.0-11) unstable; urgency=medium
 
+  [ Ralf Treinen ]
   * Dropped "Recommends: camlp4" from ocaml-nox since that package is
     being deprecated. (Closes: #895994)
 
- -- Ralf Treinen <treinen@debian.org>  Wed, 18 Apr 2018 22:38:46 +0200
+  [ Stéphane Glondu ]
+  * Fix integer overflows when unmarshaling a bigarray
+    (Closes: #895472, CVE-2018-9838)
+  * Update Vcs-* to point to salsa
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 25 Jan 2019 14:59:28 +0100
 
 ocaml (4.05.0-10) unstable; urgency=medium
 
