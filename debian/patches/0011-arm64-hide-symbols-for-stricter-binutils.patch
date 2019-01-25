@@ -1,12 +1,19 @@
-commit 4274dfe22ae37c4c5589a6fe7fe9d53d62013df5
-Author: Mark Shinwell <mshinwell@gmail.com>
-Date:   Wed Sep 13 10:23:16 2017 +0100
+From: Mark Shinwell <mshinwell@gmail.com>
+Date: Wed, 13 Sep 2017 10:23:16 +0100
+Subject: arm64-hide-symbols-for-stricter-binutils
 
     AArch64 GOT fixed
+---
+ Changes                    |  4 ++++
+ asmcomp/arm64/emit.mlp     | 15 +++++++++++++--
+ asmcomp/arm64/selection.ml |  4 ++--
+ 3 files changed, 19 insertions(+), 4 deletions(-)
 
+diff --git a/Changes b/Changes
+index cc59f63..4c0eac7 100644
 --- a/Changes
 +++ b/Changes
-@@ -135,6 +135,10 @@
+@@ -135,6 +135,10 @@ OCaml 4.05.0 (13 Jul 2017):
    (Hannes Mehnert, Guillaume Bury,
     review by Daniel Bünzli, Gabriel Scherer, Damien Doligez)
  
@@ -17,9 +24,11 @@ Date:   Wed Sep 13 10:23:16 2017 +0100
  ### Standard library:
  
  - MPR#6975, GPR#902: Truncate function added to stdlib Buffer module
+diff --git a/asmcomp/arm64/emit.mlp b/asmcomp/arm64/emit.mlp
+index f75646e..729096c 100644
 --- a/asmcomp/arm64/emit.mlp
 +++ b/asmcomp/arm64/emit.mlp
-@@ -114,6 +114,7 @@
+@@ -114,6 +114,7 @@ let emit_addressing addr r =
    | Iindexed ofs ->
        `[{emit_reg r}, #{emit_int ofs}]`
    | Ibased(s, ofs) ->
@@ -27,7 +36,7 @@ Date:   Wed Sep 13 10:23:16 2017 +0100
        `[{emit_reg r}, #:lo12:{emit_symbol_offset s ofs}]`
  
  (* Record live pointers at call points *)
-@@ -323,7 +324,7 @@
+@@ -323,7 +324,7 @@ let emit_literals() =
  (* Emit code to load the address of a symbol *)
  
  let emit_load_symbol_addr dst s =
@@ -36,7 +45,7 @@ Date:   Wed Sep 13 10:23:16 2017 +0100
      `	adrp	{emit_reg dst}, {emit_symbol s}\n`;
      `	add	{emit_reg dst}, {emit_reg dst}, #:lo12:{emit_symbol s}\n`
    end else begin
-@@ -609,6 +610,7 @@
+@@ -609,6 +610,7 @@ let emit_instr i =
            match addr with
            | Iindexed _ -> i.arg.(0)
            | Ibased(s, ofs) ->
@@ -44,7 +53,7 @@ Date:   Wed Sep 13 10:23:16 2017 +0100
                `	adrp	{emit_reg reg_tmp1}, {emit_symbol_offset s ofs}\n`;
                reg_tmp1 in
          begin match size with
-@@ -636,6 +638,7 @@
+@@ -636,6 +638,7 @@ let emit_instr i =
            match addr with
            | Iindexed _ -> i.arg.(1)
            | Ibased(s, ofs) ->
@@ -52,7 +61,7 @@ Date:   Wed Sep 13 10:23:16 2017 +0100
                `	adrp	{emit_reg reg_tmp1}, {emit_symbol_offset s ofs}\n`;
                reg_tmp1 in
          begin match size with
-@@ -924,7 +927,15 @@
+@@ -924,7 +927,15 @@ let fundecl fundecl =
  
  let emit_item = function
    | Cglobal_symbol s -> `	.globl	{emit_symbol s}\n`;
@@ -69,9 +78,11 @@ Date:   Wed Sep 13 10:23:16 2017 +0100
    | Cint8 n -> `	.byte	{emit_int n}\n`
    | Cint16 n -> `	.short	{emit_int n}\n`
    | Cint32 n -> `	.long	{emit_nativeint n}\n`
+diff --git a/asmcomp/arm64/selection.ml b/asmcomp/arm64/selection.ml
+index d8ea7f8..b714d00 100644
 --- a/asmcomp/arm64/selection.ml
 +++ b/asmcomp/arm64/selection.ml
-@@ -82,8 +82,8 @@
+@@ -82,8 +82,8 @@ let inline_ops =
    [ "sqrt"; "caml_bswap16_direct"; "caml_int32_direct_bswap";
      "caml_int64_direct_bswap"; "caml_nativeint_direct_bswap" ]
  

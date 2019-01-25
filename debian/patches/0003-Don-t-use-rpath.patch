@@ -6,9 +6,11 @@ Subject: Don't use rpath
  tools/ocamlmklib.ml | 5 +++++
  1 file changed, 5 insertions(+)
 
+diff --git a/tools/ocamlmklib.ml b/tools/ocamlmklib.ml
+index e5dda65..cb9daca 100644
 --- a/tools/ocamlmklib.ml
 +++ b/tools/ocamlmklib.ml
-@@ -43,6 +43,11 @@
+@@ -43,6 +43,11 @@ and rpath = ref []          (* rpath options *)
  and debug = ref false       (* -g option *)
  and verbose = ref false
  

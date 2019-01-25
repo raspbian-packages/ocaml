@@ -6,9 +6,11 @@ Subject: Native backtraces don't work on powerpc and sparc
  testsuite/tests/backtrace/Makefile | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)
 
+diff --git a/testsuite/tests/backtrace/Makefile b/testsuite/tests/backtrace/Makefile
+index 5df19fc..9ad93c3 100644
 --- a/testsuite/tests/backtrace/Makefile
 +++ b/testsuite/tests/backtrace/Makefile
-@@ -29,7 +29,10 @@
+@@ -29,7 +29,10 @@ LOCATIONFILTER=grep -oE \
  
  default:
  	@$(MAKE) byte
