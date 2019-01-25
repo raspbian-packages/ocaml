@@ -20,8 +20,8 @@ Build-Depends:
  zlib1g-dev,
  dh-ocaml (>= 1.0.0~)
 Standards-Version: 4.0.0
-Vcs-Git: https://anonscm.debian.org/git/pkg-ocaml-maint/packages/ocaml.git/
-Vcs-Browser: https://anonscm.debian.org/git/pkg-ocaml-maint/packages/ocaml.git/
+Vcs-Git: https://salsa.debian.org/ocaml-team/ocaml.git
+Vcs-Browser: https://salsa.debian.org/ocaml-team/ocaml
 Homepage: https://ocaml.org/
 
 # This needs to stay at the top - we symlink docs to the copy in this package,
