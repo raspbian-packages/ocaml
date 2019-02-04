@@ -8,9 +8,11 @@ code (bug#338437)
  configure | 4 +++-
  1 file changed, 3 insertions(+), 1 deletion(-)
 
+diff --git a/configure b/configure
+index e796599..d67672e 100755
 --- a/configure
 +++ b/configure
-@@ -448,7 +448,8 @@
+@@ -448,7 +448,8 @@ case "$bytecc,$target" in
    *gcc*,alpha*-*-linux*)
      if cc="$bytecc" sh ./hasgot -mieee; then
        bytecccompopts="-mieee $bytecccompopts";
@@ -20,7 +22,7 @@ code (bug#338437)
    *,mips-*-irix6*)
      # Turn off warning "unused library"
      bytecclinkopts="-n32 -Wl,-woff,84";;
-@@ -982,6 +983,7 @@
+@@ -982,6 +983,7 @@ nativeccrpath="$byteccrpath"
  case "$arch,$nativecc,$system,$model" in
    *,*,nextstep,*)      nativecclinkopts="-posix";;
    *,*,rhapsody,*)      if $arch64; then partialld="ld -r -arch ppc64"; fi;;

@@ -9,3 +9,4 @@
 0011-arm64-hide-symbols-for-stricter-binutils.patch
 0013-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
 0014-Compute-a-stable-name-for-preprocessed-files.patch
+0012-Integer-overflows-when-unmarshaling-a-bigarray.patch

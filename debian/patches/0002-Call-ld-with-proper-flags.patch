@@ -9,9 +9,11 @@ gcc.
  configure | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
+diff --git a/configure b/configure
+index d67672e..c0024a9 100755
 --- a/configure
 +++ b/configure
-@@ -2049,7 +2049,7 @@
+@@ -2049,7 +2049,7 @@ echo "DYNLINKOPTS=$dllib" >> Makefile
  echo "OTHERLIBRARIES=$otherlibraries" >> Makefile
  echo "CC_PROFILE=$cc_profile" >> Makefile
  echo "SYSTHREAD_SUPPORT=$systhread_support" >> Makefile

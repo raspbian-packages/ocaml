@@ -12,13 +12,15 @@ Bug-Debian: https://bugs.debian.org/702349
 Forwarded: no
 Last-Update: <2015-07-15>
 ---
- configure             | 2 ++
- tools/Makefile.shared | 2 +-
+ configure      | 2 ++
+ tools/Makefile | 2 +-
  2 files changed, 3 insertions(+), 1 deletion(-)
 
+diff --git a/configure b/configure
+index c0024a9..b8e0bcf 100755
 --- a/configure
 +++ b/configure
-@@ -815,6 +815,8 @@
+@@ -815,6 +815,8 @@ if test $with_sharedlibs = "yes"; then
        shared_libraries_supported=true;;
    esac
  fi
@@ -27,9 +29,11 @@ Last-Update: <2015-07-15>
  
  if test -z "$mkmaindll"; then
    mkmaindll=$mksharedlib
+diff --git a/tools/Makefile b/tools/Makefile
+index 9a8cf65..2d19c65 100644
 --- a/tools/Makefile
 +++ b/tools/Makefile
-@@ -316,7 +316,7 @@
+@@ -316,7 +316,7 @@ endif
  
  objinfo_helper$(EXE): objinfo_helper.c ../config/s.h
  	$(BYTECC) $(CCOUT)objinfo_helper$(EXE) $(BYTECCCOMPOPTS) \
