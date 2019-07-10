@@ -8,7 +8,7 @@ alloc.$(O): alloc.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
 array.$(O): array.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
   caml/mlvalues.h caml/fail.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/signals.h \
-  caml/spacetime.h
+  caml/spacetime.h caml/io.h caml/stack.h
 backtrace.$(O): backtrace.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/backtrace.h \
@@ -22,7 +22,8 @@ backtrace_prim.$(O): backtrace_prim.c caml/config.h caml/m.h caml/s.h \
 bigarray.$(O): bigarray.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/bigarray.h caml/custom.h caml/fail.h \
   caml/intext.h caml/io.h caml/hash.h caml/memory.h caml/gc.h \
-  caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h
+  caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h \
+  caml/signals.h
 callback.$(O): callback.c caml/callback.h caml/mlvalues.h caml/config.h \
   caml/m.h caml/s.h caml/misc.h caml/fail.h caml/memory.h caml/gc.h \
   caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h \
@@ -37,7 +38,7 @@ compare.$(O): compare.c caml/custom.h caml/mlvalues.h caml/config.h caml/m.h \
 custom.$(O): custom.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/custom.h caml/fail.h caml/memory.h \
   caml/gc.h caml/major_gc.h caml/freelist.h caml/minor_gc.h \
-  caml/address_class.h
+  caml/address_class.h caml/signals.h
 debugger.$(O): debugger.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/debugger.h caml/osdeps.h caml/memory.h \
   caml/gc.h caml/major_gc.h caml/freelist.h caml/minor_gc.h \
@@ -139,7 +140,7 @@ misc.$(O): misc.c caml/config.h caml/m.h caml/s.h caml/misc.h caml/memory.h \
 obj.$(O): obj.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
   caml/mlvalues.h caml/fail.h caml/gc.h caml/interp.h caml/major_gc.h \
   caml/freelist.h caml/memory.h caml/minor_gc.h caml/address_class.h \
-  caml/prims.h caml/spacetime.h
+  caml/prims.h caml/spacetime.h caml/io.h caml/stack.h
 parsing.$(O): parsing.c caml/config.h caml/m.h caml/s.h caml/mlvalues.h \
   caml/misc.h caml/memory.h caml/gc.h caml/major_gc.h caml/freelist.h \
   caml/minor_gc.h caml/address_class.h caml/alloc.h
@@ -189,8 +190,6 @@ sys.$(O): sys.c caml/config.h caml/m.h caml/s.h caml/alloc.h caml/misc.h \
   caml/osdeps.h caml/memory.h caml/gc.h caml/major_gc.h caml/freelist.h \
   caml/minor_gc.h caml/address_class.h caml/signals.h caml/stacks.h \
   caml/sys.h caml/version.h caml/callback.h caml/startup_aux.h
-terminfo.$(O): terminfo.c caml/config.h caml/m.h caml/s.h caml/alloc.h \
-  caml/misc.h caml/mlvalues.h caml/fail.h caml/io.h
 unix.$(O): unix.c caml/config.h caml/m.h caml/s.h caml/fail.h caml/misc.h \
   caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/osdeps.h \
@@ -209,7 +208,7 @@ alloc.d.$(O): alloc.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
 array.d.$(O): array.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
   caml/mlvalues.h caml/fail.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/signals.h \
-  caml/spacetime.h
+  caml/spacetime.h caml/io.h caml/stack.h
 backtrace.d.$(O): backtrace.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/backtrace.h \
@@ -223,7 +222,8 @@ backtrace_prim.d.$(O): backtrace_prim.c caml/config.h caml/m.h caml/s.h \
 bigarray.d.$(O): bigarray.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/bigarray.h caml/custom.h caml/fail.h \
   caml/intext.h caml/io.h caml/hash.h caml/memory.h caml/gc.h \
-  caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h
+  caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h \
+  caml/signals.h
 callback.d.$(O): callback.c caml/callback.h caml/mlvalues.h caml/config.h \
   caml/m.h caml/s.h caml/misc.h caml/fail.h caml/memory.h caml/gc.h \
   caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h \
@@ -238,7 +238,7 @@ compare.d.$(O): compare.c caml/custom.h caml/mlvalues.h caml/config.h caml/m.h \
 custom.d.$(O): custom.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/custom.h caml/fail.h caml/memory.h \
   caml/gc.h caml/major_gc.h caml/freelist.h caml/minor_gc.h \
-  caml/address_class.h
+  caml/address_class.h caml/signals.h
 debugger.d.$(O): debugger.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/debugger.h caml/osdeps.h caml/memory.h \
   caml/gc.h caml/major_gc.h caml/freelist.h caml/minor_gc.h \
@@ -343,7 +343,7 @@ misc.d.$(O): misc.c caml/config.h caml/m.h caml/s.h caml/misc.h caml/memory.h \
 obj.d.$(O): obj.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
   caml/mlvalues.h caml/fail.h caml/gc.h caml/interp.h caml/major_gc.h \
   caml/freelist.h caml/memory.h caml/minor_gc.h caml/address_class.h \
-  caml/prims.h caml/spacetime.h
+  caml/prims.h caml/spacetime.h caml/io.h caml/stack.h
 parsing.d.$(O): parsing.c caml/config.h caml/m.h caml/s.h caml/mlvalues.h \
   caml/misc.h caml/memory.h caml/gc.h caml/major_gc.h caml/freelist.h \
   caml/minor_gc.h caml/address_class.h caml/alloc.h
@@ -393,8 +393,6 @@ sys.d.$(O): sys.c caml/config.h caml/m.h caml/s.h caml/alloc.h caml/misc.h \
   caml/osdeps.h caml/memory.h caml/gc.h caml/major_gc.h caml/freelist.h \
   caml/minor_gc.h caml/address_class.h caml/signals.h caml/stacks.h \
   caml/sys.h caml/version.h caml/callback.h caml/startup_aux.h
-terminfo.d.$(O): terminfo.c caml/config.h caml/m.h caml/s.h caml/alloc.h \
-  caml/misc.h caml/mlvalues.h caml/fail.h caml/io.h
 unix.d.$(O): unix.c caml/config.h caml/m.h caml/s.h caml/fail.h caml/misc.h \
   caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/osdeps.h \
@@ -413,7 +411,7 @@ alloc.i.$(O): alloc.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
 array.i.$(O): array.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
   caml/mlvalues.h caml/fail.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/signals.h \
-  caml/spacetime.h
+  caml/spacetime.h caml/io.h caml/stack.h
 backtrace.i.$(O): backtrace.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/backtrace.h \
@@ -427,7 +425,8 @@ backtrace_prim.i.$(O): backtrace_prim.c caml/config.h caml/m.h caml/s.h \
 bigarray.i.$(O): bigarray.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/bigarray.h caml/custom.h caml/fail.h \
   caml/intext.h caml/io.h caml/hash.h caml/memory.h caml/gc.h \
-  caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h
+  caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h \
+  caml/signals.h
 callback.i.$(O): callback.c caml/callback.h caml/mlvalues.h caml/config.h \
   caml/m.h caml/s.h caml/misc.h caml/fail.h caml/memory.h caml/gc.h \
   caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h \
@@ -442,7 +441,7 @@ compare.i.$(O): compare.c caml/custom.h caml/mlvalues.h caml/config.h caml/m.h \
 custom.i.$(O): custom.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/custom.h caml/fail.h caml/memory.h \
   caml/gc.h caml/major_gc.h caml/freelist.h caml/minor_gc.h \
-  caml/address_class.h
+  caml/address_class.h caml/signals.h
 debugger.i.$(O): debugger.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/debugger.h caml/osdeps.h caml/memory.h \
   caml/gc.h caml/major_gc.h caml/freelist.h caml/minor_gc.h \
@@ -544,7 +543,7 @@ misc.i.$(O): misc.c caml/config.h caml/m.h caml/s.h caml/misc.h caml/memory.h \
 obj.i.$(O): obj.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
   caml/mlvalues.h caml/fail.h caml/gc.h caml/interp.h caml/major_gc.h \
   caml/freelist.h caml/memory.h caml/minor_gc.h caml/address_class.h \
-  caml/prims.h caml/spacetime.h
+  caml/prims.h caml/spacetime.h caml/io.h caml/stack.h
 parsing.i.$(O): parsing.c caml/config.h caml/m.h caml/s.h caml/mlvalues.h \
   caml/misc.h caml/memory.h caml/gc.h caml/major_gc.h caml/freelist.h \
   caml/minor_gc.h caml/address_class.h caml/alloc.h
@@ -594,8 +593,6 @@ sys.i.$(O): sys.c caml/config.h caml/m.h caml/s.h caml/alloc.h caml/misc.h \
   caml/osdeps.h caml/memory.h caml/gc.h caml/major_gc.h caml/freelist.h \
   caml/minor_gc.h caml/address_class.h caml/signals.h caml/stacks.h \
   caml/sys.h caml/version.h caml/callback.h caml/startup_aux.h
-terminfo.i.$(O): terminfo.c caml/config.h caml/m.h caml/s.h caml/alloc.h \
-  caml/misc.h caml/mlvalues.h caml/fail.h caml/io.h
 unix.i.$(O): unix.c caml/config.h caml/m.h caml/s.h caml/fail.h caml/misc.h \
   caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/osdeps.h \
@@ -614,7 +611,7 @@ alloc.pic.$(O): alloc.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h
 array.pic.$(O): array.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
   caml/mlvalues.h caml/fail.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/signals.h \
-  caml/spacetime.h
+  caml/spacetime.h caml/io.h caml/stack.h
 backtrace.pic.$(O): backtrace.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/backtrace.h \
@@ -628,7 +625,8 @@ backtrace_prim.pic.$(O): backtrace_prim.c caml/config.h caml/m.h caml/s.h \
 bigarray.pic.$(O): bigarray.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/bigarray.h caml/custom.h caml/fail.h \
   caml/intext.h caml/io.h caml/hash.h caml/memory.h caml/gc.h \
-  caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h
+  caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h \
+  caml/signals.h
 callback.pic.$(O): callback.c caml/callback.h caml/mlvalues.h caml/config.h \
   caml/m.h caml/s.h caml/misc.h caml/fail.h caml/memory.h caml/gc.h \
   caml/major_gc.h caml/freelist.h caml/minor_gc.h caml/address_class.h \
@@ -643,7 +641,7 @@ compare.pic.$(O): compare.c caml/custom.h caml/mlvalues.h caml/config.h caml/m.h
 custom.pic.$(O): custom.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/custom.h caml/fail.h caml/memory.h \
   caml/gc.h caml/major_gc.h caml/freelist.h caml/minor_gc.h \
-  caml/address_class.h
+  caml/address_class.h caml/signals.h
 debugger.pic.$(O): debugger.c caml/alloc.h caml/misc.h caml/config.h caml/m.h \
   caml/s.h caml/mlvalues.h caml/debugger.h caml/osdeps.h caml/memory.h \
   caml/gc.h caml/major_gc.h caml/freelist.h caml/minor_gc.h \
@@ -745,7 +743,7 @@ misc.pic.$(O): misc.c caml/config.h caml/m.h caml/s.h caml/misc.h caml/memory.h 
 obj.pic.$(O): obj.c caml/alloc.h caml/misc.h caml/config.h caml/m.h caml/s.h \
   caml/mlvalues.h caml/fail.h caml/gc.h caml/interp.h caml/major_gc.h \
   caml/freelist.h caml/memory.h caml/minor_gc.h caml/address_class.h \
-  caml/prims.h caml/spacetime.h
+  caml/prims.h caml/spacetime.h caml/io.h caml/stack.h
 parsing.pic.$(O): parsing.c caml/config.h caml/m.h caml/s.h caml/mlvalues.h \
   caml/misc.h caml/memory.h caml/gc.h caml/major_gc.h caml/freelist.h \
   caml/minor_gc.h caml/address_class.h caml/alloc.h
@@ -795,8 +793,6 @@ sys.pic.$(O): sys.c caml/config.h caml/m.h caml/s.h caml/alloc.h caml/misc.h \
   caml/osdeps.h caml/memory.h caml/gc.h caml/major_gc.h caml/freelist.h \
   caml/minor_gc.h caml/address_class.h caml/signals.h caml/stacks.h \
   caml/sys.h caml/version.h caml/callback.h caml/startup_aux.h
-terminfo.pic.$(O): terminfo.c caml/config.h caml/m.h caml/s.h caml/alloc.h \
-  caml/misc.h caml/mlvalues.h caml/fail.h caml/io.h
 unix.pic.$(O): unix.c caml/config.h caml/m.h caml/s.h caml/fail.h caml/misc.h \
   caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \
   caml/freelist.h caml/minor_gc.h caml/address_class.h caml/osdeps.h \

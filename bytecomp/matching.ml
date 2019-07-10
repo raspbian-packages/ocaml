@@ -22,6 +22,7 @@ open Typedtree
 open Lambda
 open Parmatch
 open Printf
+open Printpat
 
 
 let dbg = false
@@ -60,6 +61,18 @@ let string_of_lam lam =
   Printlambda.lambda Format.str_formatter lam ;
   Format.flush_str_formatter ()
 
+let all_record_args lbls = match lbls with
+| (_,{lbl_all=lbl_all},_)::_ ->
+    let t =
+      Array.map
+        (fun lbl -> mknoloc (Longident.Lident "?temp?"), lbl,omega)
+        lbl_all in
+    List.iter
+      (fun ((_, lbl,_) as x) ->  t.(lbl.lbl_pos) <- x)
+      lbls ;
+    Array.to_list t
+|  _ -> fatal_error "Parmatch.all_record_args"
+
 type matrix = pattern list list
 
 let add_omega_column pss = List.map (fun ps -> omega::ps) pss
@@ -70,9 +83,9 @@ let pretty_ctx ctx =
   List.iter
     (fun {left=left ; right=right} ->
       prerr_string "LEFT:" ;
-      pretty_line left ;
+      pretty_line Format.err_formatter left ;
       prerr_string " RIGHT:" ;
-      pretty_line right ;
+      pretty_line Format.err_formatter right ;
       prerr_endline "")
     ctx
 
@@ -163,7 +176,7 @@ let filter_matrix matcher pss =
         end
     | [] -> []
     | _ ->
-        pretty_matrix pss ;
+        pretty_matrix Format.err_formatter pss ;
         fatal_error "Matching.filter_matrix" in
   filter_rec pss
 
@@ -404,7 +417,7 @@ let pretty_cases cases =
     (fun (ps,_l) ->
       List.iter
         (fun p ->
-          Parmatch.top_pretty Format.str_formatter p ;
+          top_pretty Format.str_formatter p ;
           prerr_string " " ;
           prerr_string (Format.flush_str_formatter ()))
         ps ;
@@ -421,7 +434,7 @@ let pretty_def def =
   List.iter
     (fun (pss,i) ->
       Printf.fprintf stderr "Matrix for %d\n"  i ;
-      pretty_matrix pss)
+      pretty_matrix Format.err_formatter pss)
     def ;
   prerr_endline "+++++++++++++++++++++"
 
@@ -441,7 +454,7 @@ let rec pretty_precompiled = function
   | PmOr x ->
       prerr_endline "++++ OR ++++" ;
       pretty_pm x.body ;
-      pretty_matrix x.or_matrix ;
+      pretty_matrix Format.err_formatter x.or_matrix ;
       List.iter
         (fun (_,i,_,pm) ->
           eprintf "++ Handler %d ++\n" i ;
@@ -666,9 +679,9 @@ let default_compat p def =
 
 (* Or-pattern expansion, variables are a complication w.r.t. the article *)
 let rec extract_vars r p = match p.pat_desc with
-| Tpat_var (id, _) -> IdentSet.add id r
+| Tpat_var (id, _) -> Ident.Set.add id r
 | Tpat_alias (p, id,_ ) ->
-    extract_vars (IdentSet.add id r) p
+    extract_vars (Ident.Set.add id r) p
 | Tpat_tuple pats ->
     List.fold_left extract_vars r pats
 | Tpat_record (lpats,_) ->
@@ -714,8 +727,8 @@ let rec explode_or_pat arg patl mk_action rem vars aliases = function
 
 let pm_free_variables {cases=cases} =
   List.fold_right
-    (fun (_,act) r -> IdentSet.union (free_variables act) r)
-    cases IdentSet.empty
+    (fun (_,act) r -> Ident.Set.union (free_variables act) r)
+    cases Ident.Set.empty
 
 
 (* Basic grouping predicates *)
@@ -804,8 +817,8 @@ let insert_or_append p ps act ors no =
         if is_or q then begin
           if may_compat p q then
             if
-              IdentSet.is_empty (extract_vars IdentSet.empty p) &&
-              IdentSet.is_empty (extract_vars IdentSet.empty q) &&
+              Ident.Set.is_empty (extract_vars Ident.Set.empty p) &&
+              Ident.Set.is_empty (extract_vars Ident.Set.empty q) &&
               equiv_pat p q
             then (* attempt insert, for equivalent orpats with no variables *)
               let _, not_e = get_equiv q rem in
@@ -1101,9 +1114,9 @@ and precompile_or argo cls ors args def k = match ors with
               args = (match args with _::r -> r | _ -> assert false) ;
               default = default_compat orp def} in
           let vars =
-            IdentSet.elements
-              (IdentSet.inter
-                 (extract_vars IdentSet.empty orp)
+            Ident.Set.elements
+              (Ident.Set.inter
+                 (extract_vars Ident.Set.empty orp)
                  (pm_free_variables orpm)) in
           let or_num = next_raise_count () in
           let new_patl = Parmatch.omega_list patl in
@@ -1807,10 +1820,10 @@ let share_actions_tree sw d =
   let d =
     match d with
     | None -> None
-    | Some d -> Some (store.Switch.act_store_shared d) in
+    | Some d -> Some (store.Switch.act_store_shared () d) in
 (* Store all other actions *)
   let sw =
-    List.map  (fun (cst,act) -> cst,store.Switch.act_store act) sw in
+    List.map  (fun (cst,act) -> cst,store.Switch.act_store () act) sw in
 
 (* Retrieve all actions, including potential default *)
   let acts = store.Switch.act_get_shared () in
@@ -1888,7 +1901,7 @@ module SArg = struct
   type primitive = Lambda.primitive
 
   let eqint = Pintcomp Ceq
-  let neint = Pintcomp Cneq
+  let neint = Pintcomp Cne
   let leint = Pintcomp Cle
   let ltint = Pintcomp Clt
   let geint = Pintcomp Cge
@@ -1934,14 +1947,14 @@ let share_actions_sw sw =
   | None -> None
   | Some fail ->
       (* Fail is translated to exit, whatever happens *)
-      Some (store.Switch.act_store_shared fail) in
+      Some (store.Switch.act_store_shared () fail) in
   let consts =
     List.map
-      (fun (i,e) -> i,store.Switch.act_store e)
+      (fun (i,e) -> i,store.Switch.act_store () e)
       sw.sw_consts
   and blocks =
     List.map
-      (fun (i,e) -> i,store.Switch.act_store e)
+      (fun (i,e) -> i,store.Switch.act_store () e)
       sw.sw_blocks in
   let acts = store.Switch.act_get_shared () in
   let hs,handle_shared = handle_shared () in
@@ -2009,7 +2022,7 @@ let as_interval_canfail fail low high l =
 
   let do_store _tag act =
 
-    let i =  store.act_store act in
+    let i =  store.act_store () act in
 (*
     eprintf "STORE [%s] %i %s\n" tag i (string_of_lam act) ;
 *)
@@ -2073,7 +2086,7 @@ let as_interval_nofail l =
     | [] ->
         [cur_low, cur_high, cur_act]
     | (i,act)::rem ->
-        let act_index = store.act_store act in
+        let act_index = store.act_store () act in
         if act_index = cur_act then
           i_rec cur_low i cur_act rem
         else
@@ -2087,9 +2100,9 @@ let as_interval_nofail l =
            cases (cf. switch.ml, make_switch).
            Hence, this action will be shared *)
         if some_hole rem then
-          store.act_store_shared act
+          store.act_store_shared () act
         else
-          store.act_store act in
+          store.act_store () act in
       assert (act_index = 0) ;
       i_rec i i act_index rem
   | _ -> assert false in
@@ -2241,22 +2254,22 @@ let combine_constant loc arg cst partial ctx def
     | Const_float _ ->
         make_test_sequence loc
           fail
-          (Pfloatcomp Cneq) (Pfloatcomp Clt)
+          (Pfloatcomp CFneq) (Pfloatcomp CFlt)
           arg const_lambda_list
     | Const_int32 _ ->
         make_test_sequence loc
           fail
-          (Pbintcomp(Pint32, Cneq)) (Pbintcomp(Pint32, Clt))
+          (Pbintcomp(Pint32, Cne)) (Pbintcomp(Pint32, Clt))
           arg const_lambda_list
     | Const_int64 _ ->
         make_test_sequence loc
           fail
-          (Pbintcomp(Pint64, Cneq)) (Pbintcomp(Pint64, Clt))
+          (Pbintcomp(Pint64, Cne)) (Pbintcomp(Pint64, Clt))
           arg const_lambda_list
     | Const_nativeint _ ->
         make_test_sequence loc
           fail
-          (Pbintcomp(Pnativeint, Cneq)) (Pbintcomp(Pnativeint, Clt))
+          (Pbintcomp(Pnativeint, Cne)) (Pbintcomp(Pnativeint, Clt))
           arg const_lambda_list
   in lambda1,jumps_union local_jumps total
 

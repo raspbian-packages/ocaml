@@ -360,6 +360,12 @@ setting the
 option ensures that this module will
 always be linked if it is put in a library and this library is linked.
 .TP
+.B \-linscan
+Use linear scan register allocation.  Compiling with this allocator is faster
+than with the usual graph coloring allocator, sometimes quite drastically so for
+long functions and modules. On the other hand, the generated code can be a bit
+slower.
+.TP
 .B \-no-alias-deps
 Do not record dependencies for module aliases.
 .TP
@@ -554,8 +560,7 @@ is saved in the file
 .B \-safe\-string
 Enforce the separation between types
 .BR string \ and\  bytes ,
-thereby making strings read-only. This will become the default in
-a future version of OCaml.
+thereby making strings read-only. This is the default.
 .TP
 .B \-shared
 Build a plugin (usually .cmxs) that can be dynamically loaded with
@@ -582,11 +587,6 @@ warning messages.
 .TP
 .B \-strict\-sequence
 The left-hand part of a sequence must have type unit.
-.TP
-.B \-thread
-Compile or link multithreaded programs, in combination with the
-system threads library described in
-.IR "The OCaml user's manual" .
 .TP
 .B \-unboxed\-types
 When a type is unboxable (i.e. a record with a single argument or a
@@ -618,9 +618,9 @@ exception.
 .B \-unsafe\-string
 Identify the types
 .BR string \ and\  bytes ,
-thereby making strings writable. For reasons of backward compatibility,
-this is the default setting for the moment, but this will change in a future
-version of OCaml.
+thereby making strings writable.
+This is intended for compatibility with old source code and should not
+be used with new software.
 .TP
 .B \-v
 Print the version number of the compiler and the location of the

@@ -58,6 +58,7 @@ open Asttypes
 type type_expr =
   { mutable desc: type_desc;
     mutable level: int;
+    mutable scope: int option;
     id: int }
 
 and type_desc =
@@ -134,7 +135,7 @@ and type_desc =
     [< `X | `Y > `X ]  (row_closed = true)
 
     type t = [> `X ] as 'a      (row_more = Tvar a)
-    type t = private [> `X ]    (row_more = Tconstr (t#row, [], ref Mnil)
+    type t = private [> `X ]    (row_more = Tconstr (t#row, [], ref Mnil))
 
     And for:
 
@@ -290,8 +291,8 @@ type type_declaration =
     type_manifest: type_expr option;
     type_variance: Variance.t list;
     (* covariant, contravariant, weakly contravariant, injective *)
-    type_newtype_level: (int * int) option;
-    (* definition level * expansion level *)
+    type_is_newtype: bool;
+    type_expansion_scope: int option;
     type_loc: Location.t;
     type_attributes: Parsetree.attributes;
     type_immediate: bool; (* true iff type should not be a pointer *)

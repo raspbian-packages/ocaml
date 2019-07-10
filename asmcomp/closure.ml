@@ -131,7 +131,6 @@ let prim_size prim args =
   | Parraysetu kind -> if kind = Pgenarray then 16 else 4
   | Parrayrefs kind -> if kind = Pgenarray then 18 else 8
   | Parraysets kind -> if kind = Pgenarray then 22 else 10
-  | Pbittest -> 3
   | Pbigarrayref(_, ndims, _, _) -> 4 + ndims * 6
   | Pbigarrayset(_, ndims, _, _) -> 4 + ndims * 6
   | _ -> 2 (* arithmetic and comparisons *)
@@ -226,15 +225,31 @@ let make_const_ref c =
 let make_const_int n = make_const (Uconst_int n)
 let make_const_ptr n = make_const (Uconst_ptr n)
 let make_const_bool b = make_const_ptr(if b then 1 else 0)
-let make_comparison cmp x y =
+
+let make_integer_comparison cmp x y =
   make_const_bool
     (match cmp with
        Ceq -> x = y
-     | Cneq -> x <> y
+     | Cne -> x <> y
      | Clt -> x < y
      | Cgt -> x > y
      | Cle -> x <= y
      | Cge -> x >= y)
+
+let make_float_comparison cmp x y =
+  make_const_bool
+    (match cmp with
+     | CFeq -> x = y
+     | CFneq -> not (x = y)
+     | CFlt -> x < y
+     | CFnlt -> not (x < y)
+     | CFgt -> x > y
+     | CFngt -> not (x > y)
+     | CFle -> x <= y
+     | CFnle -> not (x <= y)
+     | CFge -> x >= y
+     | CFnge -> not (x >= y))
+
 let make_const_float n = make_const_ref (Uconst_float n)
 let make_const_natint n = make_const_ref (Uconst_nativeint n)
 let make_const_int32 n = make_const_ref (Uconst_int32 n)
@@ -280,7 +295,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
           make_const_int (n1 lsr n2)
       | Pasrint when 0 <= n2 && n2 < 8 * Arch.size_int ->
           make_const_int (n1 asr n2)
-      | Pintcomp c -> make_comparison c n1 n2
+      | Pintcomp c -> make_integer_comparison c n1 n2
       | _ -> default
       end
   (* float *)
@@ -299,7 +314,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
       | Psubfloat -> make_const_float (n1 -. n2)
       | Pmulfloat -> make_const_float (n1 *. n2)
       | Pdivfloat -> make_const_float (n1 /. n2)
-      | Pfloatcomp c  -> make_comparison c n1 n2
+      | Pfloatcomp c  -> make_float_comparison c n1 n2
       | _ -> default
       end
   (* nativeint *)
@@ -325,7 +340,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
       | Pandbint Pnativeint -> make_const_natint (Nativeint.logand n1 n2)
       | Porbint Pnativeint ->  make_const_natint (Nativeint.logor n1 n2)
       | Pxorbint Pnativeint -> make_const_natint (Nativeint.logxor n1 n2)
-      | Pbintcomp(Pnativeint, c)  -> make_comparison c n1 n2
+      | Pbintcomp(Pnativeint, c)  -> make_integer_comparison c n1 n2
       | _ -> default
       end
   (* nativeint, int *)
@@ -363,7 +378,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
       | Pandbint Pint32 -> make_const_int32 (Int32.logand n1 n2)
       | Porbint Pint32 -> make_const_int32 (Int32.logor n1 n2)
       | Pxorbint Pint32 -> make_const_int32 (Int32.logxor n1 n2)
-      | Pbintcomp(Pint32, c) -> make_comparison c n1 n2
+      | Pbintcomp(Pint32, c) -> make_integer_comparison c n1 n2
       | _ -> default
       end
   (* int32, int *)
@@ -401,7 +416,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
       | Pandbint Pint64 -> make_const_int64 (Int64.logand n1 n2)
       | Porbint Pint64 -> make_const_int64 (Int64.logor n1 n2)
       | Pxorbint Pint64 -> make_const_int64 (Int64.logxor n1 n2)
-      | Pbintcomp(Pint64, c) -> make_comparison c n1 n2
+      | Pbintcomp(Pint64, c) -> make_integer_comparison c n1 n2
       | _ -> default
       end
   (* int64, int *)
@@ -1141,7 +1156,7 @@ and close_functions fenv cenv fun_defs =
     !function_nesting_depth < excessive_function_nesting_depth in
   (* Determine the free variables of the functions *)
   let fv =
-    IdentSet.elements (free_variables (Lletrec(fun_defs, lambda_unit))) in
+    Ident.Set.elements (free_variables (Lletrec(fun_defs, lambda_unit))) in
   (* Build the function descriptors for the functions.
      Initially all functions are assumed not to need their environment
      parameter. *)
@@ -1274,13 +1289,13 @@ and close_switch fenv cenv cases num_keys default =
   (* First default case *)
   begin match default with
   | Some def when ncases < num_keys ->
-      assert (store.act_store def = 0)
+      assert (store.act_store () def = 0)
   | _ -> ()
   end ;
   (* Then all other cases *)
   List.iter
     (fun (key,lam) ->
-     index.(key) <- store.act_store lam)
+     index.(key) <- store.act_store () lam)
     cases ;
 
   (*  Explicit sharing with catch/exit, as switcher compilation may
