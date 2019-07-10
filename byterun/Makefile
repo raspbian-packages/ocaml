@@ -17,6 +17,7 @@ include ../config/Makefile
 
 INSTALL_BINDIR=$(DESTDIR)$(BINDIR)
 INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
+INSTALL_INCDIR=$(INSTALL_LIBDIR)/caml
 
 # The PROGRAMS (resp. LIBRARIES) variable list the files to build and
 # install as programs in $(INSTALL_BINDIR) (resp. libraries in
@@ -41,39 +42,40 @@ LIBRARIES += libcamlrun_pic.$(A) libcamlrun_shared.$(SO)
 endif
 endif
 
-CC=$(BYTECC)
-
 ifdef BOOTSTRAPPING_FLEXLINK
-CFLAGS=-DBOOTSTRAPPING_FLEXLINK
-else
-CFLAGS=
+CFLAGS += -DBOOTSTRAPPING_FLEXLINK
 endif
 
 # On Windows, OCAML_STDLIB_DIR needs to be defined dynamically
 
 ifeq "$(UNIX_OR_WIN32)" "win32"
-CFLAGS += -DOCAML_STDLIB_DIR='"$(LIBDIR)"'
+# OCAML_STDLIB_DIR needs to arrive in dynlink.c as a string which both gcc and
+# msvc are willing parse without warning. This means we can't pass UTF-8
+# directly since, as far as I can tell, cl can cope, but the pre-processor
+# can't. So the string needs to be directly translated to L"" form. To do this,
+# we take advantage of the fact that Cygwin uses GNU libiconv which includes a
+# Java pseudo-encoding which translates any UTF-8 sequences to \uXXXX (and,
+# unlike the C99 pseudo-encoding, emits two surrogate values when needed, rather
+# than \UXXXXXXXX). The \u is then translated to \x in order to accommodate
+# pre-Visual Studio 2013 compilers where \x is a non-standard alias for \u.
+OCAML_STDLIB_DIR = $(shell echo $(LIBDIR)| iconv -t JAVA | sed -e 's/\\u/\\x/g')
+CFLAGS += -DOCAML_STDLIB_DIR='L"$(OCAML_STDLIB_DIR)"'
 endif
 
-CFLAGS += $(IFLEXDIR) $(BYTECCCOMPOPTS)
+CFLAGS += $(IFLEXDIR)
+
+ifneq "$(CCOMPTYPE)" "msvc"
+CFLAGS += -g
+endif
 
 DFLAGS=$(CFLAGS) -DDEBUG
 IFLAGS=$(CFLAGS) -DCAML_INSTR
 PICFLAGS=$(CFLAGS) $(SHAREDCCCOMPOPTS)
 
-ifneq "$(CCOMPTYPE)" "msvc"
-DFLAGS += -g
-endif
-
-ifeq "$(CCOMPTYPE)" "msvc"
-OUTPUTOBJ=-Fo
-else
-OUTPUTOBJ=-o
-endif
 DBGO=d.$(O)
 
 ifeq "$(UNIX_OR_WIN32)" "win32"
-LIBS = $(call SYSLIB,ws2_32) $(EXTRALIBS)
+LIBS = $(BYTECCLIBS) $(EXTRALIBS)
 ifdef BOOTSTRAPPING_FLEXLINK
 MAKE_OCAMLRUN=$(MKEXE_BOOT)
 else
@@ -81,7 +83,7 @@ MAKE_OCAMLRUN = $(MKEXE) -o $(1) $(2)
 endif
 else
 LIBS = $(BYTECCLIBS)
-MAKE_OCAMLRUN = $(MKEXE) $(BYTECCLINKOPTS) -o $(1) $(2)
+MAKE_OCAMLRUN = $(MKEXE) $(LDFLAGS) -o $(1) $(2)
 endif
 
 PRIMS=\
@@ -97,7 +99,7 @@ OBJS=$(addsuffix .$(O), \
   compare ints floats str array io extern intern \
   hash sys meta parsing gc_ctrl terminfo md5 obj \
   lexing callback debugger weak compact finalise custom \
-  dynlink spacetime afl $(UNIX_OR_WIN32) main)
+  dynlink spacetime afl $(UNIX_OR_WIN32) bigarray main)
 
 DOBJS=$(OBJS:.$(O)=.$(DBGO)) instrtrace.$(DBGO)
 IOBJS=$(OBJS:.$(O)=.i.$(O))
@@ -114,11 +116,8 @@ ld.conf: ../config/Makefile
 install:
 	cp $(PROGRAMS) "$(INSTALL_BINDIR)"
 	cp $(LIBRARIES) "$(INSTALL_LIBDIR)"
-	mkdir -p "$(INSTALL_LIBDIR)/caml"
-	for i in caml/*.h; do \
-	  sed -f ../tools/cleanup-header $$i \
-	      > "$(INSTALL_LIBDIR)/$$i"; \
-	done
+	mkdir -p "$(INSTALL_INCDIR)"
+	cp caml/*.h "$(INSTALL_INCDIR)"
 
 # If primitives contain duplicated lines (e.g. because the code is defined
 # like
@@ -185,13 +184,13 @@ libcamlrun.$(A): $(OBJS)
 	$(call MKLIB,$@, $^)
 
 ocamlrund$(EXE): prims.$(O) libcamlrund.$(A)
-	$(MKEXE) $(MKEXEDEBUGFLAG) $(BYTECCLINKOPTS) -o $@ $^ $(LIBS)
+	$(MKEXE) $(MKEXEDEBUGFLAG) -o $@ $^ $(LIBS)
 
 libcamlrund.$(A): $(DOBJS)
 	$(call MKLIB,$@, $^)
 
 ocamlruni$(EXE): prims.$(O) libcamlruni.$(A)
-	$(MKEXE) $(BYTECCLINKOPTS) -o $@ $^ $(LIBS)
+	$(MKEXE) -o $@ $^ $(LIBS)
 
 libcamlruni.$(A): $(IOBJS)
 	$(call MKLIB,$@, $^)
@@ -203,49 +202,27 @@ libcamlrun_shared.$(SO): $(PICOBJS)
 	$(MKDLL) -o $@ $^ $(BYTECCLIBS)
 
 %.$(O): %.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $<
 
 %.$(DBGO): %.c
-	$(CC) $(DFLAGS) -c $(OUTPUTOBJ)$@ $<
+	$(CC) -c $(DFLAGS) $(CPPFLAGS) $(OUTPUTOBJ)$@ $<
 
 %.i.$(O): %.c
-	$(CC) $(IFLAGS) -c $(OUTPUTOBJ)$@ $<
+	$(CC) -c $(IFLAGS) $(CPPFLAGS) $(OUTPUTOBJ)$@ $<
 
 %.pic.$(O): %.c
-	$(CC) $(PICFLAGS) -c $(OUTPUTOBJ)$@ $<
+	$(CC) -c $(PICFLAGS) $(CPPFLAGS) $(OUTPUTOBJ)$@ $<
 
-ifneq "$(TOOLCHAIN)" "msvc"
 .PHONY: depend
-depend : prims.c caml/opnames.h caml/jumptbl.h caml/version.h
-	-$(CC) -MM $(BYTECCCOMPOPTS) *.c > .depend
-	-$(CC) -MM $(BYTECCCOMPOPTS) -DDEBUG *.c | sed -e 's/\.o/.d.o/' \
-	       >> .depend
-	-$(CC) -MM $(BYTECCCOMPOPTS) -DCAML_INSTR *.c | sed -e 's/\.o/.i.o/' \
-	       >> .depend
-	-$(CC) -MM $(BYTECCCOMPOPTS) *.c | sed -e 's/\.o/.pic.o/' >> .depend
-endif
-
-ifeq "$(UNIX_OR_WIN32)" "win32"
-.depend.nt: .depend
-	rm -f .depend.win32
-	echo "win32.o: win32.c caml/fail.h caml/compatibility.h \\"\
-	  >> .depend.win32
-	echo " caml/misc.h caml/config.h ../config/m.h ../config/s.h \\"\
-	  >> .depend.win32
-	echo " caml/mlvalues.h caml/memory.h caml/gc.h caml/major_gc.h \\"\
-	  >> .depend.win32
-	echo " caml/freelist.h caml/minor_gc.h caml/osdeps.h caml/signals.h"\
-	  >> .depend.win32
-	cat .depend >> .depend.win32
-	sed -ne '/\.pic\.o/q' \
-	    -e 's/^\(.*\)\.d\.o:/\1.$$(DBGO):/' \
-	    -e 's/^\(.*\)\.o:/\1.$$(O):/' \
-	    -e p \
-	    .depend.win32 > .depend.nt
-	rm -f .depend.win32
-
-include .depend.nt
-
+ifeq "$(TOOLCHAIN)" "msvc"
+depend:
+	$(error Dependencies cannot be regenerated using the MSVC ports)
 else
-include .depend
+depend: prims.c caml/opnames.h caml/jumptbl.h caml/version.h
+	$(CC) -MM $(CFLAGS) $(CPPFLAGS) *.c | sed -e 's/\.o/.$$(O)/'>.$@
+	$(CC) -MM $(DFLAGS) $(CPPFLAGS) *.c | sed -e 's/\.o/.d.$$(O)/'>>.$@
+	$(CC) -MM $(IFLAGS) $(CPPFLAGS) *.c | sed -e 's/\.o/.i.$$(O)/'>>.$@
+	$(CC) -MM $(PICFLAGS) $(CPPFLAGS) *.c | sed -e 's/\.o/.pic.$$(O)/'>>.$@
 endif
+
+include .depend

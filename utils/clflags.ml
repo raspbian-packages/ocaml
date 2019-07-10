@@ -50,6 +50,7 @@ and print_types = ref false             (* -i *)
 and make_archive = ref false            (* -a *)
 and debug = ref false                   (* -g *)
 and fast = ref false                    (* -unsafe *)
+and use_linscan = ref false             (* -linscan *)
 and link_everything = ref false         (* -linkall *)
 and custom_runtime = ref false          (* -custom *)
 and no_check_prims = ref false          (* -no-check-prims *)
@@ -112,6 +113,7 @@ and dump_cmm = ref false                (* -dcmm *)
 let dump_selection = ref false          (* -dsel *)
 let dump_cse = ref false                (* -dcse *)
 let dump_live = ref false               (* -dlive *)
+let dump_avail = ref false              (* -davail *)
 let dump_spill = ref false              (* -dspill *)
 let dump_split = ref false              (* -dsplit *)
 let dump_interf = ref false             (* -dinterf *)
@@ -120,9 +122,12 @@ let dump_regalloc = ref false           (* -dalloc *)
 let dump_reload = ref false             (* -dreload *)
 let dump_scheduling = ref false         (* -dscheduling *)
 let dump_linear = ref false             (* -dlinear *)
+let dump_interval = ref false           (* -dinterval *)
 let keep_startup_file = ref false       (* -dstartup *)
 let dump_combine = ref false            (* -dcombine *)
-let print_timings = ref false           (* -dtimings *)
+let profile_columns : Profile.column list ref = ref [] (* -dprofile/-dtimings *)
+
+let debug_runavail = ref false          (* -drunavail *)
 
 let native_code = ref false             (* set to true under ocamlopt *)
 
@@ -152,8 +157,10 @@ let pic_code = ref (match Config.architecture with (* -fPIC *)
 let runtime_variant = ref "";;      (* -runtime-variant *)
 
 let keep_docs = ref false              (* -keep-docs *)
-let keep_locs = ref false              (* -keep-locs *)
-let unsafe_string = ref (not Config.safe_string)
+let keep_locs = ref true               (* -keep-locs *)
+let unsafe_string =
+  if Config.safe_string then ref false
+  else ref (not Config.default_safe_string)
                                    (* -safe-string / -unsafe-string *)
 
 let classic_inlining = ref false       (* -Oclassic *)
@@ -364,6 +371,11 @@ let unboxed_types = ref false
 
 let arg_spec = ref []
 let arg_names = ref Misc.StringMap.empty
+
+let reset_arguments () =
+  arg_spec := [];
+  arg_names := Misc.StringMap.empty
+
 let add_arguments loc args =
   List.iter (function (arg_name, _, _) as arg ->
     try

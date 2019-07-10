@@ -518,7 +518,7 @@ let rec lam ppf = function
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
       fprintf ppf "@[<2>(%a%a)@]" primitive prim lams largs
-  | Lswitch(larg, sw) ->
+  | Lswitch(larg, sw, _loc) ->
       let switch ppf sw =
         let spc = ref false in
         List.iter
@@ -601,6 +601,8 @@ let rec lam ppf = function
        | Lev_after _  -> "after"
        | Lev_function -> "funct-body"
        | Lev_pseudo -> "pseudo"
+       | Lev_module_definition ident ->
+         Format.asprintf "module-defn(%a)" Ident.print ident
       in
       fprintf ppf "@[<2>(%s %s(%i)%s:%i-%i@ %a)@]" kind
               ev.lev_loc.Location.loc_start.Lexing.pos_fname

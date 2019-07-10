@@ -62,10 +62,12 @@ let rec live i finally =
         let across_after = Reg.diff_set_array after i.res in
         let across =
           match op with
-          | Icall_ind _ | Icall_imm _ | Iextcall _
+          | Icall_ind _ | Icall_imm _ | Iextcall _ | Ialloc _
           | Iintop (Icheckbound _) | Iintop_imm(Icheckbound _, _) ->
               (* The function call may raise an exception, branching to the
-                 nearest enclosing try ... with. Similarly for bounds checks.
+                 nearest enclosing try ... with. Similarly for bounds checks
+                 and allocation (for the latter: finalizers may throw
+                 exceptions, as may signal handlers).
                  Hence, everything that must be live at the beginning of
                  the exception handler must also be live across this instr. *)
                Reg.Set.union across_after !live_at_raise
@@ -113,14 +115,8 @@ let rec live i finally =
         Reg.Set.equal before_handler before_handler'
       in
       let live_at_exit_before = !live_at_exit in
-      let live_at_exit_add before_handlers =
-        List.map (fun (nfail, before_handler) ->
-            (nfail, before_handler))
-          before_handlers
-      in
       let rec fixpoint before_handlers =
-        let live_at_exit_add = live_at_exit_add before_handlers in
-        live_at_exit := live_at_exit_add @ !live_at_exit;
+        live_at_exit := before_handlers @ !live_at_exit;
         let before_handlers' = List.map2 aux handlers before_handlers in
         live_at_exit := live_at_exit_before;
         match rec_flag with
@@ -138,7 +134,7 @@ let rec live i finally =
       (* We could use handler.live instead of Reg.Set.empty as the initial
          value but we would need to clean the live field before doing the
          analysis (to remove remnants of previous passes). *)
-      live_at_exit := (live_at_exit_add before_handler) @ !live_at_exit;
+      live_at_exit := before_handler @ !live_at_exit;
       let before_body = live body at_join in
       live_at_exit := live_at_exit_before;
       i.live <- before_body;

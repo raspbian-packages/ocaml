@@ -110,7 +110,6 @@ INCLUDES_NODEP=\
   -I $(ROOTDIR)/otherlibs/str \
   -I $(ROOTDIR)/otherlibs/dynlink \
   -I $(ROOTDIR)/otherlibs/$(UNIXLIB) \
-  -I $(ROOTDIR)/otherlibs/num \
   -I $(ROOTDIR)/otherlibs/$(GRAPHLIB)
 
 INCLUDES=$(INCLUDES_DEP) $(INCLUDES_NODEP)
@@ -185,8 +184,7 @@ STDLIB_MLIS=\
   ../parsing/*.mli \
   ../otherlibs/$(UNIXLIB)/unix.mli \
   ../otherlibs/str/str.mli \
-  ../otherlibs/bigarray/bigarray.mli \
-  ../otherlibs/num/num.mli
+  ../otherlibs/bigarray/bigarray.mli
 
 .PHONY: all
 all: lib exe generators manpages
@@ -424,6 +422,7 @@ depend:
 	$(OCAMLLEX) odoc_lexer.mll
 	$(OCAMLLEX) odoc_ocamlhtml.mll
 	$(OCAMLLEX) odoc_see_lexer.mll
-	$(OCAMLDEP) $(INCLUDES_DEP) *.mll *.mly *.ml *.mli generators/*.ml > .depend
+	$(OCAMLDEP) $(INCLUDES_DEP) *.mll *.mly *.ml *.mli > .depend
+	$(OCAMLDEP) $(INCLUDES_DEP) -shared generators/*.ml >> .depend
 
 include .depend

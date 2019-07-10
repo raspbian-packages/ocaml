@@ -216,7 +216,7 @@ type function_kind = Curried | Tupled
 
 type let_kind = Strict | Alias | StrictOpt | Variable
 (* Meaning of kinds for let x = e in e':
-    Strict: e may have side-effets; always evaluate e first
+    Strict: e may have side-effects; always evaluate e first
       (If e is a simple expression, e.g. a variable or constant,
        we may still substitute e'[x/e].)
     Alias: e is pure, we can substitute e'[x/e] if x has 0 or 1 occurrences
@@ -245,7 +245,7 @@ type lambda =
   | Llet of let_kind * value_kind * Ident.t * lambda * lambda
   | Lletrec of (Ident.t * lambda) list * lambda
   | Lprim of primitive * lambda list * Location.t
-  | Lswitch of lambda * lambda_switch
+  | Lswitch of lambda * lambda_switch * Location.t
 (* switch on strings, clauses are sorted by string order,
    strings are pairwise distinct *)
   | Lstringswitch of
@@ -294,6 +294,7 @@ and lambda_event_kind =
   | Lev_after of Types.type_expr
   | Lev_function
   | Lev_pseudo
+  | Lev_module_definition of Ident.t
 
 type program =
   { module_ident : Ident.t;
@@ -328,6 +329,13 @@ val free_methods: lambda -> IdentSet.t
 
 val transl_normal_path: Path.t -> lambda   (* Path.t is already normal *)
 val transl_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
+[@@ocaml.deprecated "use transl_{module,value,extension,class}_path instead"]
+
+val transl_module_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
+val transl_value_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
+val transl_extension_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
+val transl_class_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
+
 val make_sequence: ('a -> lambda) -> 'a list -> lambda
 
 val subst_lambda: lambda Ident.tbl -> lambda -> lambda
@@ -360,5 +368,10 @@ val patch_guarded : lambda -> lambda -> lambda
 
 val raise_kind: raise_kind -> string
 val lam_of_loc : loc_kind -> Location.t -> lambda
+
+val merge_inline_attributes
+   : inline_attribute
+  -> inline_attribute
+  -> inline_attribute option
 
 val reset: unit -> unit

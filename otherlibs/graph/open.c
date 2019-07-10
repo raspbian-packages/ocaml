@@ -51,7 +51,8 @@ value caml_gr_clear_graph(void);
 value caml_gr_open_graph(value arg)
 {
   char display_name[256], geometry_spec[64];
-  char * p, * q;
+  const char * p;
+  char * q;
   XSizeHints hints;
   int ret;
   XEvent event;
@@ -246,7 +247,7 @@ value caml_gr_window_id(void)
 value caml_gr_set_window_title(value n)
 {
   if (window_name != NULL) caml_stat_free(window_name);
-  window_name = caml_strdup(String_val(n));
+  window_name = caml_stat_strdup(String_val(n));
   if (caml_gr_initialized) {
     XStoreName(caml_gr_display, caml_gr_window.win, window_name);
     XSetIconName(caml_gr_display, caml_gr_window.win, window_name);
@@ -366,7 +367,7 @@ value caml_gr_sigio_handler(void)
 
 static value * graphic_failure_exn = NULL;
 
-void caml_gr_fail(char *fmt, char *arg)
+void caml_gr_fail(const char *fmt, const char *arg)
 {
   char buffer[1024];
 

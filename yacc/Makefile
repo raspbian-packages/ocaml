@@ -17,23 +17,18 @@
 
 include ../config/Makefile
 
-CC=$(BYTECC)
-CFLAGS=-DNDEBUG $(BYTECCCOMPOPTS)
-
-ifeq "$(TOOLCHAIN)" "mingw"
-  CFLAGS += -DNO_UNIX
-else ifeq "$(TOOLCHAIN)" "msvc"
-  CFLAGS += -DNO_UNIX
-endif
-
 OBJS= closure.$(O) error.$(O) lalr.$(O) lr0.$(O) main.$(O) \
   mkpar.$(O) output.$(O) reader.$(O) \
   skeleton.$(O) symtab.$(O) verbose.$(O) warshall.$(O)
 
 all: ocamlyacc$(EXE)
 
+ifeq ($(TOOLCHAIN),cc)
+MKEXE_ANSI=$(MKEXE)
+endif
+
 ocamlyacc$(EXE): $(OBJS)
-	$(MKEXE) -o ocamlyacc$(EXE) $(OBJS) $(EXTRALIBS)
+	$(MKEXE_ANSI) -o ocamlyacc$(EXE) $(OBJS) $(EXTRALIBS)
 
 version.h : ../VERSION
 	echo "#define OCAML_VERSION \"`sed -e 1q $^ | tr -d '\r'`\"" > $@
@@ -60,4 +55,4 @@ warshall.$(O): defs.h
 # also works for .obj files.
 
 %.$(O): %.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) -I../byterun $(OUTPUTOBJ)$@ $<

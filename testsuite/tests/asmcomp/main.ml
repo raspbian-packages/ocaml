@@ -6,8 +6,7 @@ let compile_file filename =
     let out_name = Filename.chop_extension filename ^ ".s" in
     Emitaux.output_channel := open_out out_name
   end; (* otherwise, stdout *)
-  Clflags.dlcode := false;
-  Compilenv.reset ~source_provenance:(Timings.File filename) "test";
+  Compilenv.reset "test";
   Emit.begin_assembly();
   let ic = open_in filename in
   let lb = Lexing.from_channel ic in
@@ -58,9 +57,10 @@ let main() =
      "-dreload", Arg.Set dump_reload, "";
      "-dscheduling", Arg.Set dump_scheduling, "";
      "-dlinear", Arg.Set dump_linear, "";
-     "-dtimings", Arg.Set print_timings, "";
+     "-dtimings", Arg.Unit (fun () -> profile_columns := [ `Time ]), "";
     ] compile_file usage
 
-let _ = (*Printexc.catch*) Timings.(time All) main ();
-  if !Clflags.print_timings then Timings.print Format.std_formatter;
+let () =
+  main ();
+  Profile.print Format.std_formatter !Clflags.profile_columns;
   exit 0

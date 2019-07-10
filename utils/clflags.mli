@@ -13,6 +13,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Command line flags *)
+
 (** Optimization parameters represented as ints indexed by round number. *)
 module Int_arg_helper : sig
   type parsed
@@ -75,6 +77,7 @@ val print_types : bool ref
 val make_archive : bool ref
 val debug : bool ref
 val fast : bool ref
+val use_linscan : bool ref
 val link_everything : bool ref
 val custom_runtime : bool ref
 val no_check_prims : bool ref
@@ -133,6 +136,8 @@ val dump_cmm : bool ref
 val dump_selection : bool ref
 val dump_cse : bool ref
 val dump_live : bool ref
+val dump_avail : bool ref
+val debug_runavail : bool ref
 val dump_spill : bool ref
 val dump_split : bool ref
 val dump_interf : bool ref
@@ -141,6 +146,7 @@ val dump_regalloc : bool ref
 val dump_reload : bool ref
 val dump_scheduling : bool ref
 val dump_linear : bool ref
+val dump_interval : bool ref
 val keep_startup_file : bool ref
 val dump_combine : bool ref
 val native_code : bool ref
@@ -180,7 +186,7 @@ val keep_docs : bool ref
 val keep_locs : bool ref
 val unsafe_string : bool ref
 val opaque : bool ref
-val print_timings : bool ref
+val profile_columns : Profile.column list ref
 val flambda_invariant_checks : bool ref
 val unbox_closures : bool ref
 val unbox_closures_factor : int ref
@@ -220,4 +226,8 @@ val add_arguments : string -> (string * Arg.spec * string) list -> unit
 *)
 val parse_arguments : Arg.anon_fun -> string -> unit
 
+(* [print_arguments usage] print the standard usage message *)
 val print_arguments : string -> unit
+
+(* [reset_arguments ()] clear all declared arguments *)
+val reset_arguments : unit -> unit

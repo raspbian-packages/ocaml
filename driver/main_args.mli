@@ -100,6 +100,7 @@ module type Compiler_options = sig
 
   val _nopervasives : unit -> unit
   val _dtimings : unit -> unit
+  val _dprofile : unit -> unit
 
   val _args: string -> string array
   val _args0: string -> string array
@@ -113,7 +114,6 @@ module type Toplevel_options = sig
   val _no_version : unit -> unit
   val _noprompt : unit -> unit
   val _nopromptcont : unit -> unit
-  val _plugin : string -> unit
   val _stdin : unit -> unit
   val _args: string -> string array
   val _args0: string -> string array
@@ -181,6 +181,8 @@ module type Optcommon_options = sig
   val _dcombine : unit -> unit
   val _dcse : unit -> unit
   val _dlive : unit -> unit
+  val _davail : unit -> unit
+  val _drunavail : unit -> unit
   val _dspill : unit -> unit
   val _dsplit : unit -> unit
   val _dinterf : unit -> unit
@@ -196,6 +198,7 @@ module type Optcomp_options = sig
   include Common_options
   include Compiler_options
   include Optcommon_options
+  val _linscan : unit -> unit
   val _no_float_const_prop : unit -> unit
   val _nodynlink : unit -> unit
   val _p : unit -> unit
@@ -204,6 +207,7 @@ module type Optcomp_options = sig
   val _shared : unit -> unit
   val _afl_instrument : unit -> unit
   val _afl_inst_ratio : int -> unit
+  val _dinterval : unit -> unit
 end;;
 
 module type Opttop_options = sig

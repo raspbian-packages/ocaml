@@ -21,7 +21,7 @@ open Cmm
 module type I = sig
   val string_block_length : Cmm.expression -> Cmm.expression
   val transl_switch :
-      Cmm.expression -> int -> int ->
+      Location.t -> Cmm.expression -> int -> int ->
         (int * Cmm.expression) list -> Cmm.expression ->
           Cmm.expression
 end
@@ -334,7 +334,7 @@ module Make(I:I) = struct
 (*
   Switch according to pattern size
   Argument from_ind is the starting index, it can be zero
-  or one (when the swicth on the cell 0 has already been performed.
+  or one (when the switch on the cell 0 has already been performed.
   In that latter case pattern len is string length-1 and is corrected.
  *)
 
@@ -350,8 +350,8 @@ module Make(I:I) = struct
             (len,act))
           (by_size cases) in
       let id = gen_size_id () in
-      ignore dbg;
-      let switch = I.transl_switch (Cvar id) 1 max_int size_cases default in
+      let loc = Debuginfo.to_location dbg in
+      let switch = I.transl_switch loc (Cvar id) 1 max_int size_cases default in
       mk_let_size id str switch
 
 (*

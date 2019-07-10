@@ -16,11 +16,13 @@
 TOPDIR=$(BASEDIR)/..
 include $(TOPDIR)/Makefile.tools
 
+.PHONY: defaultpromote
 defaultpromote:
 	@for file in *.reference; do \
 	  cp `basename $$file reference`result $$file; \
 	done
 
+.PHONY: defaultclean
 defaultclean:
 	@rm -f *.cmo *.cmi *.cmx *.cma *.cmxa *.cmxs *.$(O) *.$(SO) *.$(A) *.exe
 	@rm -f *.exe.manifest
@@ -76,7 +78,7 @@ defaultclean:
 	@$(ASPP) $(ASPPFLAGS) -DSYS_$(SYSTEM) -o $*.o $*.s
 
 .c.o:
-	@$(CC) -c -I$(CTOPDIR)/byterun $*.c -o $*.$(O)
+	@$(CC) $(CFLAGS) -c -I$(CTOPDIR)/byterun $*.c -o $*.$(O)
 
 .f.o:
 	@$(FORTRAN_COMPILER) -c -I$(CTOPDIR)/byterun $*.f -o $*.$(O)

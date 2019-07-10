@@ -20,7 +20,7 @@
     exception whenever the underlying system call signals an error. *)
 
 
-(** {6 Error report} *)
+(** {1 Error report} *)
 
 
 type error =
@@ -116,12 +116,22 @@ val handle_unix_error : ('a -> 'b) -> 'a -> 'b
    describing the error and exits with code 2. *)
 
 
-(** {6 Access to the process environment} *)
+(** {1 Access to the process environment} *)
 
 
 val environment : unit -> string array
 (** Return the process environment, as an array of strings
-    with the format ``variable=value''. *)
+    with the format ``variable=value''.  The returned array
+    is empty if the process has special privileges. *)
+
+val unsafe_environment : unit -> string array
+(** Return the process environment, as an array of strings with the
+    format ``variable=value''.  Unlike {!environment}, this function
+    returns a populated array even if the process has special
+    privileges.  See the documentation for {!unsafe_getenv} for more
+    details.
+
+    @since 4.06.0 *)
 
 val getenv : string -> string
 (** Return the value associated to a variable in the process
@@ -131,7 +141,6 @@ val getenv : string -> string
 
    (This function is identical to {!Sys.getenv}. *)
 
-(*
 val unsafe_getenv : string -> string
 (** Return the value associated to a variable in the process
    environment.
@@ -143,8 +152,8 @@ val unsafe_getenv : string -> string
    for executables, the locations for temporary files or logs, and the
    like.
 
-   @raise Not_found if the variable is unbound.  *)
-*)
+   @raise Not_found if the variable is unbound.
+   @since 4.06.0  *)
 
 val putenv : string -> string -> unit
 (** [Unix.putenv name value] sets the value associated to a
@@ -153,7 +162,7 @@ val putenv : string -> string -> unit
    and [value] its new associated value. *)
 
 
-(** {6 Process handling} *)
+(** {1 Process handling} *)
 
 
 type process_status =
@@ -244,7 +253,7 @@ val nice : int -> int
    On Windows: not implemented. *)
 
 
-(** {6 Basic file input/output} *)
+(** {1 Basic file input/output} *)
 
 
 type file_descr
@@ -325,7 +334,7 @@ val single_write_substring : file_descr -> string -> int -> int -> int
     a byte sequence.
     @since 4.02.0 *)
 
-(** {6 Interfacing with the standard input/output library} *)
+(** {1 Interfacing with the standard input/output library} *)
 
 
 
@@ -371,7 +380,7 @@ val descr_of_out_channel : out_channel -> file_descr
 (** Return the descriptor corresponding to an output channel. *)
 
 
-(** {6 Seeking and truncating} *)
+(** {1 Seeking and truncating} *)
 
 
 type seek_command =
@@ -397,7 +406,7 @@ val ftruncate : file_descr -> int -> unit
   On Windows: not implemented. *)
 
 
-(** {6 File status} *)
+(** {1 File status} *)
 
 
 type file_kind =
@@ -440,7 +449,7 @@ val isatty : file_descr -> bool
 (** Return [true] if the given file descriptor refers to a terminal or
    console window, [false] otherwise. *)
 
-(** {6 File operations on large files} *)
+(** {1 File operations on large files} *)
 
 module LargeFile :
   sig
@@ -481,7 +490,60 @@ module LargeFile :
   regular integers (type [int]), thus allowing operating on files
   whose sizes are greater than [max_int]. *)
 
-(** {6 Operations on file names} *)
+(** {6 Mapping files into memory} *)
+
+val map_file :
+  file_descr -> ?pos:int64 -> ('a, 'b) CamlinternalBigarray.kind ->
+  'c CamlinternalBigarray.layout -> bool -> int array ->
+  ('a, 'b, 'c) CamlinternalBigarray.genarray
+(** Memory mapping of a file as a big array.
+  [map_file fd kind layout shared dims]
+  returns a big array of kind [kind], layout [layout],
+  and dimensions as specified in [dims].  The data contained in
+  this big array are the contents of the file referred to by
+  the file descriptor [fd] (as opened previously with
+  [Unix.openfile], for example).  The optional [pos] parameter
+  is the byte offset in the file of the data being mapped;
+  it defaults to 0 (map from the beginning of the file).
+
+  If [shared] is [true], all modifications performed on the array
+  are reflected in the file.  This requires that [fd] be opened
+  with write permissions.  If [shared] is [false], modifications
+  performed on the array are done in memory only, using
+  copy-on-write of the modified pages; the underlying file is not
+  affected.
+
+  [Genarray.map_file] is much more efficient than reading
+  the whole file in a big array, modifying that big array,
+  and writing it afterwards.
+
+  To adjust automatically the dimensions of the big array to
+  the actual size of the file, the major dimension (that is,
+  the first dimension for an array with C layout, and the last
+  dimension for an array with Fortran layout) can be given as
+  [-1].  [Genarray.map_file] then determines the major dimension
+  from the size of the file.  The file must contain an integral
+  number of sub-arrays as determined by the non-major dimensions,
+  otherwise [Failure] is raised.
+
+  If all dimensions of the big array are given, the file size is
+  matched against the size of the big array.  If the file is larger
+  than the big array, only the initial portion of the file is
+  mapped to the big array.  If the file is smaller than the big
+  array, the file is automatically grown to the size of the big array.
+  This requires write permissions on [fd].
+
+  Array accesses are bounds-checked, but the bounds are determined by
+  the initial call to [map_file]. Therefore, you should make sure no
+  other process modifies the mapped file while you're accessing it,
+  or a SIGBUS signal may be raised. This happens, for instance, if the
+  file is shrunk.
+
+  [Invalid_argument] or [Failure] may be raised in cases where argument
+  validation fails.
+  @since 4.06.0 *)
+
+(** {1 Operations on file names} *)
 
 
 val unlink : string -> unit
@@ -495,14 +557,19 @@ val unlink : string -> unit
 *)
 
 val rename : string -> string -> unit
-(** [rename old new] changes the name of a file from [old] to [new]. *)
+(** [rename old new] changes the name of a file from [old] to [new],
+    moving it between directories if needed.  If [new] already
+    exists, its contents will be replaced with those of [old].
+    Depending on the operating system, the metadata (permissions,
+    owner, etc) of [new] can either be preserved or be replaced by
+    those of [old].  *)
 
 val link : string -> string -> unit
 (** [link source dest] creates a hard link named [dest] to the file
    named [source]. *)
 
 
-(** {6 File permissions and ownership} *)
+(** {1 File permissions and ownership} *)
 
 
 type access_permission =
@@ -541,7 +608,7 @@ val access : string -> access_permission list -> unit
    tests for read permission instead. *)
 
 
-(** {6 Operations on file descriptors} *)
+(** {1 Operations on file descriptors} *)
 
 
 val dup : ?cloexec:bool -> file_descr -> file_descr
@@ -620,7 +687,7 @@ val clear_close_on_exec : file_descr -> unit
    See {!Unix.set_close_on_exec}.*)
 
 
-(** {6 Directories} *)
+(** {1 Directories} *)
 
 
 val mkdir : string -> file_perm -> unit
@@ -657,7 +724,7 @@ val closedir : dir_handle -> unit
 
 
 
-(** {6 Pipes and redirections} *)
+(** {1 Pipes and redirections} *)
 
 
 val pipe : ?cloexec:bool -> unit -> file_descr * file_descr
@@ -672,7 +739,7 @@ val mkfifo : string -> file_perm -> unit
    On Windows: not implemented. *)
 
 
-(** {6 High-level process and redirection management} *)
+(** {1 High-level process and redirection management} *)
 
 
 val create_process :
@@ -749,7 +816,7 @@ val close_process_full :
    and return its termination status. *)
 
 
-(** {6 Symbolic links} *)
+(** {1 Symbolic links} *)
 
 
 val symlink : ?to_dir:bool -> string -> string -> unit
@@ -795,7 +862,7 @@ val readlink : string -> string
 (** Read the contents of a symbolic link. *)
 
 
-(** {6 Polling} *)
+(** {1 Polling} *)
 
 
 val select :
@@ -813,7 +880,7 @@ val select :
    component). *)
 
 
-(** {6 Locking} *)
+(** {1 Locking} *)
 
 type lock_command =
     F_ULOCK       (** Unlock a region *)
@@ -858,7 +925,7 @@ val lockf : file_descr -> lock_command -> int -> unit
 *)
 
 
-(** {6 Signals}
+(** {1 Signals}
    Note: installation of signal handlers is performed via
    the functions {!Sys.signal} and {!Sys.set_signal}.
 *)
@@ -903,7 +970,7 @@ val pause : unit -> unit
   On Windows: not implemented (no inter-process signals on Windows). *)
 
 
-(** {6 Time functions} *)
+(** {1 Time functions} *)
 
 
 type process_times =
@@ -1019,7 +1086,7 @@ val setitimer :
    On Windows: not implemented. *)
 
 
-(** {6 User id, group id} *)
+(** {1 User id, group id} *)
 
 
 val getuid : unit -> int
@@ -1110,7 +1177,7 @@ val getgrgid : int -> group_entry
    On Windows, always raise [Not_found]. *)
 
 
-(** {6 Internet addresses} *)
+(** {1 Internet addresses} *)
 
 
 type inet_addr
@@ -1144,7 +1211,7 @@ val inet6_addr_loopback : inet_addr
 (** A special IPv6 address representing the host machine ([::1]). *)
 
 
-(** {6 Sockets} *)
+(** {1 Sockets} *)
 
 
 type socket_domain =
@@ -1262,7 +1329,7 @@ val sendto_substring :
     @since 4.02.0 *)
 
 
-(** {6 Socket options} *)
+(** {1 Socket options} *)
 
 
 type socket_bool_option =
@@ -1342,7 +1409,7 @@ val getsockopt_error : file_descr -> error option
     and clear it. *)
 
 
-(** {6 High-level network connection functions} *)
+(** {1 High-level network connection functions} *)
 
 
 val open_connection : sockaddr -> in_channel * out_channel
@@ -1368,7 +1435,7 @@ val establish_server : (in_channel -> out_channel -> unit) -> sockaddr -> unit
    On Windows, it is not implemented.  Use threads. *)
 
 
-(** {6 Host and protocol databases} *)
+(** {1 Host and protocol databases} *)
 
 
 type host_entry =
@@ -1483,7 +1550,7 @@ val getnameinfo : sockaddr -> getnameinfo_option list -> name_info
     @raise Not_found if an error occurs. *)
 
 
-(** {6 Terminal interface} *)
+(** {1 Terminal interface} *)
 
 
 (** The following functions implement the POSIX standard terminal

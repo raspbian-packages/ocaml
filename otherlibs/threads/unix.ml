@@ -159,7 +159,9 @@ let handle_unix_error f arg =
     exit 2
 
 external environment : unit -> string array = "unix_environment"
+external unsafe_environment : unit -> string array = "unix_environment_unsafe"
 external getenv: string -> string = "caml_sys_getenv"
+external unsafe_getenv: string -> string = "caml_sys_unsafe_getenv"
 external putenv: string -> string -> unit = "unix_putenv"
 
 type interval_timer =
@@ -317,6 +319,16 @@ module LargeFile =
     external lstat : string -> stats = "unix_lstat_64"
     external fstat : file_descr -> stats = "unix_fstat_64"
   end
+
+external map_internal:
+   file_descr -> ('a, 'b) CamlinternalBigarray.kind
+              -> 'c CamlinternalBigarray.layout
+              -> bool -> int array -> int64
+              -> ('a, 'b, 'c) CamlinternalBigarray.genarray
+     = "caml_unix_map_file_bytecode" "caml_unix_map_file"
+
+let map_file fd ?(pos=0L) kind layout shared dims =
+  map_internal fd kind layout shared dims pos
 
 type access_permission =
     R_OK
