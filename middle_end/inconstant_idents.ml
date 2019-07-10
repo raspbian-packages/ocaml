@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 (* This cannot be done in a single simple pass due to expressions like:
 
@@ -439,7 +440,7 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
             | outer_var ->
               register_implication ~in_nc:(Var outer_var.var)
                 ~implies_in_nc:[Var param])
-          ffunc.params;
+          (Parameter.List.vars ffunc.params);
         mark_loop ~toplevel:false [] ffunc.body)
       function_decls.funs
 

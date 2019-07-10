@@ -13,6 +13,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* An alias for the type of lists. *)
+type 'a t = 'a list = [] | (::) of 'a * 'a list
+
 (* List operations *)
 
 let rec length_aux len = function
@@ -55,6 +58,28 @@ let rec rev_append l1 l2 =
   | a :: l -> rev_append l (a :: l2)
 
 let rev l = rev_append l []
+
+let rec init_tailrec_aux acc i n f =
+  if i >= n then acc
+  else init_tailrec_aux (f i :: acc) (i+1) n f
+
+let rec init_aux i n f =
+  if i >= n then []
+  else
+    let r = f i in
+    r :: init_aux (i+1) n f
+
+let rev_init_threshold =
+  match Sys.backend_type with
+  | Sys.Native | Sys.Bytecode -> 10_000
+  (* We don't know the size of the stack, better be safe and assume it's
+     small. *)
+  | Sys.Other _ -> 50
+
+let init len f =
+  if len < 0 then invalid_arg "List.init" else
+  if len > rev_init_threshold then rev (init_tailrec_aux [] 0 len f)
+  else init_aux 0 len f
 
 let rec flatten = function
     [] -> []
@@ -210,6 +235,16 @@ let find_all p =
   find []
 
 let filter = find_all
+
+let filter_map f =
+  let rec aux accu = function
+    | [] -> rev accu
+    | x :: l ->
+        match f x with
+        | None -> aux accu l
+        | Some v -> aux (v :: accu) l
+  in
+  aux []
 
 let partition p l =
   let rec part yes no = function
@@ -460,9 +495,32 @@ let rec compare_lengths l1 l2 =
 ;;
 
 let rec compare_length_with l n =
-  match l, n with
-  | [], 0 -> 0
-  | [], _ -> if n > 0 then -1 else 1
-  | _, 0 -> 1
-  | _ :: l, n -> compare_length_with l (n-1)
+  match l with
+  | [] ->
+    if n = 0 then 0 else
+      if n > 0 then -1 else 1
+  | _ :: l ->
+    if n <= 0 then 1 else
+      compare_length_with l (n-1)
 ;;
+
+(** {1 Iterators} *)
+
+let to_seq l =
+  let rec aux l () = match l with
+    | [] -> Seq.Nil
+    | x :: tail -> Seq.Cons (x, aux tail)
+  in
+  aux l
+
+let of_seq seq =
+  let rec direct depth seq : _ list =
+    if depth=0
+    then
+      Seq.fold_left (fun acc x -> x::acc) [] seq
+      |> rev (* tailrec *)
+    else match seq() with
+      | Seq.Nil -> []
+      | Seq.Cons (x, next) -> x :: direct (depth-1) next
+  in
+  direct 500 seq

@@ -56,7 +56,10 @@ val fprintf : out_channel -> ('a, out_channel, unit) format -> 'a
    - [e] or [E]: convert a floating-point argument to decimal notation,
      in the style [d.ddd e+-dd] (mantissa and exponent).
    - [g] or [G]: convert a floating-point argument to decimal notation,
-     in style [f] or [e], [E] (whichever is more compact).
+     in style [f] or [e], [E] (whichever is more compact). Moreover,
+     any trailing zeros are removed from the fractional part of the result
+     and the decimal-point character is removed if there is no fractional
+     part remaining.
    - [h] or [H]: convert a floating-point argument to hexadecimal notation,
      in the style [0xh.hhhh e+-dd] (hexadecimal mantissa, exponent in
      decimal and denotes a power of 2).
@@ -97,9 +100,9 @@ val fprintf : out_channel -> ('a, out_channel, unit) format -> 'a
      sign if positive.
    - space: for signed numerical conversions, prefix number with a
      space if positive.
-   - [#]: request an alternate formatting style for the hexadecimal
-     and octal integer types ([x], [X], [o], [lx], [lX], [lo], [Lx],
-     [LX], [Lo]).
+   - [#]: request an alternate formatting style for the integer types
+     ([x], [X], [o], [lx], [lX], [lo], [Lx], [LX], [Lo], [d], [i], [u],
+     [ld], [li], [lu], [Ld], [Li], [Lu], [nd], [ni], [nu]).
 
    The optional [width] is an integer indicating the minimal
    width of the result. For instance, [%6d] prints an integer,

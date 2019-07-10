@@ -18,9 +18,13 @@
 
 type environment
 
-val env_add : Ident.t -> Reg.t array -> environment -> environment
+val env_add
+   : Backend_var.With_provenance.t
+  -> Reg.t array
+  -> environment
+  -> environment
 
-val env_find : Ident.t -> environment -> Reg.t array
+val env_find : Backend_var.t -> environment -> Reg.t array
 
 val size_expr : environment -> Cmm.expression -> int
 
@@ -112,7 +116,7 @@ class virtual selector_generic : object
   (* informs the code emitter that the current function may call
      a C function that never returns; by default, does nothing.
 
-     It is unecessary to save the stack pointer in this situation
+     It is unnecessary to save the stack pointer in this situation
      (which is the main purpose of tracking leaf functions) but some
      architectures still need to ensure that the stack is properly
      aligned when the C function is called. This is achieved by
@@ -165,7 +169,7 @@ class virtual selector_generic : object
      : Cmm.fundecl
     -> loc_arg:Reg.t array
     -> rarg:Reg.t array
-    -> spacetime_node_hole:(Ident.t * Reg.t array) option
+    -> spacetime_node_hole:(Backend_var.t * Reg.t array) option
     -> env:environment
     -> Mach.spacetime_shape option
 

@@ -1,3 +1,10 @@
+(* TEST
+
+* hassysthreads
+include systhreads
+
+*)
+
 open Event
 
 type 'a swap_chan = ('a * 'a channel) channel

@@ -22,7 +22,6 @@
 [@@@ocaml.warning "+a-4-9-40-41-42"]
 
 open Config
-open Misc
 open Cmx_format
 
 type error =
@@ -39,15 +38,14 @@ let export_infos_table =
 
 let imported_sets_of_closures_table =
   (Set_of_closures_id.Tbl.create 10
-   : Flambda.function_declarations option Set_of_closures_id.Tbl.t)
-
-let sourcefile = ref None
+   : Simple_value_approx.function_declarations option
+       Set_of_closures_id.Tbl.t)
 
 module CstMap =
   Map.Make(struct
     type t = Clambda.ustructured_constant
     let compare = Clambda.compare_structured_constants
-    (* PR#6442: it is incorrect to use Pervasives.compare on values of type t
+    (* PR#6442: it is incorrect to use Stdlib.compare on values of type t
        because it compares "0.0" and "-0.0" equal. *)
   end)
 
@@ -116,11 +114,10 @@ let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
 let current_unit_linkage_name () =
   Linkage_name.create (make_symbol ~unitname:current_unit.ui_symbol None)
 
-let reset ?packname ~source_provenance:file name =
+let reset ?packname name =
   Hashtbl.clear global_infos_table;
   Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
   let symbol = symbolname_for_pack packname name in
-  sourcefile := Some file;
   current_unit.ui_name <- name;
   current_unit.ui_symbol <- symbol;
   current_unit.ui_defines <- [symbol];
@@ -147,17 +144,6 @@ let current_unit_infos () =
 
 let current_unit_name () =
   current_unit.ui_name
-
-let current_build () =
-  match !sourcefile with
-  | None -> assert false
-  | Some v -> v
-
-let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
-  let prefix = "caml" ^ unitname in
-  match idopt with
-  | None -> prefix
-  | Some id -> prefix ^ "__" ^ id
 
 let symbol_in_current_unit name =
   let prefix = "caml" ^ current_unit.ui_symbol in
@@ -209,7 +195,7 @@ let get_global_info global_ident = (
         else begin
           try
             let filename =
-              find_in_path_uncap !load_path (modname ^ ".cmx") in
+              Load_path.find_uncap (modname ^ ".cmx") in
             let (ui, crc) = read_unit_info filename in
             if ui.ui_name <> modname then
               raise(Error(Illegal_renaming(modname, ui.ui_name, filename)));
@@ -246,7 +232,7 @@ let record_global_approx_toplevel () =
     (get_clambda_approx current_unit)
 
 let global_approx id =
-  if Ident.is_predef_exn id then Clambda.Value_unknown
+  if Ident.is_predef id then Clambda.Value_unknown
   else try Hashtbl.find toplevel_approx (Ident.name id)
   with Not_found ->
     match get_global_info id with
@@ -256,7 +242,7 @@ let global_approx id =
 (* Return the symbol used to refer to a global identifier *)
 
 let symbol_for_global id =
-  if Ident.is_predef_exn id then
+  if Ident.is_predef id then
     "caml_exn_" ^ Ident.name id
   else begin
     let unitname = Ident.name id in
@@ -285,10 +271,10 @@ let is_predefined_exception sym =
 
 let symbol_for_global' id =
   let sym_label = Linkage_name.create (symbol_for_global id) in
-  if Ident.is_predef_exn id then
-    Symbol.unsafe_create predefined_exception_compilation_unit sym_label
+  if Ident.is_predef id then
+    Symbol.of_global_linkage predefined_exception_compilation_unit sym_label
   else
-    Symbol.unsafe_create (unit_for_global id) sym_label
+    Symbol.of_global_linkage (unit_for_global id) sym_label
 
 let set_global_approx approx =
   assert(not Config.flambda);
@@ -311,18 +297,20 @@ let approx_for_global comp_unit =
   if (Compilation_unit.equal
       predefined_exception_compilation_unit
       comp_unit)
-     || Ident.is_predef_exn id
+     || Ident.is_predef id
      || not (Ident.global id)
   then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
   let modname = Ident.name id in
-  try Hashtbl.find export_infos_table modname with
-  | Not_found ->
-    let exported = match get_global_info id with
-      | None -> Export_info.empty
-      | Some ui -> get_flambda_export_info ui in
-    Hashtbl.add export_infos_table modname exported;
-    merged_environment := Export_info.merge !merged_environment exported;
-    exported
+  match Hashtbl.find export_infos_table modname with
+  | otherwise -> Some otherwise
+  | exception Not_found ->
+    match get_global_info id with
+    | None -> None
+    | Some ui ->
+      let exported = get_flambda_export_info ui in
+      Hashtbl.add export_infos_table modname exported;
+      merged_environment := Export_info.merge !merged_environment exported;
+      Some exported
 
 let approx_env () = !merged_environment
 
@@ -356,22 +344,19 @@ let save_unit_info filename =
   current_unit.ui_imports_cmi <- Env.imports();
   write_unit_info current_unit filename
 
-let current_unit_linkage_name () =
-  Linkage_name.create (make_symbol ~unitname:current_unit.ui_symbol None)
-
 let current_unit () =
   match Compilation_unit.get_current () with
   | Some current_unit -> current_unit
   | None -> Misc.fatal_error "Compilenv.current_unit"
 
 let current_unit_symbol () =
-  Symbol.unsafe_create (current_unit ()) (current_unit_linkage_name ())
+  Symbol.of_global_linkage (current_unit ()) (current_unit_linkage_name ())
 
 let const_label = ref 0
 
 let new_const_symbol () =
   incr const_label;
-  make_symbol (Some (string_of_int !const_label))
+  make_symbol (Some (Int.to_string !const_label))
 
 let snapshot () = !structured_constants
 let backtrack s = structured_constants := s
@@ -405,12 +390,19 @@ let clear_structured_constants () =
   structured_constants := structured_constants_empty
 
 let structured_constants () =
+  let provenance : Clambda.usymbol_provenance =
+    { original_idents = [];
+      module_path =
+        Path.Pident (Ident.create_persistent (current_unit_name ()));
+    }
+  in
   List.map
     (fun (symbol, definition) ->
        {
          Clambda.symbol;
          exported = Hashtbl.mem exported_constants symbol;
          definition;
+         provenance = Some provenance;
        })
     (!structured_constants).strcst_all
 
@@ -422,7 +414,7 @@ let closure_symbol fv =
   let linkage_name =
     concat_symbol unitname ((Closure_id.unique_name fv) ^ "_closure")
   in
-  Symbol.unsafe_create compilation_unit (Linkage_name.create linkage_name)
+  Symbol.of_global_linkage compilation_unit (Linkage_name.create linkage_name)
 
 let function_label fv =
   let compilation_unit = Closure_id.get_compilation_unit fv in
@@ -433,7 +425,7 @@ let function_label fv =
   (concat_symbol unitname (Closure_id.unique_name fv))
 
 let require_global global_ident =
-  if not (Ident.is_predef_exn global_ident) then
+  if not (Ident.is_predef global_ident) then
     ignore (get_global_info global_ident : Cmx_format.unit_infos option)
 
 (* Error report *)

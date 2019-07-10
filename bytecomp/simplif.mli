@@ -13,6 +13,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** Lambda simplification and lambda plugin hooks
+
+  {b Warning:} this module is unstable and part of
+  {{!Compiler_libs}compiler-libs}.
+
+*)
+
 (* Elimination of useless Llet(Alias) bindings.
    Transformation of let-bound references into variables.
    Simplification over staticraise/staticcatch constructs.
@@ -25,7 +32,8 @@ val simplify_lambda: string -> lambda -> lambda
 val split_default_wrapper
    : id:Ident.t
   -> kind:function_kind
-  -> params:Ident.t list
+  -> params:(Ident.t * Lambda.value_kind) list
+  -> return:Lambda.value_kind
   -> body:lambda
   -> attr:function_attribute
   -> loc:Location.t

@@ -1,9 +1,15 @@
-Description: Drop a test-suite experiment committed by mistake
- This was failing on armhf because Debian GCC now enables PIE by default.
-Author: Xavier Leroy <xavier.leroy@inria.fr>
+From: Xavier Leroy <xavier.leroy@inria.fr>
+Date: Fri, 25 Jan 2019 13:47:44 +0100
+Subject: Drop a test-suite experiment committed by mistake
+
+This was failing on armhf because Debian GCC now enables PIE by default.
+
 Bug: https://caml.inria.fr/mantis/view.php?id=7642
 Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=837359#80
 ---
+ testsuite/tests/asmcomp/main.ml | 1 -
+ 1 file changed, 1 deletion(-)
+
 diff --git a/testsuite/tests/asmcomp/main.ml b/testsuite/tests/asmcomp/main.ml
 index 284f7fb..6457ad2 100644
 --- a/testsuite/tests/asmcomp/main.ml

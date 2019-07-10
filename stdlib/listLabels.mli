@@ -13,6 +13,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+type 'a t = 'a list = [] | (::) of 'a * 'a list
+(** An alias for the type of lists. *)
+
 (** List operations.
 
    Some functions are flagged as not tail-recursive.  A tail-recursive
@@ -73,14 +76,21 @@ val nth_opt: 'a list -> int -> 'a option
 val rev : 'a list -> 'a list
 (** List reversal. *)
 
+val init : len:int -> f:(int -> 'a) -> 'a list
+(** [List.init len f] is [f 0; f 1; ...; f (len-1)], evaluated left to right.
+
+    @raise Invalid_argument if [len < 0].
+    @since 4.06.0
+*)
+
 val append : 'a list -> 'a list -> 'a list
 (** Catenate two lists.  Same function as the infix operator [@].
    Not tail-recursive (length of the first argument).  The [@]
    operator is not tail-recursive either. *)
 
 val rev_append : 'a list -> 'a list -> 'a list
-(** [List.rev_append l1 l2] reverses [l1] and concatenates it to [l2].
-   This is equivalent to {!List.rev}[ l1 @ l2], but [rev_append] is
+(** [List.rev_append l1 l2] reverses [l1] and concatenates it with [l2].
+   This is equivalent to [(]{!List.rev}[ l1) @ l2], but [rev_append] is
    tail-recursive and more efficient. *)
 
 val concat : 'a list list -> 'a list
@@ -94,7 +104,7 @@ val flatten : 'a list list -> 'a list
    (length of the argument + length of the longest sub-list). *)
 
 
-(** {6 Iterators} *)
+(** {1 Iterators} *)
 
 
 val iter : f:('a -> unit) -> 'a list -> unit
@@ -126,6 +136,13 @@ val rev_map : f:('a -> 'b) -> 'a list -> 'b list
    {!List.rev}[ (]{!List.map}[ f l)], but is tail-recursive and
    more efficient. *)
 
+val filter_map : f:('a -> 'b option) -> 'a list -> 'b list
+(** [filter_map f l] applies [f] to every element of [l], filters
+    out the [None] elements and returns the list of the arguments of
+    the [Some] elements.
+    @since 4.08.0
+*)
+
 val fold_left : f:('a -> 'b -> 'a) -> init:'a -> 'b list -> 'a
 (** [List.fold_left f a [b1; ...; bn]] is
    [f (... (f (f a b1) b2) ...) bn]. *)
@@ -135,7 +152,7 @@ val fold_right : f:('a -> 'b -> 'b) -> 'a list -> init:'b -> 'b
    [f a1 (f a2 (... (f an b) ...))].  Not tail-recursive. *)
 
 
-(** {6 Iterators on two lists} *)
+(** {1 Iterators on two lists} *)
 
 
 val iter2 : f:('a -> 'b -> unit) -> 'a list -> 'b list -> unit
@@ -170,7 +187,7 @@ val fold_right2 :
    to have different lengths.  Not tail-recursive. *)
 
 
-(** {6 List scanning} *)
+(** {1 List scanning} *)
 
 
 val for_all : f:('a -> bool) -> 'a list -> bool
@@ -202,7 +219,7 @@ val memq : 'a -> set:'a list -> bool
    equality to compare list elements. *)
 
 
-(** {6 List searching} *)
+(** {1 List searching} *)
 
 
 val find : f:('a -> bool) -> 'a list -> 'a
@@ -234,7 +251,7 @@ val partition : f:('a -> bool) -> 'a list -> 'a list * 'a list
    The order of the elements in the input list is preserved. *)
 
 
-(** {6 Association lists} *)
+(** {1 Association lists} *)
 
 
 val assoc : 'a -> ('a * 'b) list -> 'b
@@ -282,7 +299,7 @@ val remove_assq : 'a -> ('a * 'b) list -> ('a * 'b) list
    of structural equality to compare keys.  Not tail-recursive. *)
 
 
-(** {6 Lists of pairs} *)
+(** {1 Lists of pairs} *)
 
 
 val split : ('a * 'b) list -> 'a list * 'b list
@@ -299,7 +316,7 @@ val combine : 'a list -> 'b list -> ('a * 'b) list
    have different lengths.  Not tail-recursive. *)
 
 
-(** {6 Sorting} *)
+(** {1 Sorting} *)
 
 
 val sort : cmp:('a -> 'a -> int) -> 'a list -> 'a list
@@ -308,7 +325,7 @@ val sort : cmp:('a -> 'a -> int) -> 'a list -> 'a list
    compare as equal, a positive integer if the first is greater,
    and a negative integer if the first is smaller (see Array.sort for
    a complete specification).  For example,
-   {!Pervasives.compare} is a suitable comparison function.
+   {!Stdlib.compare} is a suitable comparison function.
    The resulting list is sorted in increasing order.
    [List.sort] is guaranteed to run in constant heap space
    (in addition to the size of the result list) and logarithmic
@@ -339,8 +356,18 @@ val merge : cmp:('a -> 'a -> int) -> 'a list -> 'a list -> 'a list
 (** Merge two lists:
     Assuming that [l1] and [l2] are sorted according to the
     comparison function [cmp], [merge cmp l1 l2] will return a
-    sorted list containting all the elements of [l1] and [l2].
+    sorted list containing all the elements of [l1] and [l2].
     If several elements compare equal, the elements of [l1] will be
     before the elements of [l2].
     Not tail-recursive (sum of the lengths of the arguments).
 *)
+
+(** {1 Iterators} *)
+
+val to_seq : 'a list -> 'a Seq.t
+(** Iterate on the list
+    @since 4.07 *)
+
+val of_seq : 'a Seq.t -> 'a list
+(** Create a list from the iterator
+    @since 4.07 *)

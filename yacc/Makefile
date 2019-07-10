@@ -15,31 +15,34 @@
 
 # Makefile for the parser generator.
 
-include ../config/Makefile
+ROOTDIR = ..
 
-CC=$(BYTECC)
-CFLAGS=-DNDEBUG $(BYTECCCOMPOPTS)
+include $(ROOTDIR)/Makefile.config
 
-ifeq "$(TOOLCHAIN)" "mingw"
-  CFLAGS += -DNO_UNIX
-else ifeq "$(TOOLCHAIN)" "msvc"
-  CFLAGS += -DNO_UNIX
-endif
+OC_CPPFLAGS += -I$(ROOTDIR)/runtime
 
-OBJS= closure.$(O) error.$(O) lalr.$(O) lr0.$(O) main.$(O) \
-  mkpar.$(O) output.$(O) reader.$(O) \
-  skeleton.$(O) symtab.$(O) verbose.$(O) warshall.$(O)
+ocamlyacc_SOURCES := $(addsuffix .c,\
+  closure error lalr lr0 main mkpar output reader skeleton symtab verbose \
+  warshall)
+
+ocamlyacc_OBJECTS := $(ocamlyacc_SOURCES:.c=.$(O))
+
+generated_files := ocamlyacc$(EXE) $(ocamlyacc_OBJECTS)  version.h
 
 all: ocamlyacc$(EXE)
 
-ocamlyacc$(EXE): $(OBJS)
-	$(MKEXE) -o ocamlyacc$(EXE) $(OBJS) $(EXTRALIBS)
+ifeq ($(TOOLCHAIN),cc)
+MKEXE_ANSI=$(MKEXE)
+endif
 
-version.h : ../VERSION
-	echo "#define OCAML_VERSION \"`sed -e 1q $^ | tr -d '\r'`\"" > $@
+ocamlyacc$(EXE): $(ocamlyacc_OBJECTS)
+	$(MKEXE_ANSI) -o $@ $^ $(EXTRALIBS)
+
+version.h : $(ROOTDIR)/VERSION
+	echo "#define OCAML_VERSION \"`sed -e 1q $< | tr -d '\r'`\"" > $@
 
 clean:
-	rm -f *.$(O) ocamlyacc$(EXE) *~ version.h
+	rm -f $(generated_files)
 
 depend:
 
@@ -60,4 +63,4 @@ warshall.$(O): defs.h
 # also works for .obj files.
 
 %.$(O): %.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) -c $(OC_CFLAGS) $(OC_CPPFLAGS) $(OUTPUTOBJ)$@ $<

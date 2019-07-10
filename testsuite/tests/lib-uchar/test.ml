@@ -1,9 +1,14 @@
+(* TEST
+*)
+
 let assert_raise_invalid_argument f v =
   assert (try ignore (f v); false with Invalid_argument _ -> true)
 
 let test_constants () =
   assert (Uchar.(to_int min) = 0x0000);
   assert (Uchar.(to_int max) = 0x10FFFF);
+  assert (Uchar.(to_int bom) = 0xFEFF);
+  assert (Uchar.(to_int rep) = 0xFFFD);
   ()
 
 let test_succ () =

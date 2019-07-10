@@ -14,8 +14,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Misc
-open Types
 open Env
 
 type error =
@@ -29,11 +27,6 @@ let env_cache =
 let reset_cache () =
   Hashtbl.clear env_cache;
   Env.reset_cache()
-
-let extract_sig env mty =
-  match Env.scrape_alias env mty with
-    Mty_signature sg -> sg
-  | _ -> fatal_error "Envaux.extract_sig"
 
 let rec env_from_summary sum subst =
   try
@@ -54,12 +47,12 @@ let rec env_from_summary sum subst =
           Env.add_extension ~check:false id
             (Subst.extension_constructor subst desc)
             (env_from_summary s subst)
-      | Env_module(s, id, desc) ->
-          Env.add_module_declaration ~check:false id
-            (Subst.module_declaration subst desc)
+      | Env_module(s, id, pres, desc) ->
+          Env.add_module_declaration ~check:false id pres
+            (Subst.module_declaration Keep subst desc)
             (env_from_summary s subst)
       | Env_modtype(s, id, desc) ->
-          Env.add_modtype id (Subst.modtype_declaration subst desc)
+          Env.add_modtype id (Subst.modtype_declaration Keep subst desc)
                           (env_from_summary s subst)
       | Env_class(s, id, desc) ->
           Env.add_class id (Subst.class_declaration subst desc)
@@ -70,25 +63,29 @@ let rec env_from_summary sum subst =
       | Env_open(s, path) ->
           let env = env_from_summary s subst in
           let path' = Subst.module_path subst path in
-          let md =
-            try
-              Env.find_module path' env
-            with Not_found ->
-              raise (Error (Module_not_found path'))
-          in
-          Env.open_signature Asttypes.Override path'
-            (extract_sig env md.md_type) env
-      | Env_functor_arg(Env_module(s, id, desc), id') when Ident.same id id' ->
+          begin match Env.open_signature Asttypes.Override path' env with
+          | Some env -> env
+          | None -> assert false
+          | exception Not_found -> raise (Error (Module_not_found path'))
+          end
+      | Env_functor_arg(Env_module(s, id, pres, desc), id')
+            when Ident.same id id' ->
           Env.add_module_declaration ~check:false
-            id (Subst.module_declaration subst desc)
+            id pres (Subst.module_declaration Keep subst desc)
             ~arg:true (env_from_summary s subst)
       | Env_functor_arg _ -> assert false
       | Env_constraints(s, map) ->
-          PathMap.fold
+          Path.Map.fold
             (fun path info ->
               Env.add_local_type (Subst.type_path subst path)
                 (Subst.type_declaration subst info))
             map (env_from_summary s subst)
+      | Env_copy_types (s, sl) ->
+          let env = env_from_summary s subst in
+          Env.do_copy_types (Env.make_copy_of_types sl env) env
+      | Env_persistent (s, id) ->
+          let env = env_from_summary s subst in
+          Env.add_persistent_structure id env
     in
       Hashtbl.add env_cache (sum, subst) env;
       env

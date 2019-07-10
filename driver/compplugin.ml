@@ -28,9 +28,10 @@ let load plugin_name =
     if Filename.is_implicit plugin_name then
       try
         Compmisc.init_path !Clflags.native_code;
-        Misc.find_in_path !Config.load_path plugin_name
+        Load_path.find plugin_name
       with Not_found ->
-        raise (Compdynlink.Error (Compdynlink.File_not_found plugin_name))
+        failwith (Printf.sprintf "Cannot find plugin %s in load path"
+          plugin_name)
     else plugin_name
   in
 

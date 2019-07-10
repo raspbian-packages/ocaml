@@ -15,12 +15,12 @@
 
 val check_attribute
    : Typedtree.expression
-  -> string Location.loc * _
+  -> Parsetree.attribute
   -> unit
 
 val check_attribute_on_module
    : Typedtree.module_expr
-  -> string Location.loc * _
+  -> Parsetree.attribute
   -> unit
 
 val add_inline_attribute
@@ -43,6 +43,16 @@ val get_specialise_attribute
    : Parsetree.attributes
   -> Lambda.specialise_attribute
 
+val add_local_attribute
+   : Lambda.lambda
+  -> Location.t
+  -> Parsetree.attributes
+  -> Lambda.lambda
+
+val get_local_attribute
+   : Parsetree.attributes
+  -> Lambda.local_attribute
+
 val get_and_remove_inlined_attribute
    : Typedtree.expression
   -> Lambda.inline_attribute * Typedtree.expression
@@ -58,3 +68,9 @@ val get_and_remove_specialised_attribute
 val get_tailcall_attribute
    : Typedtree.expression
   -> bool * Typedtree.expression
+
+val add_function_attributes
+  : Lambda.lambda
+  -> Location.t
+  -> Parsetree.attributes
+  -> Lambda.lambda

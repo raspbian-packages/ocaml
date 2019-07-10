@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 (** A variable in a closure can either be used by the closure itself
     or by an inlined version of the function. *)
@@ -93,7 +94,7 @@ let remove_unused_closure_variables ~remove_direct_call_surrogates program =
         (* Remove specialised args that are used by removed functions *)
         let all_remaining_arguments =
           Variable.Map.fold (fun _ { Flambda.params } set ->
-              Variable.Set.union set (Variable.Set.of_list params))
+              Variable.Set.union set (Parameter.Set.vars params))
             funs Variable.Set.empty
         in
         Variable.Map.filter (fun arg _ ->

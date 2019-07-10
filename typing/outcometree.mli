@@ -22,10 +22,18 @@
       [Toploop.print_out_sig_item]
       [Toploop.print_out_phrase] *)
 
+(** An [out_name] is a string representation of an identifier which can be
+    rewritten on the fly to avoid name collisions *)
+type out_name = { mutable printed_name: string }
+
 type out_ident =
   | Oide_apply of out_ident * out_ident
   | Oide_dot of out_ident * string
-  | Oide_ident of string
+  | Oide_ident of out_name
+
+type out_string =
+  | Ostr_string
+  | Ostr_bytes
 
 type out_attribute =
   { oattr_name: string }
@@ -43,7 +51,7 @@ type out_value =
   | Oval_list of out_value list
   | Oval_printer of (Format.formatter -> unit)
   | Oval_record of (out_ident * out_value) list
-  | Oval_string of string
+  | Oval_string of string * int * out_string (* string, size-to-print, kind *)
   | Oval_stuff of string
   | Oval_tuple of out_value list
   | Oval_variant of string * out_value option
@@ -65,7 +73,7 @@ type out_type =
   | Otyp_variant of
       bool * out_variant * bool * (string list) option
   | Otyp_poly of string list * out_type
-  | Otyp_module of string * string list * out_type list
+  | Otyp_module of out_ident * string list * out_type list
   | Otyp_attribute of out_type * out_attribute
 
 and out_variant =

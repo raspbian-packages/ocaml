@@ -1,3 +1,22 @@
+ocaml (4.08.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Stéphane Glondu <glondu@debian.org>  Wed, 10 Jul 2019 14:58:45 +0200
+
+ocaml (4.05.0-11) unstable; urgency=medium
+
+  [ Ralf Treinen ]
+  * Dropped "Recommends: camlp4" from ocaml-nox since that package is
+    being deprecated. (Closes: #895994)
+
+  [ Stéphane Glondu ]
+  * Fix integer overflows when unmarshaling a bigarray
+    (Closes: #895472, CVE-2018-9838)
+  * Update Vcs-* to point to salsa
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 25 Jan 2019 14:59:28 +0100
+
 ocaml (4.05.0-10) unstable; urgency=medium
 
   * Drop support for ocamlopt on armel as suggested by upstream.
@@ -649,7 +668,7 @@ ocaml (3.11.0-2) experimental; urgency=low
   * Remove {dumpobj,objinfo}.dpatch, and put manpages in debian/man
   * Build and install dumpapprox, and provide a manpage
   * Discriminate *-nox packages in short descriptions (thanks Lintian)
-  
+
   [ Stefano Zacchiroli ]
   * debian/control:
     - clean-up Uploaders, removing people no longer contributing and
@@ -1245,7 +1264,7 @@ ocaml (3.08.3-8) unstable; urgency=low
     emacsen-install, emacsen-remove and emacsen-startup
   * debian/ocaml-nox.postint: Rename previous existing emacs site
     conffiles to <file>.save in order to avoid messing with the new
-    ocaml-mode 
+    ocaml-mode
   * debian/rules: Install ocaml-mode files in their own location
   * debian/ocaml-base-nox.README.Debian: Mention new ocaml-mode package
   * debian/ocaml-nox.NEWS:
@@ -1273,7 +1292,7 @@ ocaml (3.08.3-8) unstable; urgency=low
   * debian/ocaml-interp.menu:
     - New file renamed from ocaml-nox.menu
     - Change 'ocaml' to 'ocaml-interp' in the required package for
-      the menu to be displayed 
+      the menu to be displayed
   * debian/ocaml-interp.dirs: Add pixmaps directory
   * debian/ocaml-nox.dirs: Remove pixmaps directory
 
@@ -1501,7 +1520,7 @@ ocaml (3.07.2a-3) unstable; urgency=low
   * Changed 'Objectif' to 'Objective' in ocaml-source short description
   * Cleaned up debian/rules.  It now uses stamp files a little more
     intelligently so that it doesn't rebuild the whole thing every time
-  * Check to see if /usr/include/caml EXISTS and is a symblink thus 
+  * Check to see if /usr/include/caml EXISTS and is a symblink thus
     eliminating a spurious warning message from ocaml-nox.preinst
   * Removed 'num' library from ocaml-sources.files
 
@@ -1678,7 +1697,7 @@ ocaml (3.06-13) unstable; urgency=low
     the other side around. Need to find a nicer solution here, or even stop
     shipping the headers in /usr/include. One solution would be to ship them
     under /usr/include/ocaml/3.06/caml.
-  
+
  -- Sven Luther <luther@debian.org>  Sat, 14 Dec 2002 22:24:05 +0100
 
 ocaml (3.06-12) unstable; urgency=low
@@ -1805,7 +1824,7 @@ ocaml (3.06-1) unstable; urgency=high
   * Updated ocaml_packaging_policy and README.Debian file.
   * ocaml-ldconf now handles directory only lines in /etc/ocaml/ld.donf as the
     add command.
-  
+
  -- Sven Luther <luther@debian.org>  Tue, 20 Aug 2002 15:36:45 +0200
 
 ocaml (3.05-1) unstable; urgency=high
@@ -1898,7 +1917,7 @@ ocaml (3.04-5) unstable; urgency=low
   * Added an ocaml-source package containing the source to ocaml for packages
     which need them as build-depends.
   * Applied Ian Zimmerman's caml.el patch. (Closes:#129650,#130301)
-  
+
 
  -- Sven Luther <luther@debian.org>  Wed, 16 Jan 2002 18:08:39 +0100
 
@@ -2198,7 +2217,7 @@ ocaml (2.01-3) unstable; urgency=low
 ocaml (2.01-2) unstable; urgency=low
 
   * Removed the mli2html patch again, conforming to the wishes of
-    the upstream author. Due to licensing problems, if we want it, 
+    the upstream author. Due to licensing problems, if we want it,
     we have to have autorization of INRIA. Anyway, the mli2html patch
     was buggy, creating different .mli files if -html was used or not.
   * Fixed the configure script and Makefile so that you can use -prefix

@@ -38,7 +38,7 @@ type cmm_label = int
   (* Do not introduce a dependency to Cmm *)
 
 type specific_operation =
-  | Ifar_alloc of { words : int; label_after_call_gc : cmm_label option; }
+  | Ifar_alloc of { bytes : int; label_after_call_gc : cmm_label option; }
   | Ifar_intop_checkbound of { label_after_error : cmm_label option; }
   | Ifar_intop_imm_checkbound of
       { bound : int; label_after_error : cmm_label option; }
@@ -54,7 +54,7 @@ type specific_operation =
   | Imulsubf      (* floating-point multiply and subtract *)
   | Inegmulsubf   (* floating-point negate, multiply and subtract *)
   | Isqrtf        (* floating-point square root *)
-  | Ibswap of int (* endianess conversion *)
+  | Ibswap of int (* endianness conversion *)
 
 and arith_operation =
     Ishiftadd
@@ -107,8 +107,8 @@ let print_addressing printreg addr ppf arg =
 
 let print_specific_operation printreg op ppf arg =
   match op with
-  | Ifar_alloc { words; label_after_call_gc = _; } ->
-    fprintf ppf "(far) alloc %i" words
+  | Ifar_alloc { bytes; label_after_call_gc = _; } ->
+    fprintf ppf "(far) alloc %i" bytes
   | Ifar_intop_checkbound _ ->
     fprintf ppf "%a (far) check > %a" printreg arg.(0) printreg arg.(1)
   | Ifar_intop_imm_checkbound { bound; _ } ->

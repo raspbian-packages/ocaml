@@ -15,7 +15,6 @@
 
 (* The interactive toplevel loop *)
 
-open Path
 open Format
 open Config
 open Misc
@@ -62,16 +61,14 @@ type directive_fun =
    | Directive_bool of (bool -> unit)
 
 
-(* Return the value referred to by a path *)
-
 let remembered = ref Ident.empty
 
 let rec remember phrase_name i = function
   | [] -> ()
-  | Sig_value  (id, _) :: rest
-  | Sig_module (id, _, _) :: rest
-  | Sig_typext (id, _, _) :: rest
-  | Sig_class  (id, _, _) :: rest ->
+  | Sig_value  (id, _, _) :: rest
+  | Sig_module (id, _, _, _, _) :: rest
+  | Sig_typext (id, _, _, _) :: rest
+  | Sig_class  (id, _, _, _) :: rest ->
       remembered := Ident.add id (phrase_name, i) !remembered;
       remember phrase_name (succ i) rest
   | _ :: rest -> remember phrase_name i rest
@@ -82,7 +79,7 @@ let toplevel_value id =
 
 let close_phrase lam =
   let open Lambda in
-  IdentSet.fold (fun id l ->
+  Ident.Set.fold (fun id l ->
     let glb, pos = toplevel_value id in
     let glob =
       Lprim (Pfield pos,
@@ -98,25 +95,41 @@ let toplevel_value id =
   in
   (Obj.magic (global_symbol glob)).(pos)
 
-let rec eval_path = function
-  | Pident id ->
+(* Return the value referred to by a path *)
+
+let rec eval_address = function
+  | Env.Aident id ->
       if Ident.persistent id || Ident.global id
       then global_symbol id
       else toplevel_value id
-  | Pdot(p, _s, pos) ->
-      Obj.field (eval_path p) pos
-  | Papply _ ->
-      fatal_error "Toploop.eval_path"
+  | Env.Adot(a, pos) ->
+      Obj.field (eval_address a) pos
 
-let eval_path env path =
-  eval_path (Env.normalize_path (Some Location.none) env path)
+let eval_path find env path =
+  match find path env with
+  | addr -> eval_address addr
+  | exception Not_found ->
+      fatal_error ("Cannot find address for: " ^ (Path.name path))
+
+let eval_module_path env path =
+  eval_path Env.find_module_address env path
+
+let eval_value_path env path =
+  eval_path Env.find_value_address env path
+
+let eval_extension_path env path =
+  eval_path Env.find_constructor_address env path
+
+let eval_class_path env path =
+  eval_path Env.find_class_address env path
 
 (* To print values *)
 
 module EvalPath = struct
   type valu = Obj.t
   exception Error
-  let eval_path env p = try eval_path env p with _ -> raise Error
+  let eval_address addr =
+    try eval_address addr with _ -> raise Error
   let same_value v1 v2 = (v1 == v2)
 end
 
@@ -155,14 +168,15 @@ let remove_printer = Printer.remove_printer
 
 let parse_toplevel_phrase = ref Parse.toplevel_phrase
 let parse_use_file = ref Parse.use_file
-let print_location = Location.print_error (* FIXME change back to print *)
-let print_error = Location.print_error
+let print_location = Location.print_loc
+let print_error = Location.print_report
 let print_warning = Location.print_warning
 let input_name = Location.input_name
 
 let parse_mod_use_file name lb =
   let modname =
-    String.capitalize_ascii (Filename.chop_extension (Filename.basename name))
+    String.capitalize_ascii
+      (Filename.remove_extension (Filename.basename name))
   in
   let items =
     List.concat
@@ -179,9 +193,25 @@ let parse_mod_use_file name lb =
        ]
    ]
 
-(* Hooks for initialization *)
+(* Hook for initialization *)
 
 let toplevel_startup_hook = ref (fun () -> ())
+
+type event = ..
+type event +=
+  | Startup
+  | After_setup
+
+let hooks = ref []
+
+let add_hook f = hooks := f :: !hooks
+
+let () =
+  add_hook (function
+      | Startup -> !toplevel_startup_hook ()
+      | _ -> ())
+
+let run_hooks hook = List.iter (fun f -> f hook) !hooks
 
 (* Load in-core and execute a lambda term *)
 
@@ -220,15 +250,14 @@ let load_lambda ppf ~module_ident ~required_globals lam size =
   in
   let fn = Filename.chop_extension dll in
   if not Config.flambda then
-    Asmgen.compile_implementation_clambda ~source_provenance:Timings.Toplevel
-      ~toplevel:need_symbol fn ppf
+    Asmgen.compile_implementation_clambda
+      ~toplevel:need_symbol fn ~ppf_dump:ppf
       { Lambda.code=slam ; main_module_block_size=size;
         module_ident; required_globals }
   else
-    Asmgen.compile_implementation_flambda ~source_provenance:Timings.Toplevel
-      ~required_globals ~backend ~toplevel:need_symbol fn ppf
-      (Middle_end.middle_end ppf
-         ~source_provenance:Timings.Toplevel ~prefixname:"" ~backend ~size
+    Asmgen.compile_implementation_flambda
+      ~required_globals ~backend ~toplevel:need_symbol fn ~ppf_dump:ppf
+      (Middle_end.middle_end ~ppf_dump:ppf ~prefixname:"" ~backend ~size
          ~module_ident ~module_initializer:slam ~filename:"toplevel");
   Asmlink.call_linker_shared [fn ^ ext_obj] dll;
   Sys.remove (fn ^ ext_obj);
@@ -249,7 +278,7 @@ let load_lambda ppf ~module_ident ~required_globals lam size =
 let pr_item =
   Printtyp.print_items
     (fun env -> function
-      | Sig_value(id, {val_kind = Val_reg; val_type}) ->
+      | Sig_value(id, {val_kind = Val_reg; val_type}, _) ->
           Some (outval_of_value env (toplevel_value id) val_type)
       | _ -> None
     )
@@ -281,8 +310,7 @@ let execute_phrase print_outcome ppf phr =
       let oldenv = !toplevel_env in
       incr phrase_seqid;
       phrase_name := Printf.sprintf "TOP%i" !phrase_seqid;
-      Compilenv.reset ~source_provenance:Timings.Toplevel
-        ?packname:None !phrase_name;
+      Compilenv.reset ?packname:None !phrase_name;
       Typecore.reset_delayed_checks ();
       let sstr, rewritten =
         match sstr with
@@ -299,9 +327,9 @@ let execute_phrase print_outcome ppf phr =
             [ Ast_helper.Str.value ~loc Asttypes.Nonrecursive [vb] ], true
         | _ -> sstr, false
       in
-      let (str, sg, newenv) = Typemod.type_toplevel_phrase oldenv sstr in
+      let (str, sg, names, newenv) = Typemod.type_toplevel_phrase oldenv sstr in
       if !Clflags.dump_typedtree then Printtyped.implementation ppf str;
-      let sg' = Typemod.simplify_signature sg in
+      let sg' = Typemod.Signature_names.simplify newenv names sg in
       (* Why is this done? *)
       ignore (Includemod.signatures oldenv sg sg');
       Typecore.force_delayed_checks ();
@@ -331,13 +359,13 @@ let execute_phrase print_outcome ppf phr =
               else
                 Compilenv.record_global_approx_toplevel ();
               if print_outcome then
-                Printtyp.wrap_printing_env oldenv (fun () ->
+                Printtyp.wrap_printing_env ~error:false oldenv (fun () ->
                 match str.str_items with
                 | [] -> Ophr_signature []
                 | _ ->
                     if rewritten then
                       match sg' with
-                      | [ Sig_value (id, vd) ] ->
+                      | [ Sig_value (id, vd, _) ] ->
                           let outv =
                             outval_of_value newenv (toplevel_value id)
                               vd.val_type
@@ -346,7 +374,7 @@ let execute_phrase print_outcome ppf phr =
                           Ophr_eval (outv, ty)
                       | _ -> assert false
                     else
-                      Ophr_signature (pr_item newenv sg'))
+                      Ophr_signature (pr_item oldenv sg'))
               else Ophr_signature []
           | Exception exn ->
               toplevel_env := oldenv;
@@ -364,7 +392,7 @@ let execute_phrase print_outcome ppf phr =
       with x ->
         toplevel_env := oldenv; raise x
       end
-  | Ptop_dir(dir_name, dir_arg) ->
+  | Ptop_dir {pdir_name = {Location.txt = dir_name}; pdir_arg } ->
       let d =
         try Some (Hashtbl.find directive_table dir_name)
         with Not_found -> None
@@ -374,10 +402,10 @@ let execute_phrase print_outcome ppf phr =
           fprintf ppf "Unknown directive `%s'.@." dir_name;
           false
       | Some d ->
-          match d, dir_arg with
-          | Directive_none f, Pdir_none -> f (); true
-          | Directive_string f, Pdir_string s -> f s; true
-          | Directive_int f, Pdir_int (n,None) ->
+          match d, pdir_arg with
+          | Directive_none f, None -> f (); true
+          | Directive_string f, Some {pdira_desc = Pdir_string s} -> f s; true
+          | Directive_int f, Some {pdira_desc = Pdir_int (n,None)} ->
              begin match Int_literal_converter.int n with
              | n -> f n; true
              | exception _ ->
@@ -386,12 +414,12 @@ let execute_phrase print_outcome ppf phr =
                        dir_name;
                false
              end
-          | Directive_int _, Pdir_int (_, Some _) ->
+          | Directive_int _, Some {pdira_desc = Pdir_int (_, Some _)} ->
               fprintf ppf "Wrong integer literal for directive `%s'.@."
                 dir_name;
               false
-          | Directive_ident f, Pdir_ident lid -> f lid; true
-          | Directive_bool f, Pdir_bool b -> f b; true
+          | Directive_ident f, Some {pdira_desc = Pdir_ident lid} -> f lid; true
+          | Directive_bool f, Some {pdira_desc = Pdir_bool b} -> f b; true
           | _ ->
               fprintf ppf "Wrong type of argument for directive `%s'.@."
                 dir_name;
@@ -425,7 +453,7 @@ let use_file ppf wrap_mod name =
       if name = "" then
         ("(stdin)", stdin, false)
       else begin
-        let filename = find_in_path !Config.load_path name in
+        let filename = Load_path.find name in
         let ic = open_in_bin filename in
         (filename, ic, true)
       end
@@ -466,12 +494,12 @@ let first_line = ref true
 let got_eof = ref false;;
 
 let read_input_default prompt buffer len =
-  output_string Pervasives.stdout prompt; flush Pervasives.stdout;
+  output_string stdout prompt; flush stdout;
   let i = ref 0 in
   try
     while true do
       if !i >= len then raise Exit;
-      let c = input_char Pervasives.stdin in
+      let c = input_char stdin in
       Bytes.set buffer !i c;
       incr i;
       if c = '\n' then raise Exit;
@@ -510,7 +538,6 @@ let refill_lexbuf buffer len =
 
 let _ =
   Sys.interactive := true;
-  Compdynlink.init ();
   Compmisc.init_path true;
   Clflags.dlcode := true;
   ()
@@ -532,9 +559,18 @@ let set_paths () =
   (* Add whatever -I options have been specified on the command line,
      but keep the directories that user code linked in with ocamlmktop
      may have added to load_path. *)
-  load_path := !load_path @ [Filename.concat Config.standard_library "camlp4"];
-  load_path := "" :: (List.rev !Clflags.include_dirs @ !load_path);
-  ()
+  let expand = Misc.expand_directory Config.standard_library in
+  let current_load_path = Load_path.get_paths () in
+  let load_path = List.concat [
+      [ "" ];
+      List.map expand (List.rev !Compenv.first_include_dirs);
+      List.map expand (List.rev !Clflags.include_dirs);
+      List.map expand (List.rev !Compenv.last_include_dirs);
+      current_load_path;
+      [expand "+camlp4"];
+    ]
+  in
+  Load_path.init load_path
 
 let initialize_toplevel_env () =
   toplevel_env := Compmisc.initial_env()
@@ -553,6 +589,7 @@ let loop ppf =
   Location.input_name := "//toplevel//";
   Location.input_lexbuf := Some lb;
   Sys.catch_break true;
+  run_hooks After_setup;
   load_ocamlinit ppf;
   while true do
     let snap = Btype.snapshot () in
@@ -592,6 +629,7 @@ let run_script ppf name args =
                    (* Note: would use [Filename.abspath] here, if we had it. *)
   toplevel_env := Compmisc.initial_env();
   Sys.interactive := false;
+  run_hooks After_setup;
   let explicit_name =
     (* Prevent use_silently from searching in the path. *)
     if Filename.is_implicit name
