@@ -119,6 +119,7 @@ endif
 override_dh_auto_configure: config-stamp ocamlinit-stamp
 
 config-stamp: pre-config-stamp
+	./autogen
 	./configure $(CONFIGURE_OPTS)
 	touch $@
 
