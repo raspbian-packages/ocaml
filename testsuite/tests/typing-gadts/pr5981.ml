@@ -12,9 +12,9 @@ module F(S : sig type 'a t end) = struct
     | A, B -> "f A B"
 end;;
 [%%expect{|
-Line _, characters 47-84:
-  ...............................................match l, r with
-      | A, B -> "f A B"
+Line 7, characters 47-84:
+7 | ...............................................match l, r with
+8 |     | A, B -> "f A B"
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 (A, A)
@@ -39,9 +39,9 @@ module F(S : sig type 'a t end) = struct
     | A, B -> "f A B"
 end;;
 [%%expect{|
-Line _, characters 15-52:
-  ...............match l, r with
-      | A, B -> "f A B"
+Line 10, characters 15-52:
+10 | ...............match l, r with
+11 |     | A, B -> "f A B"
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 (A, A)

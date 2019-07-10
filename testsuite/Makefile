@@ -21,24 +21,7 @@ FIND=find
 TOPDIR := ..
 include $(TOPDIR)/Makefile.tools
 
-ifeq "$(UNIX_OR_WIN32)" "unix"
-  ifeq "$(SYSTEM)" "cygwin"
-    find := /usr/bin/find
-  else # Non-cygwin Unix
-    find := find
-  endif
-else # Windows
-  find := /usr/bin/find
-  FLEXDLL_SUBMODULE_PRESENT := $(wildcard ../flexdll/Makefile)
-  ifeq "$(FLEXDLL_SUBMODULE_PRESENT)" ""
-    FLEXLINK_PREFIX=
-  else
-    ROOT:=$(shell cd .. && pwd| cygpath -m -f -)
-    EMPTY=
-    FLEXLINK_PREFIX:=OCAML_FLEXLINK="$(ROOT)/boot/ocamlrun \
-                                     $(ROOT)/flexdll/flexlink.exe" $(EMPTY)
-  endif
-endif
+OCAMLTESTDIR_CYGPATH=$(shell $(CYGPATH) $(BASEDIR)/$(DIR)/_ocamltest)
 
 failstamp := failure.stamp
 
@@ -50,7 +33,33 @@ ocamltest_program := $(or \
   $(wildcard $(ocamltest_directory)/ocamltest.opt$(EXE)),\
   $(wildcard $(ocamltest_directory)/ocamltest$(EXE)))
 
-ocamltest := $(FLEXLINK_PREFIX) SORT=$(SORT) $(ocamltest_program)
+ifeq "$(UNIX_OR_WIN32)" "unix"
+  ifeq "$(SYSTEM)" "cygwin"
+    find := /usr/bin/find
+  else # Non-cygwin Unix
+    find := find
+  endif
+else # Windows
+  find := /usr/bin/find
+  FLEXDLL_SUBMODULE_PRESENT := $(wildcard ../flexdll/Makefile)
+  ifeq "$(FLEXDLL_SUBMODULE_PRESENT)" ""
+    FLEXLINK_ENV =
+  else
+    ROOT := $(shell cd .. && pwd| cygpath -m -f -)
+    FLEXLINK_ENV = \
+      OCAML_FLEXLINK="$(ROOT)/boot/ocamlrun $(ROOT)/flexdll/flexlink.exe"
+  endif
+endif
+
+ifeq "$(FLEXLINK_ENV)" ""
+  ocamltest := MKDLL="$(MKDLL)" SORT=$(SORT) MAKE=$(MAKE) $(ocamltest_program)
+else
+  MKDLL=$(WINTOPDIR)/boot/ocamlrun $(WINTOPDIR)/flexdll/flexlink.exe \
+                                   $(FLEXLINK_FLAGS)
+
+  ocamltest := $(FLEXLINK_ENV) MKDLL="$(MKDLL)" SORT=$(SORT) MAKE=$(MAKE) \
+                               $(ocamltest_program)
+endif
 
 .PHONY: default
 default:
@@ -108,8 +117,17 @@ new-without-report: lib tools
 	  echo Running tests from \'$$dir\' ... ; \
 	  $(MAKE) exec-ocamltest DIR=$$dir \
 	    OCAMLTESTENV="" OCAMLTESTFLAGS=""; \
-	done || touch $(failstamp)) 2>&1 | tee -a $(TESTLOG)
-	@if [ -f $(failstamp) ]; then rm $(failstamp); exit 1; fi
+	done || echo outer loop >> $(failstamp)) 2>&1 | tee -a $(TESTLOG)
+	@$(MAKE) check-failstamp
+
+.PHONY: check-failstamp
+check-failstamp:
+	@if [ -f $(failstamp) ]; then \
+	  echo 'Unexpected error in the test infrastructure:'; \
+	  cat $(failstamp); \
+	  rm $(failstamp); \
+	  exit 1; \
+	fi
 
 .PHONY: all-%
 all-%: lib tools
@@ -119,7 +137,7 @@ all-%: lib tools
 	@$(MAKE) $(NO_PRINT) retries
 	@$(MAKE) report
 
-# The targets below use GNU parallel to paralellize tests
+# The targets below use GNU parallel to parallelize tests
 # 'make all' and 'make parallel' should be equivalent
 #
 # parallel uses specific logic to make sure the output of the commands
@@ -186,7 +204,7 @@ one: lib tools
 	  exit 1; \
 	fi
 	@$(MAKE) $(NO_PRINT) exec-one DIR=$(DIR)
-	@if [ -f $(failstamp) ]; then rm $(failstamp); exit 1; fi
+	@$(MAKE) check-failstamp
 
 .PHONY: exec-one
 exec-one:
@@ -203,7 +221,7 @@ exec-one:
 	elif [ -f $(DIR)/ocamltests ] && [ -z $(LEGACY) ] ; then \
 	  echo "Running tests from '$$DIR' ..."; \
 	  $(MAKE) exec-ocamltest DIR=$(DIR) \
-	    OCAMLTESTENV="OCAMLTESTDIR=$(shell $(CYGPATH) $(BASEDIR)/$(DIR)/_ocamltest)" \
+	    OCAMLTESTENV="OCAMLTESTDIR=$(OCAMLTESTDIR_CYGPATH)" \
 	    OCAMLTESTFLAGS=""; \
 	fi
 
@@ -215,8 +233,8 @@ exec-ocamltest:
 	(IFS=$$(printf "\r\n"); while read testfile; do \
 	   TERM=dumb $(OCAMLTESTENV) \
 	     $(ocamltest) $(OCAMLTESTFLAGS) $(DIR)/$$testfile || \
-	   touch $(failstamp); \
-	done < $$file) || touch $(failstamp)
+	   echo " ... testing '$$testfile' => unexpected error"; \
+	done < $$file) || echo directory "$(DIR)" >>$(failstamp)
 
 .PHONY: clean-one
 clean-one:
@@ -242,7 +260,7 @@ promote:
 	fi
 	@if [ -f $(DIR)/ocamltests ]; then \
 	  $(MAKE) exec-ocamltest DIR=$(DIR) \
-	    OCAMLTESTENV="OCAMLTESTDIR=$(shell $(CYGPATH) $(BASEDIR)/$(DIR)/_ocamltest)" \
+	    OCAMLTESTENV="OCAMLTESTDIR=$(OCAMLTESTDIR_CYGPATH)" \
 	    OCAMLTESTFLAGS="-promote"; \
 	else \
 	  cd $(DIR) && $(MAKE) TERM=dumb BASEDIR=$(BASEDIR) promote; \

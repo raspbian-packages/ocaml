@@ -71,7 +71,7 @@ let rec run_test log common_prefix path behavior = function
   Node (testenvspec, test, env_modifiers, subtrees) ->
   Printf.printf "%s %s (%s) => %!" common_prefix path test.Tests.test_name;
   let (msg, b) = match behavior with
-    | Skip_all_tests -> "skipped", Skip_all_tests
+    | Skip_all_tests -> "n/a", Skip_all_tests
     | Run env ->
       let testenv0 = interprete_environment_statements env testenvspec in
       let testenv = List.fold_left apply_modifiers testenv0 env_modifiers in
@@ -100,10 +100,16 @@ let get_test_build_directory_prefix test_dirname =
   if test_dirname = "." then root
   else Filename.concat root test_dirname
 
+let tests_to_skip = ref []
+
+let init_tests_to_skip () =
+  tests_to_skip := String.words (Sys.safe_getenv "OCAMLTEST_SKIP_TESTS")
+
 let test_file test_filename =
   (* Printf.printf "# reading test file %s\n%!" test_filename; *)
   (* Save current working directory *)
   let cwd = Sys.getcwd() in
+  let skip_test = List.mem test_filename !tests_to_skip in
   let tsl_block = tsl_block_of_file_safe test_filename in
   let (rootenv_statements, test_trees) = test_trees_of_tsl_block tsl_block in
   let test_trees = match test_trees with
@@ -115,8 +121,8 @@ let test_file test_filename =
   let used_tests = tests_in_trees test_trees in
   let used_actions = actions_in_tests used_tests in
   let action_names =
-    let f act names = StringSet.add (Actions.action_name act) names in
-    Actions.ActionSet.fold f used_actions StringSet.empty in
+    let f act names = String.Set.add (Actions.action_name act) names in
+    Actions.ActionSet.fold f used_actions String.Set.empty in
   let test_dirname = Filename.dirname test_filename in
   let test_basename = Filename.basename test_filename in
   let test_prefix = Filename.chop_extension test_basename in
@@ -143,12 +149,14 @@ let test_file test_filename =
            let hook = Actions_helpers.run_hook hook_name in
            Actions.set_hook name hook
          end in
-       StringSet.iter install_hook action_names;
+       String.Set.iter install_hook action_names;
 
        let reference_filename = Filename.concat
            test_source_directory (test_prefix ^ ".reference") in
+       let make = try Sys.getenv "MAKE" with Not_found -> "make" in
        let initial_environment = Environments.from_bindings
            [
+             Builtin_variables.make, make;
              Builtin_variables.test_file, test_basename;
              Builtin_variables.reference, reference_filename;
              Builtin_variables.test_source_directory, test_source_directory;
@@ -161,8 +169,11 @@ let test_file test_filename =
            initial_environment rootenv_statements in
        let rootenv = Environments.initialize log root_environment in
        let common_prefix = " ... testing '" ^ test_basename ^ "' with" in
+       let initial_status =
+         if skip_test then Skip_all_tests else Run rootenv
+       in
        List.iteri
-         (run_test_i log common_prefix "" (Run rootenv))
+         (run_test_i log common_prefix "" initial_status)
          test_trees;
        Actions.clear_all_hooks();
        if not !Options.log_to_stderr then close_out log
@@ -175,6 +186,7 @@ let main () =
     print_usage();
     exit 1
   end;
+  init_tests_to_skip();
   List.iter test_file !Options.files_to_test
 
 let _ = main()

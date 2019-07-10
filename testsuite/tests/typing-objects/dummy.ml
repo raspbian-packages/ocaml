@@ -42,9 +42,9 @@ and foo = object(self)
 end;;
 
 [%%expect{|
-Line _, characters 22-26:
-        inherit child1' self
-                        ^^^^
+Line 16, characters 22-26:
+16 |       inherit child1' self
+                           ^^^^
 Error: This expression has type < child : 'a; previous : 'b option; .. >
        but an expression was expected of type 'c
        Self type cannot escape its class
@@ -139,11 +139,11 @@ class leading_up_to = object(self : 'a)
     end
 end;;
 [%%expect{|
-Line _, characters 4-65:
-  ....object
-        inherit child1 self
-        inherit child2
-      end
+Line 4, characters 4-65:
+4 | ....object
+5 |       inherit child1 self
+6 |       inherit child2
+7 |     end
 Error: Cannot close type of object literal:
        < child : '_weak1; previous : 'a option; _.. > as 'a
        it has been unified with the self type of a class that is not yet
@@ -162,14 +162,14 @@ class assertion_failure = object(self : 'a)
     end
 end;;
 [%%expect{|
-Line _, characters 4-129:
-  ....object
-        inherit child1 self
-        inherit child2
-
-        method previous = None
-        method child = assert false
-      end
+Line 4, characters 4-129:
+ 4 | ....object
+ 5 |       inherit child1 self
+ 6 |       inherit child2
+ 7 |
+ 8 |       method previous = None
+ 9 |       method child = assert false
+10 |     end
 Error: Cannot close type of object literal:
        < child : '_weak2; previous : 'a option; _.. > as 'a
        it has been unified with the self type of a class that is not yet

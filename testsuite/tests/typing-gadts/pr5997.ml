@@ -22,9 +22,9 @@ match M.comp with | Diff -> false;;
 type (_, _) comp = Eq : ('a, 'a) comp | Diff : ('a, 'b) comp
 module U : sig type t = T end
 module M : sig type t = T val comp : (U.t, t) comp end
-Line _, characters 0-33:
-  match M.comp with | Diff -> false;;
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 16, characters 0-33:
+16 | match M.comp with | Diff -> false;;
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 Eq
@@ -45,9 +45,9 @@ match M.comp with | Diff -> false;;
 [%%expect{|
 module U : sig type t = { x : int; } end
 module M : sig type t = { x : int; } val comp : (U.t, t) comp end
-Line _, characters 0-33:
-  match M.comp with | Diff -> false;;
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 11, characters 0-33:
+11 | match M.comp with | Diff -> false;;
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 Eq

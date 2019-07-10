@@ -242,6 +242,25 @@ The environment variable "OCAML_COLOR" is considered if \-color is not
 provided. Its values are auto/always/never as above.
 
 .TP
+.BI \-error\-style \ mode
+Control the way error messages and warnings are printed.
+The following modes are supported:
+
+.B short
+only print the error and its location;
+
+.B contextual
+like "short", but also display the source code snippet corresponding
+to the location of the error.
+
+The default setting is
+.B contextual.
+
+The environment variable "OCAML_ERROR_STYLE" is considered if
+\-error\-style is not provided. Its values are short/contextual as
+above.
+
+.TP
 .B \-compact
 Optimize the produced code for space rather than for time. This
 results in smaller but slightly slower programs. The default is to
@@ -251,6 +270,13 @@ optimize for speed.
 Print the version number of
 .BR ocamlopt (1)
 and a detailed summary of its configuration, then exit.
+.TP
+.BI \-config-var
+Print the value of a specific configuration variable
+from the
+.B \-config
+output, then exit. If the variable does not exist,
+the exit code is non-zero.
 .TP
 .BI \-depend\ ocamldep-args
 Compute dependencies, as ocamldep would do.
@@ -366,6 +392,11 @@ than with the usual graph coloring allocator, sometimes quite drastically so for
 long functions and modules. On the other hand, the generated code can be a bit
 slower.
 .TP
+.B \-match\-context\-rows
+Set number of rows of context used during pattern matching
+compilation. Lower values cause faster compilation, but
+less optimized code. The default value is 32.
+.TP
 .B \-no-alias-deps
 Do not record dependencies for module aliases.
 .TP
@@ -396,7 +427,7 @@ Allow the compiler to use some optimizations that are valid only for code
 that is never dynlinked.
 .TP
 .B -nostdlib
-Do not automatically add the standard library directory the list of
+Do not automatically add the standard library directory to the list of
 directories searched for compiled interface files (.cmi), compiled
 object code files (.cmx), and libraries (.cmxa). See also option
 .BR \-I .
@@ -556,6 +587,12 @@ code for the source file
 .IR x .ml
 is saved in the file
 .IR x .s.
+.TP
+.BI \-stop\-after \ pass
+Stop compilation after the given compilation pass. The currently
+supported passes are:
+.BR parsing ,
+.BR typing .
 .TP
 .B \-safe\-string
 Enforce the separation between types

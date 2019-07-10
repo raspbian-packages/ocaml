@@ -87,8 +87,7 @@ let iterator =
     | Pexp_construct (id, _)
     | Pexp_field (_, id)
     | Pexp_setfield (_, id, _)
-    | Pexp_new id
-    | Pexp_open (_, id, _) -> simple_longident id
+    | Pexp_new id -> simple_longident id
     | Pexp_record (fields, _) ->
       List.iter (fun (id, _) -> simple_longident id) fields
     | _ -> ()
@@ -114,8 +113,7 @@ let iterator =
     | _ -> ()
   in
   let open_description self opn =
-    super.open_description self opn;
-    simple_longident opn.popen_lid
+    super.open_description self opn
   in
   let with_constraint self wc =
     super.with_constraint self wc;
@@ -145,6 +143,30 @@ let iterator =
     | Psig_type (_, []) -> empty_type loc
     | _ -> ()
   in
+  let row_field self field =
+    super.row_field self field;
+    let loc = field.prf_loc in
+    match field.prf_desc with
+    | Rtag _ -> ()
+    | Rinherit _ ->
+      if field.prf_attributes = []
+      then ()
+      else err loc
+          "In variant types, attaching attributes to inherited \
+           subtypes is not allowed."
+  in
+  let object_field self field =
+    super.object_field self field;
+    let loc = field.pof_loc in
+    match field.pof_desc with
+    | Otag _ -> ()
+    | Oinherit _ ->
+      if field.pof_attributes = []
+      then ()
+      else err loc
+          "In object types, attaching attributes to inherited \
+           subtypes is not allowed."
+  in
   { super with
     type_declaration
   ; typ
@@ -158,6 +180,8 @@ let iterator =
   ; with_constraint
   ; structure_item
   ; signature_item
+  ; row_field
+  ; object_field
   }
 
 let structure st = iterator.structure iterator st

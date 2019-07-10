@@ -6,9 +6,9 @@ type t = (unit, unit, unit, unit) bar
 ;;
 (* PR#7315: we expect the error location on "bar" instead of "(...) bar" *)
 [%%expect{|
-Line _, characters 34-37:
-  type t = (unit, unit, unit, unit) bar
-                                    ^^^
+Line 1, characters 34-37:
+1 | type t = (unit, unit, unit, unit) bar
+                                      ^^^
 Error: Unbound type constructor bar
 |}];;
 
@@ -16,9 +16,9 @@ function (x :
 #bar) -> ();;
 (* we expect the location on "bar" instead of "#bar" *)
 [%%expect{|
-Line _, characters 1-4:
-  #bar) -> ();;
-   ^^^
+Line 2, characters 1-4:
+2 | #bar) -> ();;
+     ^^^
 Error: Unbound class bar
 |}];;
 
@@ -27,18 +27,18 @@ function
 ;;
 (* we expect the location on "bar" instead of "#bar" *)
 [%%expect{|
-Line _, characters 1-4:
-  #bar -> ()
-   ^^^
+Line 2, characters 1-4:
+2 | #bar -> ()
+     ^^^
 Error: Unbound type constructor bar
 |}];;
 
 new bar;;
 (* we expect the location on "bar" instead of "new bar" *)
 [%%expect{|
-Line _, characters 4-7:
-  new bar;;
-      ^^^
+Line 1, characters 4-7:
+1 | new bar;;
+        ^^^
 Error: Unbound class bar
 |}];;
 
@@ -51,28 +51,28 @@ Foo ();;
 (* "Foo ()": the whole construct, with arguments, is deprecated *)
 [%%expect{|
 type t = Foo of unit | Bar
-Line _, characters 0-6:
-  Foo ();;
-  ^^^^^^
-Error (warning 3): deprecated: Foo
+Line 6, characters 0-6:
+6 | Foo ();;
+    ^^^^^^
+Error (alert deprecated): Foo
 |}];;
 function
 Foo _ -> () | Bar -> ();;
 (* "Foo _", the whole construct is deprecated *)
 [%%expect{|
-Line _, characters 0-5:
-  Foo _ -> () | Bar -> ();;
-  ^^^^^
-Error (warning 3): deprecated: Foo
+Line 2, characters 0-5:
+2 | Foo _ -> () | Bar -> ();;
+    ^^^^^
+Error (alert deprecated): Foo
 |}];;
 
 
 open Foo;;
 (* the error location should be on "Foo" *)
 [%%expect{|
-Line _, characters 5-8:
-  open Foo;;
-       ^^^
+Line 1, characters 5-8:
+1 | open Foo;;
+         ^^^
 Error: Unbound module Foo
 |}];;
 
@@ -83,18 +83,18 @@ end);;
 (* here we expect the error location to be
    on "open List" as whole rather than "List" *)
 [%%expect{|
-Line _, characters 0-9:
-  open List
-  ^^^^^^^^^
+Line 2, characters 0-9:
+2 | open List
+    ^^^^^^^^^
 Error (warning 33): unused open Stdlib.List.
 |}];;
 
 type unknown += Foo;;
 (* unknown, not the whole line *)
 [%%expect{|
-Line _, characters 5-12:
-  type unknown += Foo;;
-       ^^^^^^^
+Line 1, characters 5-12:
+1 | type unknown += Foo;;
+         ^^^^^^^
 Error: Unbound type constructor unknown
 |}];;
 
@@ -104,8 +104,8 @@ Foo = Foobar;;
 (* Foobar, not the whole line *)
 [%%expect{|
 type t = ..
-Line _, characters 6-12:
-  Foo = Foobar;;
-        ^^^^^^
+Line 3, characters 6-12:
+3 | Foo = Foobar;;
+          ^^^^^^
 Error: Unbound constructor Foobar
 |}];;

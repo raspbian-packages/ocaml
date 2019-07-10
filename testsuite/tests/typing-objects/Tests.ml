@@ -31,10 +31,10 @@ end and d () = object
   inherit ['a] c ()
 end;;
 [%%expect{|
-Line _, characters 4-45:
-  ....and d () = object
-    inherit ['a] c ()
-  end..
+Line 3, characters 4-45:
+3 | ....and d () = object
+4 |   inherit ['a] c ()
+5 | end..
 Error: Some type variables are unbound in this type:
          class d : unit -> object method f : 'a -> unit end
        The method f has type 'a -> unit where 'a is unbound
@@ -88,10 +88,10 @@ class x () = object
   method virtual f : int
 end;;
 [%%expect{|
-Line _, characters 0-48:
-  class x () = object
-    method virtual f : int
-  end..
+Line 1, characters 0-48:
+1 | class x () = object
+2 |   method virtual f : int
+3 | end..
 Error: This class should be virtual. The following methods are undefined : f
 |}];;
 (* The class x should be virtual:  its methods f is undefined *)
@@ -103,9 +103,9 @@ and virtual d x = object (_ : 'a)
   method g = true
 end;;
 [%%expect{|
-Line _, characters 49-57:
-  class virtual c ((x : 'a): < f : int >) = object (_ : 'a) end
-                                                   ^^^^^^^^
+Line 1, characters 49-57:
+1 | class virtual c ((x : 'a): < f : int >) = object (_ : 'a) end
+                                                     ^^^^^^^^
 Error: This pattern cannot match self: it only matches values of type
        < f : int >
 |}];;
@@ -116,11 +116,11 @@ class ['a] c () = object
   method f x = (x : bool c)
 end;;
 [%%expect{|
-Line _, characters 0-78:
-  class ['a] c () = object
-    constraint 'a = int
-    method f x = (x : bool c)
-  end..
+Line 1, characters 0-78:
+1 | class ['a] c () = object
+2 |   constraint 'a = int
+3 |   method f x = (x : bool c)
+4 | end..
 Error: The abbreviation c is used with parameters bool c
        which are incompatible with constraints int c
 |}];;
@@ -162,10 +162,10 @@ class ['a] c () = object
   method f = (x : 'a)
 end;;
 [%%expect{|
-Line _, characters 0-50:
-  class ['a] c () = object
-    method f = (x : 'a)
-  end..
+Line 1, characters 0-50:
+1 | class ['a] c () = object
+2 |   method f = (x : 'a)
+3 | end..
 Error: The type of this class,
        class ['a] c :
          unit -> object constraint 'a = '_weak1 list ref method f : 'a end,
@@ -176,9 +176,9 @@ Error: The type of this class,
 type 'a c = <f : 'a c; g : 'a d>
 and 'a d = <f : int c>;;
 [%%expect{|
-Line _, characters 0-32:
-  type 'a c = <f : 'a c; g : 'a d>
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 0-32:
+1 | type 'a c = <f : 'a c; g : 'a d>
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In the definition of d, type int c should be 'a c
 |}];;
 type 'a c = <f : 'a c; g : 'a d>
@@ -196,18 +196,18 @@ and 'a d = < f : int c >
 type 'a u = < x : 'a>
 and 'a t = 'a t u;;
 [%%expect{|
-Line _, characters 0-17:
-  and 'a t = 'a t u;;
-  ^^^^^^^^^^^^^^^^^
+Line 2, characters 0-17:
+2 | and 'a t = 'a t u;;
+    ^^^^^^^^^^^^^^^^^
 Error: The definition of t contains a cycle:
        'a t u
 |}];; (* fails since 4.04 *)
 type 'a u = 'a
 and 'a t = 'a t u;;
 [%%expect{|
-Line _, characters 0-17:
-  and 'a t = 'a t u;;
-  ^^^^^^^^^^^^^^^^^
+Line 2, characters 0-17:
+2 | and 'a t = 'a t u;;
+    ^^^^^^^^^^^^^^^^^
 Error: The type abbreviation t is cyclic
 |}];;
 type 'a u = 'a;;
@@ -216,9 +216,9 @@ type 'a u = 'a
 |}];;
 type t = t u * t u;;
 [%%expect{|
-Line _, characters 0-18:
-  type t = t u * t u;;
-  ^^^^^^^^^^^^^^^^^^
+Line 1, characters 0-18:
+1 | type t = t u * t u;;
+    ^^^^^^^^^^^^^^^^^^
 Error: The type abbreviation t is cyclic
 |}];;
 
@@ -380,9 +380,9 @@ class e : unit -> object method f : int end
 |}];;
 class c () = object val x = - true val y = -. () end;;
 [%%expect{|
-Line _, characters 30-34:
-  class c () = object val x = - true val y = -. () end;;
-                                ^^^^
+Line 1, characters 30-34:
+1 | class c () = object val x = - true val y = -. () end;;
+                                  ^^^^
 Error: This expression has type bool but an expression was expected of type
          int
 |}];;
@@ -447,26 +447,26 @@ class e () = object
   method b = b
 end;;
 [%%expect{|
-Line _, characters 10-13:
-    inherit c 5
-            ^^^
+Line 3, characters 10-13:
+3 |   inherit c 5
+              ^^^
 Warning 13: the following instance variables are overridden by the class c :
   x
 The behaviour changed in ocaml 3.10 (previous behaviour was hiding.)
-Line _, characters 6-7:
-    val y = 3
-        ^
+Line 4, characters 6-7:
+4 |   val y = 3
+          ^
 Warning 13: the instance variable y is overridden.
 The behaviour changed in ocaml 3.10 (previous behaviour was hiding.)
-Line _, characters 10-13:
-    inherit d 7
-            ^^^
+Line 6, characters 10-13:
+6 |   inherit d 7
+              ^^^
 Warning 13: the following instance variables are overridden by the class d :
   t z
 The behaviour changed in ocaml 3.10 (previous behaviour was hiding.)
-Line _, characters 6-7:
-    val u = 3
-        ^
+Line 7, characters 6-7:
+7 |   val u = 3
+          ^
 Warning 13: the instance variable u is overridden.
 The behaviour changed in ocaml 3.10 (previous behaviour was hiding.)
 class e :
@@ -618,11 +618,11 @@ class virtual ['a] matrix (sz, init : int * 'a) = object
   method add (mtx : 'a matrix) = (mtx#m.(0).(0) : 'a)
 end;;
 [%%expect{|
-Line _, characters 0-153:
-  class virtual ['a] matrix (sz, init : int * 'a) = object
-    val m = Array.make_matrix sz sz init
-    method add (mtx : 'a matrix) = (mtx#m.(0).(0) : 'a)
-  end..
+Line 1, characters 0-153:
+1 | class virtual ['a] matrix (sz, init : int * 'a) = object
+2 |   val m = Array.make_matrix sz sz init
+3 |   method add (mtx : 'a matrix) = (mtx#m.(0).(0) : 'a)
+4 | end..
 Error: The abbreviation 'a matrix expands to type < add : 'a matrix -> 'a >
        but is used with type < m : 'a array array; .. >
 |}];;
@@ -667,10 +667,10 @@ end : sig
   val f : #c -> #c
 end);;
 [%%expect{|
-Line _, characters 12-43:
-  ............struct
-    let f (x : #c) = x
-  end......
+Line 1, characters 12-43:
+1 | ............struct
+2 |   let f (x : #c) = x
+3 | end......
 Error: Signature mismatch:
        Modules do not match:
          sig val f : (#c as 'a) -> 'a end
@@ -684,9 +684,9 @@ Error: Signature mismatch:
 
 module M = struct type t = int class t () = object end end;;
 [%%expect{|
-Line _, characters 37-38:
-  module M = struct type t = int class t () = object end end;;
-                                       ^
+Line 1, characters 37-38:
+1 | module M = struct type t = int class t () = object end end;;
+                                         ^
 Error: Multiple definition of the type name t.
        Names must be unique in a given structure or signature.
 |}];;
@@ -698,17 +698,17 @@ fun x -> (x :> < m : 'a -> 'a > as 'a);;
 
 fun x -> (x : int -> bool :> 'a -> 'a);;
 [%%expect{|
-Line _, characters 9-38:
-  fun x -> (x : int -> bool :> 'a -> 'a);;
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 9-38:
+1 | fun x -> (x : int -> bool :> 'a -> 'a);;
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: Type int -> bool is not a subtype of int -> int
        Type bool is not a subtype of int
 |}];;
 fun x -> (x : int -> bool :> int -> int);;
 [%%expect{|
-Line _, characters 9-40:
-  fun x -> (x : int -> bool :> int -> int);;
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 9-40:
+1 | fun x -> (x : int -> bool :> int -> int);;
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: Type int -> bool is not a subtype of int -> int
        Type bool is not a subtype of int
 |}];;
@@ -741,17 +741,17 @@ type 'a t
 |}];;
 fun (x : 'a t as 'a) -> ();;
 [%%expect{|
-Line _, characters 9-19:
-  fun (x : 'a t as 'a) -> ();;
-           ^^^^^^^^^^
+Line 1, characters 9-19:
+1 | fun (x : 'a t as 'a) -> ();;
+             ^^^^^^^^^^
 Error: This alias is bound to type 'a t but is used as an instance of type 'a
        The type variable 'a occurs inside 'a t
 |}];;
 fun (x : 'a t) -> (x : 'a); ();;
 [%%expect{|
-Line _, characters 19-20:
-  fun (x : 'a t) -> (x : 'a); ();;
-                     ^
+Line 1, characters 19-20:
+1 | fun (x : 'a t) -> (x : 'a); ();;
+                       ^
 Error: This expression has type 'a t but an expression was expected of type
          'a
        The type variable 'a occurs inside 'a t
@@ -766,9 +766,9 @@ fun (x : 'a t as 'a) -> ();;
 |}];;
 fun (x : 'a t) -> (x : 'a); ();;
 [%%expect{|
-Line _, characters 18-26:
-  fun (x : 'a t) -> (x : 'a); ();;
-                    ^^^^^^^^
+Line 1, characters 18-26:
+1 | fun (x : 'a t) -> (x : 'a); ();;
+                      ^^^^^^^^
 Warning 10: this expression should have type unit.
 - : ('a t as 'a) t -> unit = <fun>
 |}];;
@@ -873,17 +873,17 @@ let o = object val x = 33 val y = 44 method m = x end in
 class a = let _ = new b in object end
 and b = let _ = new a in object end;;
 [%%expect{|
-Line _, characters 10-37:
-  class a = let _ = new b in object end
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 10-37:
+1 | class a = let _ = new b in object end
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This kind of recursive class expression is not allowed
 |}];;
 
 class a = let _ = new a in object end;;
 [%%expect{|
-Line _, characters 10-37:
-  class a = let _ = new a in object end;;
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 10-37:
+1 | class a = let _ = new a in object end;;
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This kind of recursive class expression is not allowed
 |}];;
 
@@ -902,17 +902,17 @@ and b : object  end
 
 class a = let x() = new a in let y = x() in object end;;
 [%%expect{|
-Line _, characters 10-54:
-  class a = let x() = new a in let y = x() in object end;;
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 10-54:
+1 | class a = let x() = new a in let y = x() in object end;;
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This kind of recursive class expression is not allowed
 |}];;
 
 class a = object end
 and b = let x() = new a in let y = x() in object end;;
 [%%expect{|
-Line _, characters 8-52:
-  and b = let x() = new a in let y = x() in object end;;
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 2, characters 8-52:
+2 | and b = let x() = new a in let y = x() in object end;;
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This kind of recursive class expression is not allowed
 |}];;

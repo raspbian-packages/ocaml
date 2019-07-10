@@ -34,7 +34,7 @@ val normalize_pat : pattern -> pattern
 
 val const_compare : constant -> constant -> int
 (** [const_compare c1 c2] compares the actual values represented by [c1] and
-    [c2], while simply using [Pervasives.compare] would compare the
+    [c2], while simply using [Stdlib.compare] would compare the
     representations.
 
     cf. MPR#5758 *)
@@ -106,9 +106,10 @@ val check_unused:
 (* Irrefutability tests *)
 val irrefutable : pattern -> bool
 
-(** An inactive pattern is a pattern, matching against which can be duplicated, erased or
-    delayed without change in observable behavior of the program.  Patterns containing
-    (lazy _) subpatterns or reads of mutable fields are active. *)
+(** An inactive pattern is a pattern, matching against which can be duplicated,
+    erased or delayed without change in observable behavior of the program.
+    Patterns containing (lazy _) subpatterns or reads of mutable fields are
+    active. *)
 val inactive : partial:partial -> pattern -> bool
 
 (* Ambiguous bindings *)

@@ -34,7 +34,7 @@ let ocamlrun ocamlsrcdir =
     | Debug -> "ocamlrund"
     | Instrumented -> "ocamlruni" in
   let ocamlrunfile = Filename.mkexe runtime in
-  Filename.make_path [ocamlsrcdir; "byterun"; ocamlrunfile]
+  Filename.make_path [ocamlsrcdir; "runtime"; ocamlrunfile]
 
 let ocamlc ocamlsrcdir =
   Filename.make_path [ocamlsrcdir; "ocamlc"]
@@ -75,3 +75,15 @@ let ocamldebug ocamlsrcdir =
 
 let ocamlobjinfo ocamlsrcdir =
   Filename.make_path [ocamlsrcdir; "tools"; "ocamlobjinfo"]
+
+let ocamlmklib ocamlsrcdir =
+  Filename.make_path [ocamlsrcdir; "tools"; "ocamlmklib"]
+
+let codegen ocamlsrcdir =
+  Filename.make_path [ocamlsrcdir; "testsuite"; "tools"; "codegen"]
+
+let asmgen_archmod ocamlsrcdir =
+  let objname =
+    "asmgen_" ^ Ocamltest_config.arch ^ "." ^ Ocamltest_config.objext
+  in
+  Filename.make_path [ocamlsrcdir; "testsuite"; "tools"; objname]

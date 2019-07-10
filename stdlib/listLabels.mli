@@ -13,6 +13,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+type 'a t = 'a list = [] | (::) of 'a * 'a list
+(** An alias for the type of lists. *)
+
 (** List operations.
 
    Some functions are flagged as not tail-recursive.  A tail-recursive
@@ -132,6 +135,13 @@ val rev_map : f:('a -> 'b) -> 'a list -> 'b list
 (** [List.rev_map f l] gives the same result as
    {!List.rev}[ (]{!List.map}[ f l)], but is tail-recursive and
    more efficient. *)
+
+val filter_map : f:('a -> 'b option) -> 'a list -> 'b list
+(** [filter_map f l] applies [f] to every element of [l], filters
+    out the [None] elements and returns the list of the arguments of
+    the [Some] elements.
+    @since 4.08.0
+*)
 
 val fold_left : f:('a -> 'b -> 'a) -> init:'a -> 'b list -> 'a
 (** [List.fold_left f a [b1; ...; bn]] is
@@ -315,7 +325,7 @@ val sort : cmp:('a -> 'a -> int) -> 'a list -> 'a list
    compare as equal, a positive integer if the first is greater,
    and a negative integer if the first is smaller (see Array.sort for
    a complete specification).  For example,
-   {!Pervasives.compare} is a suitable comparison function.
+   {!Stdlib.compare} is a suitable comparison function.
    The resulting list is sorted in increasing order.
    [List.sort] is guaranteed to run in constant heap space
    (in addition to the size of the result list) and logarithmic
@@ -352,7 +362,7 @@ val merge : cmp:('a -> 'a -> int) -> 'a list -> 'a list -> 'a list
     Not tail-recursive (sum of the lengths of the arguments).
 *)
 
-(** {6 Iterators} *)
+(** {1 Iterators} *)
 
 val to_seq : 'a list -> 'a Seq.t
 (** Iterate on the list

@@ -21,8 +21,9 @@ let remove_locs =
     attributes =
       (fun mapper attrs ->
          let attrs = default_mapper.attributes mapper attrs in
-         List.filter (fun (s, _) -> s.Location.txt <> "#punning#")
-           attrs (* this is to accomodate a LexiFi custom extension *)
+         List.filter (fun a ->
+           a.Parsetree.attr_name.Location.txt <> "#punning#")
+           attrs (* this is to accommodate a LexiFi custom extension *)
       )
   }
 

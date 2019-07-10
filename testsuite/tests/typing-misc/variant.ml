@@ -11,11 +11,11 @@ end = struct
  let f = function A | B -> 0
 end;;
 [%%expect{|
-Line _, characters 6-61:
-  ......struct
-   type t = A | B
-   let f = function A | B -> 0
-  end..
+Line 3, characters 6-61:
+3 | ......struct
+4 |  type t = A | B
+5 |  let f = function A | B -> 0
+6 | end..
 Error: Signature mismatch:
        Modules do not match:
          sig type t = X.t = A | B val f : t -> int end

@@ -17,16 +17,13 @@
    been redefined to not block the whole process, but only the calling
    thread. *)
 
-module Pervasives = struct
-(* type 'a option = None | Some of 'a *)
-
 (* Exceptions *)
 
 external register_named_value : string -> 'a -> unit
                               = "caml_register_named_value"
 
 let () =
-  (* for asmrun/fail.c *)
+  (* for runtime/fail_nat.c *)
   register_named_value "Pervasives.array_bound_error"
     (Invalid_argument "index out of bounds")
 
@@ -38,6 +35,18 @@ let failwith s = raise(Failure s)
 let invalid_arg s = raise(Invalid_argument s)
 
 exception Exit
+exception Match_failure = Match_failure
+exception Assert_failure = Assert_failure
+exception Invalid_argument = Invalid_argument
+exception Failure = Failure
+exception Not_found = Not_found
+exception Out_of_memory = Out_of_memory
+exception Stack_overflow = Stack_overflow
+exception Sys_error = Sys_error
+exception End_of_file = End_of_file
+exception Division_by_zero = Division_by_zero
+exception Sys_blocked_io = Sys_blocked_io
+exception Undefined_recursive_module = Undefined_recursive_module
 
 (* Composition operators *)
 
@@ -629,7 +638,7 @@ let at_exit f =
   (* MPR#7253, MPR#7796: make sure "f" is executed only once *)
   let f_already_ran = ref false in
   exit_function :=
-    (fun () -> 
+    (fun () ->
       if not !f_already_ran then begin f_already_ran := true; f() end;
       g())
 
@@ -640,15 +649,13 @@ let exit retcode =
   sys_exit retcode
 
 let _ = register_named_value "Pervasives.do_at_exit" do_at_exit
-end
-
-include Pervasives
 
 (*MODULE_ALIASES*)
 module Arg          = Arg
 module Array        = Array
 module ArrayLabels  = ArrayLabels
 module Bigarray     = Bigarray
+module Bool         = Bool
 module Buffer       = Buffer
 module Bytes        = Bytes
 module BytesLabels  = BytesLabels
@@ -660,9 +667,11 @@ module Ephemeron    = Ephemeron
 module Filename     = Filename
 module Float        = Float
 module Format       = Format
+module Fun          = Fun
 module Gc           = Gc
 module Genlex       = Genlex
 module Hashtbl      = Hashtbl
+module Int          = Int
 module Int32        = Int32
 module Int64        = Int64
 module Lazy         = Lazy
@@ -675,15 +684,17 @@ module MoreLabels   = MoreLabels
 module Nativeint    = Nativeint
 module Obj          = Obj
 module Oo           = Oo
+module Option       = Option
 module Parsing      = Parsing
+module Pervasives   = Pervasives
 module Printexc     = Printexc
 module Printf       = Printf
 module Queue        = Queue
 module Random       = Random
+module Result       = Result
 module Scanf        = Scanf
 module Seq          = Seq
 module Set          = Set
-module Sort         = Sort
 module Spacetime    = Spacetime
 module Stack        = Stack
 module StdLabels    = StdLabels
@@ -692,4 +703,5 @@ module String       = String
 module StringLabels = StringLabels
 module Sys          = Sys
 module Uchar        = Uchar
+module Unit         = Unit
 module Weak         = Weak

@@ -46,8 +46,8 @@ type error =
   | Bound_type_variable of string
   | Recursive_type
   | Unbound_row_variable of Longident.t
-  | Type_mismatch of (type_expr * type_expr) list
-  | Alias_type_mismatch of (type_expr * type_expr) list
+  | Type_mismatch of Ctype.Unification_trace.t
+  | Alias_type_mismatch of Ctype.Unification_trace.t
   | Present_has_conjunction of string
   | Present_has_no_type of string
   | Constructor_mismatch of type_expr * type_expr
@@ -76,6 +76,7 @@ type error =
   | Cannot_scrape_alias of Longident.t * Path.t
   | Opened_object of Path.t option
   | Not_an_object of type_expr
+  | Unbound_value_missing_rec of Longident.t * Location.t
 
 exception Error of Location.t * Env.t * error
 
@@ -118,3 +119,6 @@ val find_class_type:
 
 val unbound_constructor_error: Env.t -> Longident.t Location.loc -> 'a
 val unbound_label_error: Env.t -> Longident.t Location.loc -> 'a
+
+(* To update location from typemod errors *)
+val typemod_update_location: (Location.t -> exn -> exn) ref

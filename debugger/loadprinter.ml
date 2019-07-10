@@ -17,7 +17,6 @@
 
 open Misc
 open Longident
-open Path
 open Types
 
 (* Error report *)
@@ -41,20 +40,17 @@ let use_debugger_symtable fn arg =
   let old_symtable = Symtable.current_state() in
   begin match !debugger_symtable with
   | None ->
-      Compdynlink.init();
       Compdynlink.allow_unsafe_modules true;
       debugger_symtable := Some(Symtable.current_state())
   | Some st ->
       Symtable.restore_state st
   end;
-  try
-    let result = fn arg in
-    debugger_symtable := Some(Symtable.current_state());
-    Symtable.restore_state old_symtable;
-    result
-  with exn ->
-    Symtable.restore_state old_symtable;
-    raise exn
+  Misc.try_finally (fun () ->
+      let result = fn arg in
+      debugger_symtable := Some(Symtable.current_state());
+      result
+    )
+    ~always:(fun () -> Symtable.restore_state old_symtable)
 
 (* Load a .cmo or .cma file *)
 
@@ -62,12 +58,12 @@ open Format
 
 let rec loadfiles ppf name =
   try
-    let filename = find_in_path !Config.load_path name in
+    let filename = Load_path.find name in
     use_debugger_symtable Compdynlink.loadfile filename;
     let d = Filename.dirname name in
     if d <> Filename.current_dir_name then begin
-      if not (List.mem d !Config.load_path) then
-        Config.load_path := d :: !Config.load_path;
+      if not (List.mem d (Load_path.get_paths ())) then
+        Load_path.add_dir d;
     end;
     fprintf ppf "File %s loaded@." filename;
     true
@@ -92,15 +88,17 @@ let loadfile ppf name =
 (* Note: evaluation proceeds in the debugger memory space, not in
    the debuggee. *)
 
-let rec eval_path = function
-    Pident id -> Symtable.get_global_value id
-  | Pdot(p, _, pos) -> Obj.field (eval_path p) pos
-  | Papply _ -> fatal_error "Loadprinter.eval_path"
+let rec eval_address = function
+  | Env.Aident id -> Symtable.get_global_value id
+  | Env.Adot(addr, pos) -> Obj.field (eval_address addr) pos
 
 (* PR#7258: get rid of module aliases before evaluating paths *)
 
-let eval_path path =
-  eval_path (Env.normalize_path (Some Location.none) Env.empty path)
+let eval_value_path env path =
+  match Env.find_value_address path env with
+  | addr -> eval_address addr
+  | exception Not_found ->
+      fatal_error ("Cannot find address for: " ^ (Path.name path))
 
 (* Install, remove a printer (as in toplevel/topdirs) *)
 
@@ -117,7 +115,6 @@ let match_printer_type desc typename =
       Env.lookup_type (Ldot(Lident "Topdirs", typename)) Env.empty
     with Not_found ->
       raise (Error(Unbound_identifier(Ldot(Lident "Topdirs", typename)))) in
-  Ctype.init_def(Ident.current_time());
   Ctype.begin_def();
   let ty_arg = Ctype.newvar() in
   Ctype.unify Env.empty
@@ -144,7 +141,7 @@ let install_printer ppf lid =
   let (ty_arg, path, is_old_style) = find_printer_type lid in
   let v =
     try
-      use_debugger_symtable eval_path path
+      use_debugger_symtable (eval_value_path Env.empty) path
     with Symtable.Error(Symtable.Undefined_global s) ->
       raise(Error(Unavailable_module(s, lid))) in
   let print_function =

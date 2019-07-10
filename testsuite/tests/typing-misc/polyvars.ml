@@ -6,27 +6,27 @@ type ab = [ `A | `B ];;
 let f (x : [`A]) = match x with #ab -> 1;;
 [%%expect{|
 type ab = [ `A | `B ]
-Line _, characters 32-35:
-  let f (x : [`A]) = match x with #ab -> 1;;
-                                  ^^^
+Line 2, characters 32-35:
+2 | let f (x : [`A]) = match x with #ab -> 1;;
+                                    ^^^
 Error: This pattern matches values of type [? `A | `B ]
        but a pattern was expected which matches values of type [ `A ]
        The second variant type does not allow tag(s) `B
 |}];;
 let f x = ignore (match x with #ab -> 1); ignore (x : [`A]);;
 [%%expect{|
-Line _, characters 31-34:
-  let f x = ignore (match x with #ab -> 1); ignore (x : [`A]);;
-                                 ^^^
+Line 1, characters 31-34:
+1 | let f x = ignore (match x with #ab -> 1); ignore (x : [`A]);;
+                                   ^^^
 Error: This pattern matches values of type [? `B ]
        but a pattern was expected which matches values of type [ `A ]
        The second variant type does not allow tag(s) `B
 |}];;
 let f x = ignore (match x with `A|`B -> 1); ignore (x : [`A]);;
 [%%expect{|
-Line _, characters 34-36:
-  let f x = ignore (match x with `A|`B -> 1); ignore (x : [`A]);;
-                                    ^^
+Line 1, characters 34-36:
+1 | let f x = ignore (match x with `A|`B -> 1); ignore (x : [`A]);;
+                                      ^^
 Error: This pattern matches values of type [? `B ]
        but a pattern was expected which matches values of type [ `A ]
        The second variant type does not allow tag(s) `B
@@ -34,17 +34,17 @@ Error: This pattern matches values of type [? `B ]
 
 let f (x : [< `A | `B]) = match x with `A | `B | `C -> 0;; (* warn *)
 [%%expect{|
-Line _, characters 49-51:
-  let f (x : [< `A | `B]) = match x with `A | `B | `C -> 0;; (* warn *)
-                                                   ^^
+Line 1, characters 49-51:
+1 | let f (x : [< `A | `B]) = match x with `A | `B | `C -> 0;; (* warn *)
+                                                     ^^
 Warning 12: this sub-pattern is unused.
 val f : [< `A | `B ] -> int = <fun>
 |}];;
 let f (x : [`A | `B]) = match x with `A | `B | `C -> 0;; (* fail *)
 [%%expect{|
-Line _, characters 47-49:
-  let f (x : [`A | `B]) = match x with `A | `B | `C -> 0;; (* fail *)
-                                                 ^^
+Line 1, characters 47-49:
+1 | let f (x : [`A | `B]) = match x with `A | `B | `C -> 0;; (* fail *)
+                                                   ^^
 Error: This pattern matches values of type [? `C ]
        but a pattern was expected which matches values of type [ `A | `B ]
        The second variant type does not allow tag(s) `C
@@ -70,33 +70,33 @@ type t = A | B
 - : [> `A ] option * t -> int = <fun>
 - : t * [< `A | `B ] -> int = <fun>
 - : [< `A | `B ] * t -> int = <fun>
-Line _, characters 0-41:
-  function (`A|`B), _ -> 0 | _,(`A|`B) -> 1;;
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 9, characters 0-41:
+9 | function (`A|`B), _ -> 0 | _,(`A|`B) -> 1;;
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 (`AnyOtherTag, `AnyOtherTag)
 - : [> `A | `B ] * [> `A | `B ] -> int = <fun>
-Line _, characters 0-29:
-  function `B,1 -> 1 | _,1 -> 2;;
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 10, characters 0-29:
+10 | function `B,1 -> 1 | _,1 -> 2;;
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 (_, 0)
-Line _, characters 21-24:
-  function `B,1 -> 1 | _,1 -> 2;;
-                       ^^^
+Line 10, characters 21-24:
+10 | function `B,1 -> 1 | _,1 -> 2;;
+                          ^^^
 Warning 11: this match case is unused.
 - : [< `B ] * int -> int = <fun>
-Line _, characters 0-29:
-  function 1,`B -> 1 | 1,_ -> 2;;
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 11, characters 0-29:
+11 | function 1,`B -> 1 | 1,_ -> 2;;
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 (0, _)
-Line _, characters 21-24:
-  function 1,`B -> 1 | 1,_ -> 2;;
-                       ^^^
+Line 11, characters 21-24:
+11 | function 1,`B -> 1 | 1,_ -> 2;;
+                          ^^^
 Warning 11: this match case is unused.
 - : int * [< `B ] -> int = <fun>
 |}];;
@@ -117,9 +117,9 @@ val f : 'a -> [< `Foo ] -> 'a = <fun>
 let f : ([`A | `B ] as 'a) -> [> 'a] -> unit = fun x (y : [> 'a]) -> ();;
 let f (x : [`A | `B] as 'a) (y : [> 'a]) = ();;
 [%%expect{|
-Line _, characters 61-63:
-  let f : ([`A | `B ] as 'a) -> [> 'a] -> unit = fun x (y : [> 'a]) -> ();;
-                                                               ^^
+Line 1, characters 61-63:
+1 | let f : ([`A | `B ] as 'a) -> [> 'a] -> unit = fun x (y : [> 'a]) -> ();;
+                                                                 ^^
 Error: The type 'a does not expand to a polymorphic variant type
 Hint: Did you mean `a?
 |}]
@@ -135,9 +135,9 @@ type t = private [> `A of string ];;
 function (`A x : t) -> x;;
 [%%expect{|
 type t = private [> `A of string ]
-Line _, characters 0-24:
-  function (`A x : t) -> x;;
-  ^^^^^^^^^^^^^^^^^^^^^^^^
+Line 2, characters 0-24:
+2 | function (`A x : t) -> x;;
+    ^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 `<some private tag>
@@ -146,9 +146,9 @@ Here is an example of a case that is not matched:
 
 let f = function `AnyOtherTag, _ -> 1 | _, (`AnyOtherTag|`AnyOtherTag') -> 2;;
 [%%expect{|
-Line _, characters 8-76:
-  let f = function `AnyOtherTag, _ -> 1 | _, (`AnyOtherTag|`AnyOtherTag') -> 2;;
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 8-76:
+1 | let f = function `AnyOtherTag, _ -> 1 | _, (`AnyOtherTag|`AnyOtherTag') -> 2;;
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 (`AnyOtherTag', `AnyOtherTag'')

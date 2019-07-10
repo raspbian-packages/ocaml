@@ -3,6 +3,7 @@ didier.ml
 dynamic_frisch.ml
 nested_equations.ml
 omega07.ml
+or_patterns.ml
 pr5332.ml
 pr5689.ml
 pr5785.ml
@@ -43,7 +44,7 @@ pr7618.ml
 pr7747.ml
 term-conv.ml
 test.ml
+unexpected_existentials.ml
 unify_mb.ml
 variables_in_mcomp.ml
 yallop_bugs.ml
-gpr1997.ml

@@ -4,8 +4,8 @@
 
 let f (x: #M.foo) = 0;;
 [%%expect{|
-Line _, characters 11-16:
-  let f (x: #M.foo) = 0;;
-             ^^^^^
+Line 1, characters 11-16:
+1 | let f (x: #M.foo) = 0;;
+               ^^^^^
 Error: Unbound module M
 |}];;

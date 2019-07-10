@@ -1,6 +1,9 @@
 (* TEST
+* hasunix
 include unix
 stderr = "/dev/null"
+** bytecode
+** native
 *)
 
 let cat file =
@@ -18,12 +21,10 @@ let _ =
   let fd =
     Unix.(openfile "./tmp.txt"
                    [O_WRONLY;O_TRUNC;O_CREAT;O_SHARE_DELETE]
-		   0o600) in
+                   0o600) in
   out fd "---\n";
   Unix.dup2 ~cloexec:true fd Unix.stderr;
   Unix.close fd;
   out Unix.stderr "Some output\n";
   cat "./tmp.txt";
   Sys.remove "./tmp.txt"
-
-    

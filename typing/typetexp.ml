@@ -34,8 +34,8 @@ type error =
   | Bound_type_variable of string
   | Recursive_type
   | Unbound_row_variable of Longident.t
-  | Type_mismatch of (type_expr * type_expr) list
-  | Alias_type_mismatch of (type_expr * type_expr) list
+  | Type_mismatch of Ctype.Unification_trace.t
+  | Alias_type_mismatch of Ctype.Unification_trace.t
   | Present_has_conjunction of string
   | Present_has_no_type of string
   | Constructor_mismatch of type_expr * type_expr
@@ -64,12 +64,19 @@ type error =
   | Cannot_scrape_alias of Longident.t * Path.t
   | Opened_object of Path.t option
   | Not_an_object of type_expr
+  | Unbound_value_missing_rec of Longident.t * Location.t
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
 
+(** Map indexed by type variable names. *)
+module TyVarMap = Misc.Stdlib.String.Map
 
-type variable_context = int * (string, type_expr) Tbl.t
+type variable_context = int * type_expr TyVarMap.t
+
+(* To update locations from Typemod.check_well_founded_module. *)
+
+let typemod_update_location = ref (fun _ -> assert false)
 
 (* Narrowing unbound identifier errors. *)
 
@@ -93,7 +100,7 @@ let rec narrow_unbound_lid_error : 'a. _ -> _ -> _ -> _ -> 'a =
          error (Wrong_use_of_module (mlid, `Functor_used_as_structure))
       | Mty_ident _ ->
          error (Wrong_use_of_module (mlid, `Abstract_used_as_structure))
-      | Mty_alias(_, p) -> error (Cannot_scrape_alias(mlid, p))
+      | Mty_alias p -> error (Cannot_scrape_alias(mlid, p))
       | Mty_signature _ -> ()
       end
   | Longident.Lapply (flid, mlid) ->
@@ -105,7 +112,7 @@ let rec narrow_unbound_lid_error : 'a. _ -> _ -> _ -> _ -> 'a =
            error (Wrong_use_of_module (flid, `Structure_used_as_functor))
         | Mty_ident _ ->
            error (Wrong_use_of_module (flid, `Abstract_used_as_functor))
-        | Mty_alias(_, p) -> error (Cannot_scrape_alias(flid, p))
+        | Mty_alias p -> error (Cannot_scrape_alias(flid, p))
         | Mty_functor (_, None, _) ->
            error (Wrong_use_of_module (flid, `Generative_used_as_applicative))
         | Mty_functor (_, Some mty_param, _) -> mty_param
@@ -114,7 +121,7 @@ let rec narrow_unbound_lid_error : 'a. _ -> _ -> _ -> _ -> 'a =
       let mpath = Env.lookup_module ~load:true mlid env in
       let mmd = Env.find_module mpath env in
       begin match Env.scrape_alias env mmd.md_type with
-      | Mty_alias(_, p) -> error (Cannot_scrape_alias(mlid, p))
+      | Mty_alias p -> error (Cannot_scrape_alias(mlid, p))
       | mty_arg ->
          let details =
            try Includemod.check_modtype_inclusion
@@ -138,6 +145,8 @@ let find_component (lookup : ?loc:_ -> ?mark:_ -> _) make_error env loc lid =
     narrow_unbound_lid_error env loc lid make_error
   | Env.Recmodule ->
     raise (Error (loc, env, Illegal_reference_to_recursive_module))
+  | err ->
+    raise (!typemod_update_location loc err)
 
 let find_type env loc lid =
   let path =
@@ -145,7 +154,7 @@ let find_type env loc lid =
       env loc lid
   in
   let decl = Env.find_type path env in
-  Builtin_attributes.check_deprecated loc decl.type_attributes (Path.name path);
+  Builtin_attributes.check_alerts loc decl.type_attributes (Path.name path);
   (path, decl)
 
 let find_constructor =
@@ -162,7 +171,7 @@ let find_class env loc lid =
   let (path, decl) as r =
     find_component Env.lookup_class (fun lid -> Unbound_class lid) env loc lid
   in
-  Builtin_attributes.check_deprecated loc decl.cty_attributes (Path.name path);
+  Builtin_attributes.check_alerts loc decl.cty_attributes (Path.name path);
   r
 
 let find_value env loc lid =
@@ -170,17 +179,18 @@ let find_value env loc lid =
   let (path, decl) as r =
     find_component Env.lookup_value (fun lid -> Unbound_value lid) env loc lid
   in
-  Builtin_attributes.check_deprecated loc decl.val_attributes (Path.name path);
+  Builtin_attributes.check_alerts loc decl.val_attributes (Path.name path);
   r
 
 let lookup_module ?(load=false) env loc lid =
-  find_component (fun ?loc ?mark lid env -> (Env.lookup_module ~load ?loc ?mark lid env))
+  find_component
+    (fun ?loc ?mark lid env -> (Env.lookup_module ~load ?loc ?mark lid env))
     (fun lid -> Unbound_module lid) env loc lid
 
 let find_module env loc lid =
   let path = lookup_module ~load:true env loc lid in
   let decl = Env.find_module path env in
-  (* No need to check for deprecated here, this is done in Env. *)
+  (* No need to check for alerts here, this is done in Env. *)
   (path, decl)
 
 let find_modtype env loc lid =
@@ -188,7 +198,7 @@ let find_modtype env loc lid =
     find_component Env.lookup_modtype (fun lid -> Unbound_modtype lid)
       env loc lid
   in
-  Builtin_attributes.check_deprecated loc decl.mtd_attributes (Path.name path);
+  Builtin_attributes.check_alerts loc decl.mtd_attributes (Path.name path);
   r
 
 let find_class_type env loc lid =
@@ -196,7 +206,7 @@ let find_class_type env loc lid =
     find_component Env.lookup_cltype (fun lid -> Unbound_cltype lid)
       env loc lid
   in
-  Builtin_attributes.check_deprecated loc decl.clty_attributes (Path.name path);
+  Builtin_attributes.check_alerts loc decl.clty_attributes (Path.name path);
   r
 
 let unbound_constructor_error env lid =
@@ -240,15 +250,15 @@ let create_package_mty fake loc env (p, l) =
 
 (* Translation of type expressions *)
 
-let type_variables = ref (Tbl.empty : (string, type_expr) Tbl.t)
+let type_variables = ref (TyVarMap.empty : type_expr TyVarMap.t)
 let univars        = ref ([] : (string * type_expr) list)
 let pre_univars    = ref ([] : type_expr list)
-let used_variables = ref (Tbl.empty : (string, type_expr * Location.t) Tbl.t)
+let used_variables = ref (TyVarMap.empty : (type_expr * Location.t) TyVarMap.t)
 
 let reset_type_variables () =
   reset_global_level ();
   Ctype.reset_reified_var_counter ();
-  type_variables := Tbl.empty
+  type_variables := TyVarMap.empty
 
 let narrow () =
   (increase_global_level (), !type_variables)
@@ -271,7 +281,7 @@ let newvar ?name () =
 
 let type_variable loc name =
   try
-    Tbl.find name !type_variables
+    TyVarMap.find name !type_variables
   with Not_found ->
     raise(Error(loc, Env.empty, Unbound_type_variable ("'" ^ name)))
 
@@ -287,11 +297,11 @@ let transl_type_param env styp =
         try
           if name <> "" && name.[0] = '_' then
             raise (Error (loc, Env.empty, Invalid_variable_name ("'" ^ name)));
-          ignore (Tbl.find name !type_variables);
+          ignore (TyVarMap.find name !type_variables);
           raise Already_bound
         with Not_found ->
           let v = new_global_var ~name () in
-            type_variables := Tbl.add name v !type_variables;
+            type_variables := TyVarMap.add name v !type_variables;
             v
       in
         { ctyp_desc = Ttyp_var name; ctyp_type = ty; ctyp_env = env;
@@ -307,10 +317,6 @@ let transl_type_param env styp =
 
 let new_pre_univar ?name () =
   let v = newvar ?name () in pre_univars := v :: !pre_univars; v
-
-let rec swap_list = function
-    x :: y :: l -> y :: x :: swap_list l
-  | l -> l
 
 type policy = Fixed | Extensible | Univars
 
@@ -340,12 +346,12 @@ and transl_type_aux env policy styp =
       begin try
         instance (List.assoc name !univars)
       with Not_found -> try
-        instance (fst(Tbl.find name !used_variables))
+        instance (fst (TyVarMap.find name !used_variables))
       with Not_found ->
         let v =
           if policy = Univars then new_pre_univar ~name () else newvar ~name ()
         in
-        used_variables := Tbl.add name (v, styp.ptyp_loc) !used_variables;
+        used_variables := TyVarMap.add name (v, styp.ptyp_loc) !used_variables;
         v
       end
     in
@@ -388,7 +394,9 @@ and transl_type_aux env policy styp =
       List.iter2
         (fun (sty, cty) ty' ->
            try unify_param env ty' cty.ctyp_type with Unify trace ->
-             raise (Error(sty.ptyp_loc, env, Type_mismatch (swap_list trace))))
+             let trace = Unification_trace.swap trace in
+             raise (Error(sty.ptyp_loc, env, Type_mismatch trace))
+        )
         (List.combine stl args) params;
       let constr =
         newconstr path (List.map (fun ctyp -> ctyp.ctyp_type) args) in
@@ -441,7 +449,9 @@ and transl_type_aux env policy styp =
       List.iter2
         (fun (sty, cty) ty' ->
            try unify_var env ty' cty.ctyp_type with Unify trace ->
-             raise (Error(sty.ptyp_loc, env, Type_mismatch (swap_list trace))))
+             let trace = Unification_trace.swap trace in
+             raise (Error(sty.ptyp_loc, env, Type_mismatch trace))
+        )
         (List.combine stl args) params;
         let ty_args = List.map (fun ctyp -> ctyp.ctyp_type) args in
       let ty =
@@ -487,21 +497,22 @@ and transl_type_aux env policy styp =
           let t =
             try List.assoc alias !univars
             with Not_found ->
-              instance (fst(Tbl.find alias !used_variables))
+              instance (fst(TyVarMap.find alias !used_variables))
           in
           let ty = transl_type env policy st in
           begin try unify_var env t ty.ctyp_type with Unify trace ->
-            let trace = swap_list trace in
+            let trace = Unification_trace.swap trace in
             raise(Error(styp.ptyp_loc, env, Alias_type_mismatch trace))
           end;
           ty
         with Not_found ->
           if !Clflags.principal then begin_def ();
           let t = newvar () in
-          used_variables := Tbl.add alias (t, styp.ptyp_loc) !used_variables;
+          used_variables :=
+            TyVarMap.add alias (t, styp.ptyp_loc) !used_variables;
           let ty = transl_type env policy st in
           begin try unify_var env t ty.ctyp_type with Unify trace ->
-            let trace = swap_list trace in
+            let trace = Unification_trace.swap trace in
             raise(Error(styp.ptyp_loc, env, Alias_type_mismatch trace))
           end;
           if !Clflags.principal then begin
@@ -539,11 +550,14 @@ and transl_type_aux env policy styp =
         with Not_found ->
           Hashtbl.add hfields h (l,f)
       in
-      let add_field = function
-          Rtag (l, attrs, c, stl) ->
+      let add_field field =
+        let rf_loc = field.prf_loc in
+        let rf_attributes = field.prf_attributes in
+        let rf_desc = match field.prf_desc with
+        | Rtag (l, c, stl) ->
             name := None;
             let tl =
-              Builtin_attributes.warning_scope attrs
+              Builtin_attributes.warning_scope rf_attributes
                 (fun () -> List.map (transl_type env policy) stl)
             in
             let f = match present with
@@ -559,7 +573,7 @@ and transl_type_aux env policy styp =
                       Rpresent (Some st.ctyp_type)
             in
             add_typed_field styp.ptyp_loc l.txt f;
-              Ttag (l,attrs,c,tl)
+              Ttag (l,c,tl)
         | Rinherit sty ->
             let cty = transl_type env policy sty in
             let ty = cty.ctyp_type in
@@ -602,6 +616,8 @@ and transl_type_aux env policy styp =
                 add_typed_field sty.ptyp_loc l f)
               fl;
               Tinherit cty
+        in
+        { rf_desc; rf_loc; rf_attributes; }
       in
       let tfields = List.map add_field fields in
       let fields = Hashtbl.fold (fun _ p l -> p :: l) hfields [] in
@@ -688,13 +704,16 @@ and transl_fields env policy o fields =
           raise(Error(loc, env, Method_mismatch (l, ty, ty')))
     with Not_found ->
       Hashtbl.add hfields l ty in
-  let add_field = function
-    | Otag (s, a, ty1) -> begin
+  let add_field {pof_desc; pof_loc; pof_attributes;} =
+    let of_loc = pof_loc in
+    let of_attributes = pof_attributes in
+    let of_desc = match pof_desc with
+    | Otag (s, ty1) -> begin
         let ty1 =
-          Builtin_attributes.warning_scope a
+          Builtin_attributes.warning_scope of_attributes
             (fun () -> transl_poly_type env policy ty1)
         in
-        let field = OTtag (s, a, ty1) in
+        let field = OTtag (s, ty1) in
         add_typed_field ty1.ctyp_loc s.txt ty1.ctyp_type;
         field
       end
@@ -723,6 +742,8 @@ and transl_fields env policy o fields =
             raise (Error (sty.ptyp_loc, env, Unbound_type_constructor_2 p))
         | _ -> raise (Error (sty.ptyp_loc, env, Not_an_object t))
       end in
+    { of_desc; of_loc; of_attributes; }
+  in
   let object_fields = List.map add_field fields in
   let fields = Hashtbl.fold (fun s ty l -> (s, ty) :: l) hfields [] in
   let ty_init =
@@ -764,21 +785,21 @@ let create_package_mty = create_package_mty false
 
 let globalize_used_variables env fixed =
   let r = ref [] in
-  Tbl.iter
+  TyVarMap.iter
     (fun name (ty, loc) ->
       let v = new_global_var () in
       let snap = Btype.snapshot () in
       if try unify env v ty; true with _ -> Btype.backtrack snap; false
       then try
-        r := (loc, v,  Tbl.find name !type_variables) :: !r
+        r := (loc, v,  TyVarMap.find name !type_variables) :: !r
       with Not_found ->
         if fixed && Btype.is_Tvar (repr ty) then
           raise(Error(loc, env, Unbound_type_variable ("'"^name)));
         let v2 = new_global_var () in
         r := (loc, v, v2) :: !r;
-        type_variables := Tbl.add name v2 !type_variables)
+        type_variables := TyVarMap.add name v2 !type_variables)
     !used_variables;
-  used_variables := Tbl.empty;
+  used_variables := TyVarMap.empty;
   fun () ->
     List.iter
       (function (loc, t1, t2) ->
@@ -787,23 +808,23 @@ let globalize_used_variables env fixed =
       !r
 
 let transl_simple_type env fixed styp =
-  univars := []; used_variables := Tbl.empty;
+  univars := []; used_variables := TyVarMap.empty;
   let typ = transl_type env (if fixed then Fixed else Extensible) styp in
   globalize_used_variables env fixed ();
   make_fixed_univars typ.ctyp_type;
   typ
 
 let transl_simple_type_univars env styp =
-  univars := []; used_variables := Tbl.empty; pre_univars := [];
+  univars := []; used_variables := TyVarMap.empty; pre_univars := [];
   begin_def ();
   let typ = transl_type env Univars styp in
   (* Only keep already global variables in used_variables *)
   let new_variables = !used_variables in
-  used_variables := Tbl.empty;
-  Tbl.iter
+  used_variables := TyVarMap.empty;
+  TyVarMap.iter
     (fun name p ->
-      if Tbl.mem name !type_variables then
-        used_variables := Tbl.add name p !used_variables)
+      if TyVarMap.mem name !type_variables then
+        used_variables := TyVarMap.add name p !used_variables)
     new_variables;
   globalize_used_variables env false ();
   end_def ();
@@ -823,7 +844,7 @@ let transl_simple_type_univars env styp =
         instance (Btype.newgenty (Tpoly (typ.ctyp_type, univs))) }
 
 let transl_simple_type_delayed env styp =
-  univars := []; used_variables := Tbl.empty;
+  univars := []; used_variables := TyVarMap.empty;
   let typ = transl_type env Extensible styp in
   make_fixed_univars typ.ctyp_type;
   (typ, globalize_used_variables env false)
@@ -856,21 +877,31 @@ let spellcheck ppf fold env lid =
 let fold_descr fold get_name f = fold (fun descr acc -> f (get_name descr) acc)
 let fold_simple fold4 f = fold4 (fun name _path _descr acc -> f name acc)
 
-let fold_values = fold_simple Env.fold_values
+let fold_values f =
+  (* We only use "real" values while spellchecking (as opposed to "ghost"
+     values inserted in the environment to trigger the "missing rec" hint).
+     This is needed in order to avoid dummy suggestions like:
+     "unbound value x, did you mean x?" *)
+  Env.fold_values
+    (fun name _path descr acc ->
+       match descr.val_kind with
+       | Val_unbound _ -> acc
+       | _ -> f name acc)
 let fold_types = fold_simple Env.fold_types
 let fold_modules = fold_simple Env.fold_modules
 let fold_constructors = fold_descr Env.fold_constructors (fun d -> d.cstr_name)
 let fold_labels = fold_descr Env.fold_labels (fun d -> d.lbl_name)
-let fold_classs = fold_simple Env.fold_classs
+let fold_classes = fold_simple Env.fold_classes
 let fold_modtypes = fold_simple Env.fold_modtypes
 let fold_cltypes = fold_simple Env.fold_cltypes
 
 let report_error env ppf = function
   | Unbound_type_variable name ->
-     (* we don't use "spellcheck" here: the function that raises this
-        error seems not to be called anywhere, so it's unclear how it
-        should be handled *)
-    fprintf ppf "Unbound type parameter %s@." name
+      let add_name name _ l = if name = "_" then l else ("'" ^ name) :: l in
+      let names = TyVarMap.fold add_name !type_variables [] in
+    fprintf ppf "The type variable %s is unbound in this type declaration.@ %a"
+      name
+      did_you_mean (fun () -> Misc.spellcheck names name )
   | Unbound_type_constructor lid ->
     fprintf ppf "Unbound type constructor %a" longident lid;
     spellcheck ppf fold_types env lid;
@@ -883,7 +914,7 @@ let report_error env ppf = function
         but is here applied to %i argument(s)@]"
       longident lid expected provided
   | Bound_type_variable name ->
-    fprintf ppf "Already bound type parameter '%s" name
+    fprintf ppf "Already bound type parameter %a" Pprintast.tyvar name
   | Recursive_type ->
     fprintf ppf "This type is recursive"
   | Unbound_row_variable lid ->
@@ -905,15 +936,21 @@ let report_error env ppf = function
   | Present_has_conjunction l ->
       fprintf ppf "The present constructor %s has a conjunctive type" l
   | Present_has_no_type l ->
-      fprintf ppf "The present constructor %s has no type" l
+      fprintf ppf
+        "@[<v>@[The constructor %s is missing from the upper bound@ \
+         (between '<'@ and '>')@ of this polymorphic variant@ \
+         but is present in@ its lower bound (after '>').@]@,\
+         @[Hint: Either add `%s in the upper bound,@ \
+         or remove it@ from the lower bound.@]@]"
+         l l
   | Constructor_mismatch (ty, ty') ->
       wrap_printing_env ~error:true env (fun ()  ->
         Printtyp.reset_and_mark_loops_list [ty; ty'];
         fprintf ppf "@[<hov>%s %a@ %s@ %a@]"
           "This variant type contains a constructor"
-          Printtyp.type_expr ty
+          !Oprint.out_type (tree_of_typexp false ty)
           "which should be"
-          Printtyp.type_expr ty')
+           !Oprint.out_type (tree_of_typexp false ty'))
   | Not_a_variant ty ->
       Printtyp.reset_and_mark_loops ty;
       fprintf ppf
@@ -933,11 +970,15 @@ let report_error env ppf = function
       fprintf ppf "The type variable name %s is not allowed in programs" name
   | Cannot_quantify (name, v) ->
       fprintf ppf
-        "@[<hov>The universal type variable '%s cannot be generalized:@ %s.@]"
-        name
-        (if Btype.is_Tvar v then "it escapes its scope" else
-         if Btype.is_Tunivar v then "it is already bound to another variable"
-         else "it is not a variable")
+        "@[<hov>The universal type variable %a cannot be generalized:@ "
+        Pprintast.tyvar name;
+      if Btype.is_Tvar v then
+        fprintf ppf "it escapes its scope"
+      else if Btype.is_Tunivar v then
+        fprintf ppf "it is already bound to another variable"
+      else
+        fprintf ppf "it is bound to@ %a" Printtyp.type_expr v;
+      fprintf ppf ".@]";
   | Multiple_constraints_on_type s ->
       fprintf ppf "Multiple constraints for type %a" longident s
   | Method_mismatch (l, ty, ty') ->
@@ -959,7 +1000,7 @@ let report_error env ppf = function
       spellcheck ppf fold_labels env lid;
   | Unbound_class lid ->
       fprintf ppf "Unbound class %a" longident lid;
-      spellcheck ppf fold_classs env lid;
+      spellcheck ppf fold_classes env lid;
   | Unbound_modtype lid ->
       fprintf ppf "Unbound module type %a" longident lid;
       spellcheck ppf fold_modtypes env lid;
@@ -1007,12 +1048,22 @@ let report_error env ppf = function
       Printtyp.reset_and_mark_loops ty;
       fprintf ppf "@[The type %a@ is not an object type@]"
         Printtyp.type_expr ty
+  | Unbound_value_missing_rec (lid, loc) ->
+      fprintf ppf
+        "Unbound value %a" longident lid;
+      spellcheck ppf fold_values env lid;
+      let (_, line, _) = Location.get_pos_info loc.Location.loc_start in
+      fprintf ppf
+        "@.@[%s@ %s %i@]"
+        "Hint: If this is a recursive definition,"
+        "you should add the 'rec' keyword on line"
+        line
 
 let () =
   Location.register_error_of_exn
     (function
       | Error (loc, env, err) ->
-        Some (Location.error_of_printer loc (report_error env) err)
+        Some (Location.error_of_printer ~loc (report_error env) err)
       | Error_forward err ->
         Some err
       | _ ->

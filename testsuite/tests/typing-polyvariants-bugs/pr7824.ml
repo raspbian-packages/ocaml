@@ -37,9 +37,9 @@ let f x =
   | _::_ -> (x :> [`A | `C] Element.t)
 ;;
 [%%expect{|
-Line _, characters 2-54:
-  ..match [] with
-    | _::_ -> (x :> [`A | `C] Element.t)
+Line 4, characters 2-54:
+4 | ..match [] with
+5 |   | _::_ -> (x :> [`A | `C] Element.t)
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 []

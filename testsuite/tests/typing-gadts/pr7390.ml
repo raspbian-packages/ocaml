@@ -21,9 +21,9 @@ type 'fill either =
 let f (* : filled either -> string *) =
   fun (Either (Y a, N)) -> a;;
 [%%expect{|
-Line _, characters 2-28:
-    fun (Either (Y a, N)) -> a;;
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 2, characters 2-28:
+2 |   fun (Either (Y a, N)) -> a;;
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 Either (N, Y _)

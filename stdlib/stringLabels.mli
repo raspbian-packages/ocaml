@@ -265,7 +265,7 @@ type t = string
 
 val compare: t -> t -> int
 (** The comparison function for strings, with the same specification as
-    {!Pervasives.compare}.  Along with the type [t], this function [compare]
+    {!Stdlib.compare}.  Along with the type [t], this function [compare]
     allows the module [String] to be passed as argument to the functors
     {!Set.Make} and {!Map.Make}. *)
 
@@ -288,7 +288,7 @@ val split_on_char: sep:char -> string -> string list
     @since 4.05.0
 *)
 
-(** {6 Iterators} *)
+(** {1 Iterators} *)
 
 val to_seq : t -> char Seq.t
 (** Iterate on the string, in increasing index order. Modifications of the

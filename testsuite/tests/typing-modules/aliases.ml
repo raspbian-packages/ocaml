@@ -287,6 +287,7 @@ module StringSet :
     val remove : elt -> t -> t
     val union : t -> t -> t
     val inter : t -> t -> t
+    val disjoint : t -> t -> bool
     val diff : t -> t -> t
     val compare : t -> t -> int
     val equal : t -> t -> bool
@@ -331,6 +332,7 @@ module SSet :
     val remove : elt -> t -> t
     val union : t -> t -> t
     val inter : t -> t -> t
+    val disjoint : t -> t -> bool
     val diff : t -> t -> t
     val compare : t -> t -> int
     val equal : t -> t -> bool
@@ -407,6 +409,7 @@ module A :
         val remove : elt -> t -> t
         val union : t -> t -> t
         val inter : t -> t -> t
+        val disjoint : t -> t -> bool
         val diff : t -> t -> t
         val compare : t -> t -> int
         val equal : t -> t -> bool
@@ -523,6 +526,7 @@ module SInt :
     val remove : elt -> t -> t
     val union : t -> t -> t
     val inter : t -> t -> t
+    val disjoint : t -> t -> bool
     val diff : t -> t -> t
     val compare : t -> t -> int
     val equal : t -> t -> bool
@@ -568,9 +572,9 @@ module type S =
     type wrap' = wrap = W of (Set.Make(Int).t, Set.Make(I).t) eq
   end
 module Int2 : sig type t = int val compare : 'a -> 'a -> int end
-Line _, characters 10-30:
-    include S with module I := I
-            ^^^^^^^^^^^^^^^^^^^^
+Line 15, characters 10-30:
+15 |   include S with module I := I
+               ^^^^^^^^^^^^^^^^^^^^
 Error: In this `with' constraint, the new definition of I
        does not match its original definition in the constrained signature:
        Modules do not match: (module Int2) is not included in (module Int)
@@ -661,7 +665,7 @@ module rec Bad : A = Bad;;
 [%%expect{|
 module type Alias = sig module N : sig  end module M = N end
 module F : functor (X : sig  end) -> sig type t end
-Line _:
+Line 1:
 Error: Module type declarations do not match:
          module type A = sig module M = F(List) end
        does not match
@@ -795,3 +799,65 @@ end;;
 module X : sig module N : sig  end end
 module Y : sig module type S = sig module N = X.N end end
 |}];;
+
+module type S = sig
+  module M : sig
+    module A : sig end
+    module B : sig end
+  end
+  module N = M.A
+end
+
+module Foo = struct
+  module B = struct let x = 0 end
+  module A = struct let x = "hello" end
+end
+
+module Bar : S with module M := Foo = struct module N = Foo.A end
+
+let s : string = Bar.N.x
+[%%expect {|
+module type S =
+  sig
+    module M : sig module A : sig  end module B : sig  end end
+    module N = M.A
+  end
+module Foo :
+  sig module B : sig val x : int end module A : sig val x : string end end
+module Bar : sig module N = Foo.A end
+val s : string = "hello"
+|}]
+
+
+module M : sig
+  module N : sig
+    module A : sig val x : string end
+    module B : sig val x : int end
+  end
+  module F (X : sig module A = N.A end) : sig val s : string end
+end = struct
+  module N = struct
+    module B = struct let x = 0 end
+    module A = struct let x = "hello" end
+  end
+  module F (X : sig module A : sig val x : string end end) = struct
+    let s = X.A.x
+  end
+end
+
+module N = M.F(struct module A = M.N.A end)
+
+let s : string = N.s
+[%%expect {|
+module M :
+  sig
+    module N :
+      sig
+        module A : sig val x : string end
+        module B : sig val x : int end
+      end
+    module F : functor (X : sig module A = N.A end) -> sig val s : string end
+  end
+module N : sig val s : string end
+val s : string = "hello"
+|}]

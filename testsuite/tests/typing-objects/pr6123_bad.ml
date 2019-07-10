@@ -26,9 +26,9 @@ object
 end
 ;;
 [%%expect{|
-Line _, characters 50-54:
-        let args = List.map (fun ty -> new argument(self, ty)) args_ty in
-                                                    ^^^^
+Line 15, characters 50-54:
+15 |       let args = List.map (fun ty -> new argument(self, ty)) args_ty in
+                                                       ^^^^
 Error: This expression has type < arguments : 'a; .. >
        but an expression was expected of type 'b
        Self type cannot escape its class

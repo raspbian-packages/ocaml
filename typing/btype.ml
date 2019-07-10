@@ -32,10 +32,10 @@ let print_raw =
 
 (**** Type level management ****)
 
-let generic_level = 100000000
+let generic_level = Ident.highest_scope
 
 (* Used to mark a type during a traversal. *)
-let lowest_level = 0
+let lowest_level = Ident.lowest_scope
 let pivot_level = 2 * lowest_level - 1
     (* pivot_level - lowest_level < lowest_level *)
 
@@ -44,7 +44,7 @@ let pivot_level = 2 * lowest_level - 1
 let new_id = ref (-1)
 
 let newty2 level desc  =
-  incr new_id; { desc; level; scope = None; id = !new_id }
+  incr new_id; { desc; level; scope = lowest_level; id = !new_id }
 let newgenty desc      = newty2 generic_level desc
 let newgenvar ?name () = newgenty (Tvar name)
 (*
@@ -72,7 +72,7 @@ type change =
     Ctype of type_expr * type_desc
   | Ccompress of type_expr * type_desc * type_desc
   | Clevel of type_expr * int
-  | Cscope of type_expr * int option
+  | Cscope of type_expr * int
   | Cname of
       (Path.t * type_expr list) option ref * (Path.t * type_expr list) option
   | Crow of row_field option ref * row_field option
@@ -210,7 +210,7 @@ let proxy ty =
 
 (**** Utilities for fixed row private types ****)
 
-let row_of_type t = 
+let row_of_type t =
   match (repr t).desc with
     Tobject(t,_) ->
       let rec get_row t =
@@ -235,7 +235,7 @@ let is_constr_row ~allow_ident t =
   match t.desc with
     Tconstr (Path.Pident id, _, _) when allow_ident ->
       is_row_name (Ident.name id)
-  | Tconstr (Path.Pdot (_, s, _), _, _) -> is_row_name s
+  | Tconstr (Path.Pdot (_, s), _, _) -> is_row_name s
   | _ -> false
 
 
@@ -243,37 +243,61 @@ let is_constr_row ~allow_ident t =
                   (*  Utilities for type traversal  *)
                   (**********************************)
 
-let rec iter_row f row =
-  List.iter
-    (fun (_, fi) ->
-      match row_field_repr fi with
-      | Rpresent(Some ty) -> f ty
-      | Reither(_, tl, _, _) -> List.iter f tl
-      | _ -> ())
-    row.row_fields;
+let rec fold_row f init row =
+  let result =
+    List.fold_left
+      (fun init (_, fi) ->
+         match row_field_repr fi with
+         | Rpresent(Some ty) -> f init ty
+         | Reither(_, tl, _, _) -> List.fold_left f init tl
+         | _ -> init)
+      init
+      row.row_fields
+  in
   match (repr row.row_more).desc with
-    Tvariant row -> iter_row f row
+    Tvariant row -> fold_row f result row
   | Tvar _ | Tunivar _ | Tsubst _ | Tconstr _ | Tnil ->
-      Misc.may (fun (_,l) -> List.iter f l) row.row_name
+    begin match
+      Misc.may_map (fun (_,l) -> List.fold_left f result l) row.row_name
+    with
+    | None -> result
+    | Some result -> result
+    end
   | _ -> assert false
 
-let iter_type_expr f ty =
+let iter_row f row =
+  fold_row (fun () v -> f v) () row
+
+let fold_type_expr f init ty =
   match ty.desc with
-    Tvar _              -> ()
-  | Tarrow (_, ty1, ty2, _) -> f ty1; f ty2
-  | Ttuple l            -> List.iter f l
-  | Tconstr (_, l, _)   -> List.iter f l
+    Tvar _              -> init
+  | Tarrow (_, ty1, ty2, _) ->
+    let result = f init ty1 in
+    f result ty2
+  | Ttuple l            -> List.fold_left f init l
+  | Tconstr (_, l, _)   -> List.fold_left f init l
   | Tobject(ty, {contents = Some (_, p)})
-                        -> f ty; List.iter f p
-  | Tobject (ty, _)     -> f ty
-  | Tvariant row        -> iter_row f row; f (row_more row)
-  | Tfield (_, _, ty1, ty2) -> f ty1; f ty2
-  | Tnil                -> ()
-  | Tlink ty            -> f ty
-  | Tsubst ty           -> f ty
-  | Tunivar _           -> ()
-  | Tpoly (ty, tyl)     -> f ty; List.iter f tyl
-  | Tpackage (_, _, l)  -> List.iter f l
+    ->
+    let result = f init ty in
+    List.fold_left f result p
+  | Tobject (ty, _)     -> f init ty
+  | Tvariant row        ->
+    let result = fold_row f init row in
+    f result (row_more row)
+  | Tfield (_, _, ty1, ty2) ->
+    let result = f init ty1 in
+    f result ty2
+  | Tnil                -> init
+  | Tlink ty            -> f init ty
+  | Tsubst ty           -> f init ty
+  | Tunivar _           -> init
+  | Tpoly (ty, tyl)     ->
+    let result = f init ty in
+    List.fold_left f result tyl
+  | Tpackage (_, _, l)  -> List.fold_left f init l
+
+let iter_type_expr f ty =
+  fold_type_expr (fun () v -> f v) () ty
 
 let rec iter_abbrev f = function
     Mnil                   -> ()
@@ -325,13 +349,13 @@ let type_iterators =
   let it_signature it =
     List.iter (it.it_signature_item it)
   and it_signature_item it = function
-      Sig_value (_, vd)     -> it.it_value_description it vd
-    | Sig_type (_, td, _)   -> it.it_type_declaration it td
-    | Sig_typext (_, td, _) -> it.it_extension_constructor it td
-    | Sig_module (_, md, _) -> it.it_module_declaration it md
-    | Sig_modtype (_, mtd)  -> it.it_modtype_declaration it mtd
-    | Sig_class (_, cd, _)  -> it.it_class_declaration it cd
-    | Sig_class_type (_, ctd, _) -> it.it_class_type_declaration it ctd
+      Sig_value (_, vd, _)          -> it.it_value_description it vd
+    | Sig_type (_, td, _, _)        -> it.it_type_declaration it td
+    | Sig_typext (_, td, _, _)      -> it.it_extension_constructor it td
+    | Sig_module (_, _, md, _, _)   -> it.it_module_declaration it md
+    | Sig_modtype (_, mtd, _)       -> it.it_modtype_declaration it mtd
+    | Sig_class (_, cd, _, _)       -> it.it_class_declaration it cd
+    | Sig_class_type (_, ctd, _, _) -> it.it_class_type_declaration it ctd
   and it_value_description it vd =
     it.it_type_expr it vd.val_type
   and it_type_declaration it td =
@@ -358,7 +382,7 @@ let type_iterators =
     it.it_path ctd.clty_path
   and it_module_type it = function
       Mty_ident p
-    | Mty_alias(_, p) -> it.it_path p
+    | Mty_alias p -> it.it_path p
     | Mty_signature sg -> it.it_signature it sg
     | Mty_functor (_, mto, mt) ->
         may (it.it_module_type it) mto;
@@ -456,28 +480,49 @@ let rec copy_type_desc ?(keep_names=false) f = function
 
 (* Utilities for copying *)
 
-let saved_desc = ref []
-  (* Saved association of generic nodes with their description. *)
+module For_copy : sig
+  type copy_scope
 
-let save_desc ty desc =
-  saved_desc := (ty, desc)::!saved_desc
+  val save_desc: copy_scope -> type_expr -> type_desc -> unit
 
-let saved_kinds = ref [] (* duplicated kind variables *)
-let new_kinds = ref []   (* new kind variables *)
-let dup_kind r =
-  (match !r with None -> () | Some _ -> assert false);
-  if not (List.memq r !new_kinds) then begin
-    saved_kinds := r :: !saved_kinds;
-    let r' = ref None in
-    new_kinds := r' :: !new_kinds;
-    r := Some (Fvar r')
-  end
+  val dup_kind: copy_scope -> field_kind option ref -> unit
 
-(* Restored type descriptions. *)
-let cleanup_types () =
-  List.iter (fun (ty, desc) -> ty.desc <- desc) !saved_desc;
-  List.iter (fun r -> r := None) !saved_kinds;
-  saved_desc := []; saved_kinds := []; new_kinds := []
+  val with_scope: (copy_scope -> 'a) -> 'a
+end = struct
+  type copy_scope = {
+    mutable saved_desc : (type_expr * type_desc) list;
+    (* Save association of generic nodes with their description. *)
+
+    mutable saved_kinds: field_kind option ref list;
+    (* duplicated kind variables *)
+
+    mutable new_kinds  : field_kind option ref list;
+    (* new kind variables *)
+  }
+
+  let save_desc copy_scope ty desc =
+    copy_scope.saved_desc <- (ty, desc) :: copy_scope.saved_desc
+
+  let dup_kind copy_scope r =
+    assert (Option.is_none !r);
+    if not (List.memq r copy_scope.new_kinds) then begin
+      copy_scope.saved_kinds <- r :: copy_scope.saved_kinds;
+      let r' = ref None in
+      copy_scope.new_kinds <- r' :: copy_scope.new_kinds;
+      r := Some (Fvar r')
+    end
+
+  (* Restore type descriptions. *)
+  let cleanup { saved_desc; saved_kinds; _ } =
+    List.iter (fun (ty, desc) -> ty.desc <- desc) saved_desc;
+    List.iter (fun r -> r := None) saved_kinds
+
+  let with_scope f =
+    let scope = { saved_desc = []; saved_kinds = []; new_kinds = [] } in
+    let res = f scope in
+    cleanup scope;
+    res
+end
 
 (* Mark a type. *)
 let rec mark_type ty =
@@ -672,11 +717,15 @@ let link_type ty ty' =
   (* ; assert (check_memorized_abbrevs ()) *)
   (*  ; check_expans [] ty' *)
 let set_level ty level =
-  if ty.id <= !last_snapshot then log_change (Clevel (ty, ty.level));
-  ty.level <- level
+  if level <> ty.level then begin
+    if ty.id <= !last_snapshot then log_change (Clevel (ty, ty.level));
+    ty.level <- level
+  end
 let set_scope ty scope =
-  if ty.id <= !last_snapshot then log_change (Cscope (ty, ty.scope));
-  ty.scope <- scope
+  if scope <> ty.scope then begin
+    if ty.id <= !last_snapshot then log_change (Cscope (ty, ty.scope));
+    ty.scope <- scope
+  end
 let set_univar rty ty =
   log_change (Cuniv (rty, !rty)); rty := Some ty
 let set_name nm v =

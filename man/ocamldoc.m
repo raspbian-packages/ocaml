@@ -115,7 +115,7 @@ displaying and processing by
 The
 .IR dot (1)
 tool is available from
-.IR http://www.research.att.com/sw/tools/graphviz/ .
+.IR https://graphviz.org/ .
 The textual representation of the graph is written to the file
 .IR ocamldoc.out ,
 or to the file specified with the
@@ -235,6 +235,11 @@ instead of
 This option is meaningful only in conjunction with the
 .BR \-latex , \ \-texi ,\ or \ \-dot
 options.
+.TP
+.BI \-open \ module
+Opens
+.I module
+before typing.
 .TP
 .BI \-pp \ command
 Pipe sources through preprocessor

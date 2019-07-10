@@ -15,9 +15,9 @@ module Y = struct
     | A : 'a * 'b * ('b -> unit) -> t
 end;; (* should fail *)
 [%%expect{|
-Line _, characters 2-54:
-  ..type t = X.t =
-      | A : 'a * 'b * ('b -> unit) -> t
+Line 2, characters 2-54:
+2 | ..type t = X.t =
+3 |     | A : 'a * 'b * ('b -> unit) -> t
 Error: This variant or record definition does not match that of type X.t
        The types for field A are not equal.
 |}]

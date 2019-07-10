@@ -22,8 +22,7 @@ open Lambda
 open Instruct
 open Opcodes
 open Cmo_format
-
-module StringSet = Set.Make(String)
+module String = Misc.Stdlib.String
 
 type error = Not_compatible_32 of (string * string)
 exception Error of error
@@ -39,12 +38,15 @@ let marshal_to_channel_with_possibly_32bit_compat ~filename ~kind outchan obj =
 
 
 let report_error ppf (file, kind) =
-  Format.fprintf ppf "Generated %s %S cannot be used on a 32-bit platform" kind file
+  Format.fprintf ppf "Generated %s %S cannot be used on a 32-bit platform"
+                     kind file
 let () =
   Location.register_error_of_exn
     (function
-      | Error (Not_compatible_32 info) -> Some (Location.error_of_printer_file report_error info)
-      | _ -> None
+      | Error (Not_compatible_32 info) ->
+          Some (Location.error_of_printer_file report_error info)
+      | _ ->
+          None
     )
 
 (* Buffering of bytecode *)
@@ -162,15 +164,15 @@ and slot_for_c_prim name =
 (* Debugging events *)
 
 let events = ref ([] : debug_event list)
-let debug_dirs = ref StringSet.empty
+let debug_dirs = ref String.Set.empty
 
 let record_event ev =
   let path = ev.ev_loc.Location.loc_start.Lexing.pos_fname in
   let abspath = Location.absolute_path path in
-  debug_dirs := StringSet.add (Filename.dirname abspath) !debug_dirs;
+  debug_dirs := String.Set.add (Filename.dirname abspath) !debug_dirs;
   if Filename.is_relative path then begin
     let cwd = Location.rewrite_absolute_path (Sys.getcwd ()) in
-    debug_dirs := StringSet.add cwd !debug_dirs;
+    debug_dirs := String.Set.add cwd !debug_dirs;
   end;
   ev.ev_pos <- !out_position;
   events := ev :: !events
@@ -181,7 +183,7 @@ let init () =
   out_position := 0;
   label_table := Array.make 16 (Label_undefined []);
   reloc_info := [];
-  debug_dirs := StringSet.empty;
+  debug_dirs := String.Set.empty;
   events := []
 
 (* Emission of one instruction *)
@@ -405,12 +407,12 @@ let to_file outchan unit_name objfile ~required_globals code =
   LongString.output outchan !out_buffer 0 !out_position;
   let (pos_debug, size_debug) =
     if !Clflags.debug then begin
-      debug_dirs := StringSet.add
+      debug_dirs := String.Set.add
         (Filename.dirname (Location.absolute_path objfile))
         !debug_dirs;
       let p = pos_out outchan in
       output_value outchan !events;
-      output_value outchan (StringSet.elements !debug_dirs);
+      output_value outchan (String.Set.elements !debug_dirs);
       (p, pos_out outchan - p)
     end else
       (0, 0) in
@@ -442,13 +444,12 @@ let to_memory init_code fun_code =
   init();
   emit init_code;
   emit fun_code;
-  let code = Meta.static_alloc !out_position in
-  LongString.unsafe_blit_to_bytes !out_buffer 0 code 0 !out_position;
-  let reloc = List.rev !reloc_info
-  and code_size = !out_position in
+  let code = LongString.create !out_position in
+  LongString.blit !out_buffer 0 code 0 !out_position;
+  let reloc = List.rev !reloc_info in
   let events = !events in
   init();
-  (code, code_size, reloc, events)
+  (code, reloc, events)
 
 (* Emission to a file for a packed library *)
 

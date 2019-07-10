@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 module U = Flambda_utils
 
@@ -115,7 +116,8 @@ let descr t = t.descr
 
 let print_value_set_of_closures ppf
       { function_decls = { funs }; invariant_params; freshening; size; _ } =
-  Format.fprintf ppf "(set_of_closures:@ %a invariant_params=%a freshening=%a size=%a)"
+  Format.fprintf ppf
+    "(set_of_closures:@ %a invariant_params=%a freshening=%a size=%a)"
     (fun ppf -> Variable.Map.iter (fun id _ -> Variable.print ppf id)) funs
     (Variable.Map.print Variable.Set.print) (Lazy.force invariant_params)
     Freshening.Project_var.print freshening
@@ -677,7 +679,7 @@ let equal_floats f1 f2 =
    The approximation for [f 1] and [f 2] could both contain the
    description of [g]. But if [f] where inlined, a new [g] would
    be created in each branch, leading to incompatible description.
-   And we must never make the descrition for a function less
+   And we must never make the description for a function less
    precise that it used to be: its information are needed for
    rewriting [Project_var] and [Project_closure] constructions
    in [Flambdainline.loop]
@@ -697,7 +699,7 @@ let rec meet_descr ~really_import_approx d1 d2 = match d1, d2 with
       equal_boxed_int bi1 i1 bi2 i2 ->
       d1
   | Value_block (tag1, a1), Value_block (tag2, a2)
-    when tag1 = tag2 && Array.length a1 = Array.length a2 ->
+    when Tag.compare tag1 tag2 = 0 && Array.length a1 = Array.length a2 ->
     let fields =
       Array.mapi (fun i v -> meet ~really_import_approx v a2.(i)) a1
     in

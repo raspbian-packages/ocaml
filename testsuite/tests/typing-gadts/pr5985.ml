@@ -8,9 +8,9 @@ module F (S : sig type 'a s end) = struct
   type _ t = T : 'a -> 'a s t
 end;; (* fail *)
 [%%expect{|
-Line _, characters 2-29:
-    type _ t = T : 'a -> 'a s t
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 3, characters 2-29:
+3 |   type _ t = T : 'a -> 'a s t
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
 |}];;
@@ -37,9 +37,9 @@ module F(T:sig type 'a t end) = struct
     object constraint 'a = 'b T.t val x' : 'b = x method x = x' end
 end;; (* fail *)
 [%%expect{|
-Line _, characters 2-86:
-  ..class ['a] c x =
-      object constraint 'a = 'b T.t val x' : 'b = x method x = x' end
+Line 2, characters 2-86:
+2 | ..class ['a] c x =
+3 |     object constraint 'a = 'b T.t val x' : 'b = x method x = x' end
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
 |}];;
@@ -51,18 +51,18 @@ let magic (x : int) : bool  =
   let A x = A x in
   x;; (* fail *)
 [%%expect{|
-Line _, characters 0-49:
-  type 'x t = A of 'a constraint 'x = [< `X of 'a ] ;; (* fail *)
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 0-49:
+1 | type 'x t = A of 'a constraint 'x = [< `X of 'a ] ;; (* fail *)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
 |}];;
 
 type 'a t = A : 'a -> [< `X of 'a ] t;; (* fail *)
 [%%expect{|
-Line _, characters 0-37:
-  type 'a t = A : 'a -> [< `X of 'a ] t;; (* fail *)
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 0-37:
+1 | type 'a t = A : 'a -> [< `X of 'a ] t;; (* fail *)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
 |}];;
@@ -77,9 +77,9 @@ type _ t = T : 'a -> 'a Queue.t t;; (* fail *)
 type (_, _) eq = Eq : ('a, 'a) eq
 val eq : 'a = <poly>
 val eq : ('a Queue.t, 'b Queue.t) eq = Eq
-Line _, characters 0-33:
-  type _ t = T : 'a -> 'a Queue.t t;; (* fail *)
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 5, characters 0-33:
+5 | type _ t = T : 'a -> 'a Queue.t t;; (* fail *)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
 |}];;
@@ -95,18 +95,18 @@ module type S = sig
   type _ t = T : 'a -> 'a s t
 end;; (* fail *)
 [%%expect{|
-Line _, characters 2-29:
-    type _ t = T : 'a -> 'a s t
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 3, characters 2-29:
+3 |   type _ t = T : 'a -> 'a s t
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
 |}];;
 (* Otherwise we can write the following *)
 module rec M : (S with type 'a s = unit) = M;;
 [%%expect{|
-Line _, characters 16-17:
-  module rec M : (S with type 'a s = unit) = M;;
-                  ^
+Line 1, characters 16-17:
+1 | module rec M : (S with type 'a s = unit) = M;;
+                    ^
 Error: Unbound module type S
 |}];;
 (* For the above reason, we cannot allow the abstract declaration
@@ -129,14 +129,14 @@ type 'a q = Q;;
 type +'a t = 'b constraint 'a = 'b q;;
 [%%expect{|
 type 'a q = Q
-Line _, characters 0-36:
-  type +'a t = 'b constraint 'a = 'b q;;
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 2, characters 0-36:
+2 | type +'a t = 'b constraint 'a = 'b q;;
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable has a variance that
        cannot be deduced from the type parameters.
        It was expected to be unrestricted, but it is covariant.
 |}];;
-(* shoud fail: we do not know for sure the variance of Queue.t *)
+(* should fail: we do not know for sure the variance of Queue.t *)
 
 type +'a t = T of 'a;;
 type +'a s = 'b constraint 'a = 'b t;; (* ok *)
@@ -146,9 +146,9 @@ type +'a s = 'b constraint 'a = 'b t
 |}];;
 type -'a s = 'b constraint 'a = 'b t;; (* fail *)
 [%%expect{|
-Line _, characters 0-36:
-  type -'a s = 'b constraint 'a = 'b t;; (* fail *)
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 0-36:
+1 | type -'a s = 'b constraint 'a = 'b t;; (* fail *)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable has a variance that
        is not reflected by its occurrence in type parameters.
        It was expected to be contravariant, but it is covariant.
@@ -167,9 +167,9 @@ type +'a s = 'b constraint 'a = 'b q t
 |}];;
 type +'a s = 'b constraint 'a = 'b t q;; (* fail *)
 [%%expect{|
-Line _, characters 0-38:
-  type +'a s = 'b constraint 'a = 'b t q;; (* fail *)
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 0-38:
+1 | type +'a s = 'b constraint 'a = 'b t q;; (* fail *)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable has a variance that
        cannot be deduced from the type parameters.
        It was expected to be unrestricted, but it is covariant.
@@ -195,9 +195,9 @@ type +'a t = unit constraint 'a = 'b list;;
 type _ g = G : 'a -> 'a t g;; (* fail *)
 [%%expect{|
 type +'a t = unit constraint 'a = 'b list
-Line _, characters 0-27:
-  type _ g = G : 'a -> 'a t g;; (* fail *)
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 2, characters 0-27:
+2 | type _ g = G : 'a -> 'a t g;; (* fail *)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this definition, a type variable cannot be deduced
        from the type parameters.
 |}];;

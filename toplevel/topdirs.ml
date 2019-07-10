@@ -70,8 +70,15 @@ let _ = add_directive "quit" (Directive_none dir_quit)
 
 let dir_directory s =
   let d = expand_directory Config.standard_library s in
-  Config.load_path := d :: !Config.load_path;
-  Dll.add_path [d]
+  Dll.add_path [d];
+  let dir = Load_path.Dir.create d in
+  Load_path.add dir;
+  toplevel_env :=
+    Stdlib.String.Set.fold
+      (fun name env ->
+         Env.add_persistent_structure (Ident.create_persistent name) env)
+      (Env.persistent_structures_of_dir dir)
+      !toplevel_env
 
 let _ = add_directive "directory" (Directive_string dir_directory)
     {
@@ -83,7 +90,13 @@ let _ = add_directive "directory" (Directive_string dir_directory)
 (* To remove a directory from the load path *)
 let dir_remove_directory s =
   let d = expand_directory Config.standard_library s in
-  Config.load_path := List.filter (fun d' -> d' <> d) !Config.load_path;
+  let keep id =
+    match Load_path.find_uncap (Ident.name id ^ ".cmi") with
+    | exception Not_found -> true
+    | fn -> Filename.dirname fn <> d
+  in
+  toplevel_env := Env.filter_non_loaded_persistent keep !toplevel_env;
+  Load_path.remove_dir s;
   Dll.remove_path [d]
 
 let _ = add_directive "remove_directory" (Directive_string dir_remove_directory)
@@ -124,10 +137,10 @@ let load_compunit ic filename ppf compunit =
   check_consistency ppf filename compunit;
   seek_in ic compunit.cu_pos;
   let code_size = compunit.cu_codesize + 8 in
-  let code = Meta.static_alloc code_size in
-  unsafe_really_input ic code 0 compunit.cu_codesize;
-  Bytes.unsafe_set code compunit.cu_codesize (Char.chr Opcodes.opRETURN);
-  String.unsafe_blit "\000\000\000\001\000\000\000" 0
+  let code = LongString.create code_size in
+  LongString.input_bytes_into code ic compunit.cu_codesize;
+  LongString.set code compunit.cu_codesize (Char.chr Opcodes.opRETURN);
+  LongString.blit_string "\000\000\000\001\000\000\000" 0
                      code (compunit.cu_codesize + 1) 7;
   let initial_symtable = Symtable.current_state() in
   Symtable.patch_object code compunit.cu_reloc;
@@ -138,10 +151,10 @@ let load_compunit ic filename ppf compunit =
       seek_in ic compunit.cu_debug;
       [| input_value ic |]
     end in
-  Meta.add_debug_info code code_size events;
   begin try
     may_trace := true;
-    ignore((Meta.reify_bytecode code code_size) ());
+    let _bytecode, closure = Meta.reify_bytecode code events None in
+    ignore (closure ());
     may_trace := false;
   with exn ->
     record_backtrace ();
@@ -153,19 +166,15 @@ let load_compunit ic filename ppf compunit =
 
 let rec load_file recursive ppf name =
   let filename =
-    try Some (find_in_path !Config.load_path name) with Not_found -> None
+    try Some (Load_path.find name) with Not_found -> None
   in
   match filename with
   | None -> fprintf ppf "Cannot find file %s.@." name; false
   | Some filename ->
       let ic = open_in_bin filename in
-      try
-        let success = really_load_file recursive ppf name filename ic in
-        close_in ic;
-        success
-      with exn ->
-        close_in ic;
-        raise exn
+      Misc.try_finally
+        ~always:(fun () -> close_in ic)
+        (fun () -> really_load_file recursive ppf name filename ic)
 
 and really_load_file recursive ppf name filename ic =
   let buffer = really_input_string ic (String.length Config.cmo_magic_number) in
@@ -180,12 +189,9 @@ and really_load_file recursive ppf name filename ic =
             | (Reloc_getglobal id, _)
               when not (Symtable.is_global_defined id) ->
                 let file = Ident.name id ^ ".cmo" in
-                begin match try Some (Misc.find_in_path_uncap !Config.load_path
-                                        file)
-                      with Not_found -> None
-                with
-                | None -> ()
-                | Some file ->
+                begin match Load_path.find_uncap file with
+                | exception Not_found -> ()
+                | file ->
                     if not (load_file recursive ppf file) then raise Load_failed
                 end
             | _ -> ()
@@ -294,7 +300,7 @@ let match_simple_printer_type desc printer_type =
   let ty_arg = Ctype.newvar() in
   Ctype.unify !toplevel_env
     (Ctype.newconstr printer_type [ty_arg])
-    (Ctype.instance_def desc.val_type);
+    (Ctype.instance desc.val_type);
   Ctype.end_def();
   Ctype.generalize ty_arg;
   (ty_arg, None)
@@ -312,7 +318,7 @@ let match_generic_printer_type desc path args printer_type =
       ty_args (Ctype.newconstr printer_type [ty_target]) in
   Ctype.unify !toplevel_env
     ty_expected
-    (Ctype.instance_def desc.val_type);
+    (Ctype.instance desc.val_type);
   Ctype.end_def();
   Ctype.generalize ty_expected;
   if not (Ctype.all_distinct_vars !toplevel_env args) then
@@ -322,7 +328,6 @@ let match_generic_printer_type desc path args printer_type =
 let match_printer_type ppf desc =
   let printer_type_new = printer_type ppf "printer_type_new" in
   let printer_type_old = printer_type ppf "printer_type_old" in
-  Ctype.init_def(Ident.current_time());
   try
     (match_simple_printer_type desc printer_type_new, false)
   with Ctype.Unify _ ->
@@ -353,7 +358,7 @@ let dir_install_printer ppf lid =
   try
     let ((ty_arg, ty), path, is_old_style) =
       find_printer_type ppf lid in
-    let v = eval_path !toplevel_env path in
+    let v = eval_value_path !toplevel_env path in
     match ty with
     | None ->
        let print_function =
@@ -418,7 +423,7 @@ let dir_trace ppf lid =
         fprintf ppf "%a is an external function and cannot be traced.@."
         Printtyp.longident lid
     | _ ->
-        let clos = eval_path !toplevel_env path in
+        let clos = eval_value_path !toplevel_env path in
         (* Nothing to do if it's not a closure *)
         if Obj.is_block clos
         && (Obj.tag clos = Obj.closure_tag || Obj.tag clos = Obj.infix_tag)
@@ -483,11 +488,15 @@ let trim_signature = function
       Mty_signature
         (List.map
            (function
-               Sig_module (id, md, rs) ->
-                 Sig_module (id, {md with md_attributes =
-                                    (Location.mknoloc "...", Parsetree.PStr [])
-                                    :: md.md_attributes},
-                             rs)
+               Sig_module (id, pres, md, rs, priv) ->
+                 let attribute =
+                   Ast_helper.Attr.mk
+                     (Location.mknoloc "...")
+                     (Parsetree.PStr [])
+                 in
+                 Sig_module (id, pres, {md with md_attributes =
+                                          attribute :: md.md_attributes},
+                             rs, priv)
              (*| Sig_modtype (id, Modtype_manifest mty) ->
                  Sig_modtype (id, Modtype_manifest (trim_modtype mty))*)
              | item -> item)
@@ -531,7 +540,7 @@ let () =
   reg_show_prim "show_val"
     (fun env loc id lid ->
        let _path, desc = Typetexp.find_value env loc lid in
-       [ Sig_value (id, desc) ]
+       [ Sig_value (id, desc, Exported) ]
     )
     "Print the signature of the corresponding value."
 
@@ -539,7 +548,7 @@ let () =
   reg_show_prim "show_type"
     (fun env loc id lid ->
        let _path, desc = Typetexp.find_type env loc lid in
-       [ Sig_type (id, desc, Trec_not) ]
+       [ Sig_type (id, desc, Trec_not, Exported) ]
     )
     "Print the signature of the corresponding type constructor."
 
@@ -562,7 +571,7 @@ let () =
            Types.ext_loc = desc.cstr_loc;
            Types.ext_attributes = desc.cstr_attributes; }
        in
-         [Sig_typext (id, ext, Text_exception)]
+         [Sig_typext (id, ext, Text_exception, Exported)]
     )
     "Print the signature of the corresponding exception."
 
@@ -572,10 +581,11 @@ let () =
        let rec accum_aliases path acc =
          let md = Env.find_module path env in
          let acc =
-           Sig_module (id, {md with md_type = trim_signature md.md_type},
-                       Trec_not) :: acc in
+           Sig_module (id, Mp_present,
+                       {md with md_type = trim_signature md.md_type},
+                       Trec_not, Exported) :: acc in
          match md.md_type with
-         | Mty_alias(_, path) -> accum_aliases path acc
+         | Mty_alias path -> accum_aliases path acc
          | Mty_ident _ | Mty_signature _ | Mty_functor _ ->
              List.rev acc
        in
@@ -588,7 +598,7 @@ let () =
   reg_show_prim "show_module_type"
     (fun env loc id lid ->
        let _path, desc = Typetexp.find_modtype env loc lid in
-       [ Sig_modtype (id, desc) ]
+       [ Sig_modtype (id, desc, Exported) ]
     )
     "Print the signature of the corresponding module type."
 
@@ -596,7 +606,7 @@ let () =
   reg_show_prim "show_class"
     (fun env loc id lid ->
        let _path, desc = Typetexp.find_class env loc lid in
-       [ Sig_class (id, desc, Trec_not) ]
+       [ Sig_class (id, desc, Trec_not, Exported) ]
     )
     "Print the signature of the corresponding class."
 
@@ -604,7 +614,7 @@ let () =
   reg_show_prim "show_class_type"
     (fun env loc id lid ->
        let _path, desc = Typetexp.find_class_type env loc lid in
-       [ Sig_class_type (id, desc, Trec_not) ]
+       [ Sig_class_type (id, desc, Trec_not, Exported) ]
     )
     "Print the signature of the corresponding class type."
 

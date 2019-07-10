@@ -2,31 +2,32 @@
 
 files = "reflector.ml"
 
-* setup-ocamlc.byte-build-env
+* hasunix
+** setup-ocamlc.byte-build-env
 program = "${test_build_directory}/redirections.byte"
-** ocamlc.byte
-program = "${test_build_directory}/reflector.exe"
-all_modules = "reflector.ml"
 *** ocamlc.byte
+program = "${test_build_directory}/reflector.exe"
+all_modules = "reflector.ml"
+**** ocamlc.byte
 include unix
 program = "${test_build_directory}/redirections.byte"
 all_modules= "redirections.ml"
-**** check-ocamlc.byte-output
-***** run
-****** check-program-output
+***** check-ocamlc.byte-output
+****** run
+******* check-program-output
 
-* setup-ocamlopt.byte-build-env
+** setup-ocamlopt.byte-build-env
 program = "${test_build_directory}/redirections.opt"
-** ocamlopt.byte
+*** ocamlopt.byte
 program = "${test_build_directory}/reflector.exe"
 all_modules = "reflector.ml"
-*** ocamlopt.byte
+**** ocamlopt.byte
 include unix
 program = "${test_build_directory}/redirections.opt"
 all_modules= "redirections.ml"
-**** check-ocamlopt.byte-output
-***** run
-****** check-program-output
+***** check-ocamlopt.byte-output
+****** run
+******* check-program-output
 
 *)
 
@@ -55,7 +56,8 @@ let test_createprocess systemenv =
   let pid =
     Unix.create_process_env
        refl
-       [| refl; "-i2o"; "-i2e"; "-o"; "123"; "-e"; "456"; "-i2o"; "-v"; "XVAR" |]
+       [| refl; "-i2o"; "-i2e"; "-o"; "123"; "-e"; "456"; "-i2o"; "-v"; "XVAR"
+       |]
        (Array.append [| "XVAR=xvar" |] systemenv)
        p_exit f_out f_err in
   out p_entrance "aaaa\n";
@@ -115,7 +117,7 @@ let test_open_process_full systemenv =
       (refl ^ " -o 123 -i2o -e 456 -i2e -v XVAR")
       (Array.append [|"XVAR=xvar"|] systemenv) in
   output_string i "aa\nbbbb\n"; close_out i;
-  for _i = 1 to 3 do 
+  for _i = 1 to 3 do
     out Unix.stdout (input_line o ^ "\n")
   done;
   for _i = 1 to 2 do
@@ -126,17 +128,13 @@ let test_open_process_full systemenv =
     out Unix.stdout "!!! reflector exited with an error\n"
 
 let _ =
-  let ocamlrunparam =
-    match Sys.getenv_opt "OCAMLRUNPARAM" with
-    | None -> [||]
-    | Some v -> [|"OCAMLRUNPARAM=" ^ v|]
-  in
+  let env = Unix.environment() in
   (* The following 'close' makes things more difficult.
-     Under Unix it works fine, but under Win32 create_process 
+     Under Unix it works fine, but under Win32 create_process
      gives an error if one of the standard handles is closed. *)
   (* Unix.close Unix.stdin; *)
   out Unix.stdout "** create_process\n";
-  test_createprocess ocamlrunparam;
+  test_createprocess env;
   out Unix.stdout "** create_process 2>&1 redirection\n";
   test_2ampsup1();
   out Unix.stdout "** create_process swap 1-2\n";
@@ -146,4 +144,4 @@ let _ =
   out Unix.stdout "** open_process_out\n";
   test_open_process_out();
   out Unix.stdout "** open_process_full\n";
-  test_open_process_full ocamlrunparam
+  test_open_process_full env

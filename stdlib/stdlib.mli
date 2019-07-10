@@ -18,18 +18,12 @@
     This module is automatically opened at the beginning of each
     compilation. All components of this module can therefore be
     referred by their short name, without prefixing them by [Stdlib].
+
+    It particular, it provides the basic operations over the built-in
+    types (numbers, booleans, byte sequences, strings, exceptions,
+    references, lists, arrays, input-output channels, ...) and the
+    {{!modules}standard library modules}.
 *)
-
-module Pervasives : sig
-(** Pervasive operations.
-
-    This module provides the basic operations over the built-in types
-    (numbers, booleans, byte sequences, strings, exceptions, references,
-    lists, arrays, input-output channels, ...).
-
-    This module is included in the toplevel [Stdlib] module.
-*)
-
 
 (** {1 Exceptions} *)
 
@@ -51,6 +45,73 @@ exception Exit
 (** The [Exit] exception is not raised by any library function.  It is
     provided for use in your programs. *)
 
+exception Match_failure of (string * int * int)
+  [@ocaml.warn_on_literal_pattern]
+(** Exception raised when none of the cases of a pattern-matching
+   apply. The arguments are the location of the match keyword in the
+   source code (file name, line number, column number). *)
+
+exception Assert_failure of (string * int * int)
+  [@ocaml.warn_on_literal_pattern]
+(** Exception raised when an assertion fails. The arguments are the
+   location of the assert keyword in the source code (file name, line
+   number, column number). *)
+
+exception Invalid_argument of string
+  [@ocaml.warn_on_literal_pattern]
+(** Exception raised by library functions to signal that the given
+   arguments do not make sense. The string gives some information to
+   the programmer. As a general rule, this exception should not be
+   caught, it denotes a programming error and the code should be
+   modified not to trigger it. *)
+
+exception Failure of string
+  [@ocaml.warn_on_literal_pattern]
+(** Exception raised by library functions to signal that they are
+   undefined on the given arguments. The string is meant to give some
+   information to the programmer; you must not pattern match on the
+   string literal because it may change in future versions (use
+   Failure _ instead). *)
+
+exception Not_found
+(** Exception raised by search functions when the desired object could
+   not be found. *)
+
+exception Out_of_memory
+(** Exception raised by the garbage collector when there is
+   insufficient memory to complete the computation. *)
+
+exception Stack_overflow
+(** Exception raised by the bytecode interpreter when the evaluation
+   stack reaches its maximal size. This often indicates infinite or
+   excessively deep recursion in the user's program. (Not fully
+   implemented by the native-code compiler.) *)
+
+exception Sys_error of string
+  [@ocaml.warn_on_literal_pattern]
+(** Exception raised by the input/output functions to report an
+   operating system error. The string is meant to give some
+   information to the programmer; you must not pattern match on the
+   string literal because it may change in future versions (use
+   Sys_error _ instead). *)
+
+exception End_of_file
+(** Exception raised by input functions to signal that the end of file
+   has been reached. *)
+
+exception Division_by_zero
+(** Exception raised by integer division and remainder operations when
+   their second argument is zero. *)
+
+exception Sys_blocked_io
+(** A special case of Sys_error raised when no I/O is possible on a
+   non-blocking I/O channel. *)
+
+exception Undefined_recursive_module of (string * int * int)
+  [@ocaml.warn_on_literal_pattern]
+(** Exception raised when an ill-founded recursive module definition
+   is evaluated. The arguments are the location of the definition in
+   the source code (file name, line number, column number). *)
 
 (** {1 Comparisons} *)
 
@@ -61,23 +122,27 @@ external ( = ) : 'a -> 'a -> bool = "%equal"
    even if the two mutable objects are not the same physical object.
    Equality between functional values raises [Invalid_argument].
    Equality between cyclic data structures may not terminate.
-   Left-associative operator at precedence level 4/11. *)
+   Left-associative operator, see {!Ocaml_operators} for more information. *)
 
 external ( <> ) : 'a -> 'a -> bool = "%notequal"
-(** Negation of {!Pervasives.( = )}.
-    Left-associative operator at precedence level 4/11. *)
+(** Negation of {!Stdlib.( = )}.
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( < ) : 'a -> 'a -> bool = "%lessthan"
-(** See {!Pervasives.( >= )}.
-    Left-associative operator at precedence level 4/11. *)
+(** See {!Stdlib.( >= )}.
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( > ) : 'a -> 'a -> bool = "%greaterthan"
-(** See {!Pervasives.( >= )}.
-    Left-associative operator at precedence level 4/11. *)
+(** See {!Stdlib.( >= )}.
+    Left-associative operator,  see {!Ocaml_operators} for more information.
+*)
 
 external ( <= ) : 'a -> 'a -> bool = "%lessequal"
-(** See {!Pervasives.( >= )}.
-    Left-associative operator at precedence level 4/11. *)
+(** See {!Stdlib.( >= )}.
+    Left-associative operator,  see {!Ocaml_operators} for more information.
+*)
 
 external ( >= ) : 'a -> 'a -> bool = "%greaterequal"
 (** Structural ordering functions. These functions coincide with
@@ -88,7 +153,8 @@ external ( >= ) : 'a -> 'a -> bool = "%greaterequal"
    of [( = )], mutable structures are compared by contents.
    Comparison between functional values raises [Invalid_argument].
    Comparison between cyclic structures may not terminate.
-   Left-associative operator at precedence level 4/11. *)
+   Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external compare : 'a -> 'a -> int = "%compare"
 (** [compare x y] returns [0] if [x] is equal to [y],
@@ -96,7 +162,7 @@ external compare : 'a -> 'a -> int = "%compare"
    if [x] is greater than [y].  The ordering implemented by [compare]
    is compatible with the comparison predicates [=], [<] and [>]
    defined above,  with one difference on the treatment of the float value
-   {!Pervasives.nan}.  Namely, the comparison predicates treat [nan]
+   {!Stdlib.nan}.  Namely, the comparison predicates treat [nan]
    as different from any other float value, including itself;
    while [compare] treats [nan] as equal to itself and less than any
    other float value.  This treatment of [nan] ensures that [compare]
@@ -128,11 +194,13 @@ external ( == ) : 'a -> 'a -> bool = "%eq"
    On non-mutable types, the behavior of [( == )] is
    implementation-dependent; however, it is guaranteed that
    [e1 == e2] implies [compare e1 e2 = 0].
-   Left-associative operator at precedence level 4/11. *)
+   Left-associative operator,  see {!Ocaml_operators} for more information.
+*)
 
 external ( != ) : 'a -> 'a -> bool = "%noteq"
-(** Negation of {!Pervasives.( == )}.
-    Left-associative operator at precedence level 4/11. *)
+(** Negation of {!Stdlib.( == )}.
+    Left-associative operator,  see {!Ocaml_operators} for more information.
+*)
 
 
 (** {1 Boolean operations} *)
@@ -144,24 +212,27 @@ external ( && ) : bool -> bool -> bool = "%sequand"
 (** The boolean 'and'. Evaluation is sequential, left-to-right:
    in [e1 && e2], [e1] is evaluated first, and if it returns [false],
    [e2] is not evaluated at all.
-   Right-associative operator at precedence level 3/11. *)
+   Right-associative operator,  see {!Ocaml_operators} for more information.
+*)
 
 external ( & ) : bool -> bool -> bool = "%sequand"
   [@@ocaml.deprecated "Use (&&) instead."]
-(** @deprecated {!Pervasives.( && )} should be used instead.
-    Right-associative operator at precedence level 3/11. *)
+(** @deprecated {!Stdlib.( && )} should be used instead.
+    Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( || ) : bool -> bool -> bool = "%sequor"
 (** The boolean 'or'. Evaluation is sequential, left-to-right:
    in [e1 || e2], [e1] is evaluated first, and if it returns [true],
    [e2] is not evaluated at all.
-   Right-associative operator at precedence level 2/11.
+   Right-associative operator,  see {!Ocaml_operators} for more information.
 *)
 
 external ( or ) : bool -> bool -> bool = "%sequor"
   [@@ocaml.deprecated "Use (||) instead."]
-(** @deprecated {!Pervasives.( || )} should be used instead.
-    Right-associative operator at precedence level 2/11. *)
+(** @deprecated {!Stdlib.( || )} should be used instead.
+    Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 (** {1 Debugging} *)
 
@@ -229,15 +300,15 @@ external __POS_OF__ : 'a -> (string * int * int * int) * 'a = "%loc_POS"
 external ( |> ) : 'a -> ('a -> 'b) -> 'b = "%revapply"
 (** Reverse-application operator: [x |> f |> g] is exactly equivalent
  to [g (f (x))].
- Left-associative operator at precedence level 4/11.
-   @since 4.01
- *)
+ Left-associative operator, see {!Ocaml_operators} for more information.
+ @since 4.01
+*)
 
 external ( @@ ) : ('a -> 'b) -> 'a -> 'b = "%apply"
 (** Application operator: [g @@ f @@ x] is exactly equivalent to
  [g (f (x))].
- Right-associative operator at precedence level 5/11.
-   @since 4.01
+ Right-associative operator, see {!Ocaml_operators} for more information.
+ @since 4.01
 *)
 
 (** {1 Integer arithmetic} *)
@@ -248,13 +319,13 @@ external ( @@ ) : ('a -> 'b) -> 'a -> 'b = "%apply"
 
 external ( ~- ) : int -> int = "%negint"
 (** Unary negation. You can also write [- e] instead of [~- e].
-    Unary operator at precedence level 9/11 for [- e]
-    and 11/11 for [~- e]. *)
+    Unary operator, see {!Ocaml_operators} for more information.
+*)
+
 
 external ( ~+ ) : int -> int = "%identity"
 (** Unary addition. You can also write [+ e] instead of [~+ e].
-    Unary operator at precedence level 9/11 for [+ e]
-    and 11/11 for [~+ e].
+    Unary operator, see {!Ocaml_operators} for more information.
     @since 3.12.0
 *)
 
@@ -266,15 +337,18 @@ external pred : int -> int = "%predint"
 
 external ( + ) : int -> int -> int = "%addint"
 (** Integer addition.
-    Left-associative operator at precedence level 6/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( - ) : int -> int -> int = "%subint"
 (** Integer subtraction.
-    Left-associative operator at precedence level 6/11. *)
+    Left-associative operator, , see {!Ocaml_operators} for more information.
+*)
 
 external ( * ) : int -> int -> int = "%mulint"
 (** Integer multiplication.
-    Left-associative operator at precedence level 7/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( / ) : int -> int -> int = "%divint"
 (** Integer division.
@@ -283,7 +357,8 @@ external ( / ) : int -> int -> int = "%divint"
    More precisely, if [x >= 0] and [y > 0], [x / y] is the greatest integer
    less than or equal to the real quotient of [x] by [y].  Moreover,
    [(- x) / y = x / (- y) = - (x / y)].
-   Left-associative operator at precedence level 7/11. *)
+   Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( mod ) : int -> int -> int = "%modint"
 (** Integer remainder.  If [y] is not zero, the result
@@ -293,7 +368,8 @@ external ( mod ) : int -> int -> int = "%modint"
    If [y = 0], [x mod y] raises [Division_by_zero].
    Note that [x mod y] is negative only if [x < 0].
    Raise [Division_by_zero] if [y] is zero.
-   Left-associative operator at precedence level 7/11. *)
+   Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 val abs : int -> int
 (** Return the absolute value of the argument.  Note that this may be
@@ -310,15 +386,18 @@ val min_int : int
 
 external ( land ) : int -> int -> int = "%andint"
 (** Bitwise logical and.
-    Left-associative operator at precedence level 7/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( lor ) : int -> int -> int = "%orint"
 (** Bitwise logical or.
-    Left-associative operator at precedence level 7/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( lxor ) : int -> int -> int = "%xorint"
 (** Bitwise logical exclusive or.
-    Left-associative operator at precedence level 7/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 val lnot : int -> int
 (** Bitwise logical negation. *)
@@ -326,21 +405,23 @@ val lnot : int -> int
 external ( lsl ) : int -> int -> int = "%lslint"
 (** [n lsl m] shifts [n] to the left by [m] bits.
     The result is unspecified if [m < 0] or [m > Sys.int_size].
-    Right-associative operator at precedence level 8/11. *)
+    Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( lsr ) : int -> int -> int = "%lsrint"
 (** [n lsr m] shifts [n] to the right by [m] bits.
     This is a logical shift: zeroes are inserted regardless of
     the sign of [n].
     The result is unspecified if [m < 0] or [m > Sys.int_size].
-    Right-associative operator at precedence level 8/11. *)
+    Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( asr ) : int -> int -> int = "%asrint"
 (** [n asr m] shifts [n] to the right by [m] bits.
     This is an arithmetic shift: the sign bit of [n] is replicated.
     The result is unspecified if [m < 0] or [m > Sys.int_size].
-    Right-associative operator at precedence level 8/11. *)
-
+    Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 (** {1 Floating-point arithmetic}
 
@@ -358,36 +439,40 @@ external ( asr ) : int -> int -> int = "%asrint"
 
 external ( ~-. ) : float -> float = "%negfloat"
 (** Unary negation. You can also write [-. e] instead of [~-. e].
-    Unary operator at precedence level 9/11 for [-. e]
-    and 11/11 for [~-. e]. *)
+    Unary operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( ~+. ) : float -> float = "%identity"
 (** Unary addition. You can also write [+. e] instead of [~+. e].
-    Unary operator at precedence level 9/11 for [+. e]
-    and 11/11 for [~+. e].
+    Unary operator, see {!Ocaml_operators} for more information.
     @since 3.12.0
 *)
 
 external ( +. ) : float -> float -> float = "%addfloat"
 (** Floating-point addition.
-    Left-associative operator at precedence level 6/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( -. ) : float -> float -> float = "%subfloat"
 (** Floating-point subtraction.
-    Left-associative operator at precedence level 6/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( *. ) : float -> float -> float = "%mulfloat"
 (** Floating-point multiplication.
-    Left-associative operator at precedence level 7/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( /. ) : float -> float -> float = "%divfloat"
 (** Floating-point division.
-    Left-associative operator at precedence level 7/11. *)
+    Left-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( ** ) : float -> float -> float = "caml_power_float" "pow"
   [@@unboxed] [@@noalloc]
 (** Exponentiation.
-    Right-associative operator at precedence level 8/11. *)
+    Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external sqrt : float -> float = "caml_sqrt_float" "sqrt"
   [@@unboxed] [@@noalloc]
@@ -516,13 +601,13 @@ external modf : float -> float * float = "caml_modf_float"
    part of [f]. *)
 
 external float : int -> float = "%floatofint"
-(** Same as {!Pervasives.float_of_int}. *)
+(** Same as {!Stdlib.float_of_int}. *)
 
 external float_of_int : int -> float = "%floatofint"
 (** Convert an integer to floating-point. *)
 
 external truncate : float -> int = "%intoffloat"
-(** Same as {!Pervasives.int_of_float}. *)
+(** Same as {!Stdlib.int_of_float}. *)
 
 external int_of_float : float -> int = "%intoffloat"
 (** Truncate the given floating-point number to an integer.
@@ -560,7 +645,7 @@ type fpclass =
   | FP_infinite         (** Number is positive or negative infinity *)
   | FP_nan              (** Not a number: result of an undefined operation *)
 (** The five classes of floating-point numbers, as determined by
-   the {!Pervasives.classify_float} function. *)
+   the {!Stdlib.classify_float} function. *)
 
 external classify_float : (float [@unboxed]) -> fpclass =
   "caml_classify_float" "caml_classify_float_unboxed" [@@noalloc]
@@ -575,8 +660,8 @@ external classify_float : (float [@unboxed]) -> fpclass =
 
 val ( ^ ) : string -> string -> string
 (** String concatenation.
-    Right-associative operator at precedence level 5/11. *)
-
+    Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 (** {1 Character operations}
 
@@ -610,22 +695,21 @@ val string_of_bool : bool -> string
    may be shared, the user should not modify them directly.
 *)
 
-val bool_of_string : string -> bool
-(** Convert the given string to a boolean.
-   Raise [Invalid_argument "bool_of_string"] if the string is not
-   ["true"] or ["false"]. *)
-
 val bool_of_string_opt: string -> bool option
 (** Convert the given string to a boolean.
-    Return [None] if the string is not
-    ["true"] or ["false"].
-    @since 4.05
+
+   Return [None] if the string is not ["true"] or ["false"].
+   @since 4.05
 *)
+
+val bool_of_string : string -> bool
+(** Same as {!Stdlib.bool_of_string_opt}, but raise
+   [Invalid_argument "bool_of_string"] instead of returning [None]. *)
 
 val string_of_int : int -> string
 (** Return the string representation of an integer, in decimal. *)
 
-external int_of_string : string -> int = "caml_int_of_string"
+val int_of_string_opt: string -> int option
 (** Convert the given string to an integer.
    The string is read in decimal (by default, or if the string
    begins with [0u]), in hexadecimal (if it begins with [0x] or
@@ -639,40 +723,47 @@ external int_of_string : string -> int = "caml_int_of_string"
 
    The [_] (underscore) character can appear anywhere in the string
    and is ignored.
-   Raise [Failure "int_of_string"] if the given string is not
-   a valid representation of an integer, or if the integer represented
-   exceeds the range of integers representable in type [int]. *)
 
-
-val int_of_string_opt: string -> int option
-(** Same as [int_of_string], but returns [None] instead of raising.
-    @since 4.05
+   Return [None] if the given string is not a valid representation of an
+   integer, or if the integer represented exceeds the range of integers
+   representable in type [int].
+   @since 4.05
 *)
+
+external int_of_string : string -> int = "caml_int_of_string"
+(** Same as {!Stdlib.int_of_string_opt}, but raise
+   [Failure "int_of_string"] instead of returning [None]. *)
 
 val string_of_float : float -> string
 (** Return the string representation of a floating-point number. *)
 
-external float_of_string : string -> float = "caml_float_of_string"
+val float_of_string_opt: string -> float option
 (** Convert the given string to a float.  The string is read in decimal
    (by default) or in hexadecimal (marked by [0x] or [0X]).
+
    The format of decimal floating-point numbers is
    [ [-] dd.ddd (e|E) [+|-] dd ], where [d] stands for a decimal digit.
+
    The format of hexadecimal floating-point numbers is
    [ [-] 0(x|X) hh.hhh (p|P) [+|-] dd ], where [h] stands for an
    hexadecimal digit and [d] for a decimal digit.
+
    In both cases, at least one of the integer and fractional parts must be
    given; the exponent part is optional.
+
    The [_] (underscore) character can appear anywhere in the string
    and is ignored.
+
    Depending on the execution platforms, other representations of
    floating-point numbers can be accepted, but should not be relied upon.
-   Raise [Failure "float_of_string"] if the given string is not a valid
-   representation of a float. *)
 
-val float_of_string_opt: string -> float option
-(** Same as [float_of_string], but returns [None] instead of raising.
-    @since 4.05
+   Return [None] if the given string is not a valid representation of a float.
+   @since 4.05
 *)
+
+external float_of_string : string -> float = "caml_float_of_string"
+(** Same as {!Stdlib.float_of_string_opt}, but raise
+   [Failure "float_of_string"] instead of returning [None]. *)
 
 (** {1 Pair operations} *)
 
@@ -690,8 +781,8 @@ external snd : 'a * 'b -> 'b = "%field1"
 
 val ( @ ) : 'a list -> 'a list -> 'a list
 (** List concatenation.  Not tail-recursive (length of the first argument).
-    Right-associative operator at precedence level 5/11. *)
-
+  Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 (** {1 Input/output}
     Note: all input/output functions can raise [Sys_error] when the system
@@ -775,28 +866,30 @@ val read_line : unit -> string
    until a newline character is encountered. Return the string of
    all characters read, without the newline character at the end. *)
 
-val read_int : unit -> int
-(** Flush standard output, then read one line from standard input
-   and convert it to an integer. Raise [Failure "int_of_string"]
-   if the line read is not a valid representation of an integer. *)
-
 val read_int_opt: unit -> int option
-(** Same as [read_int_opt], but returns [None] instead of raising.
-    @since 4.05
+(** Flush standard output, then read one line from standard input
+   and convert it to an integer.
+
+   Return [None] if the line read is not a valid representation of an integer.
+   @since 4.05
 *)
 
-val read_float : unit -> float
-(** Flush standard output, then read one line from standard input
-   and convert it to a floating-point number.
-   The result is unspecified if the line read is not a valid
-   representation of a floating-point number. *)
+val read_int : unit -> int
+(** Same as {!Stdlib.read_int_opt}, but raise [Failure "int_of_string"]
+   instead of returning [None]. *)
 
 val read_float_opt: unit -> float option
 (** Flush standard output, then read one line from standard input
-    and convert it to a floating-point number.
-    Returns [None] if the line read is not a valid
-    representation of a floating-point number.
-    @since 4.05.0 *)
+   and convert it to a floating-point number.
+
+   Return [None] if the line read is not a valid representation of a
+   floating-point number.
+   @since 4.05.0
+*)
+
+val read_float : unit -> float
+(** Same as {!Stdlib.read_float_opt}, but raise [Failure "float_of_string"]
+   instead of returning [None]. *)
 
 
 (** {2 General output functions} *)
@@ -811,8 +904,8 @@ type open_flag =
   | Open_binary      (** open in binary mode (no conversion). *)
   | Open_text        (** open in text mode (may perform conversions). *)
   | Open_nonblock    (** open in non-blocking mode. *)
-(** Opening modes for {!Pervasives.open_out_gen} and
-  {!Pervasives.open_in_gen}. *)
+(** Opening modes for {!Stdlib.open_out_gen} and
+  {!Stdlib.open_in_gen}. *)
 
 val open_out : string -> out_channel
 (** Open the named file for writing, and return a new output channel
@@ -821,17 +914,17 @@ val open_out : string -> out_channel
    is created if it does not already exists. *)
 
 val open_out_bin : string -> out_channel
-(** Same as {!Pervasives.open_out}, but the file is opened in binary mode,
+(** Same as {!Stdlib.open_out}, but the file is opened in binary mode,
    so that no translation takes place during writes. On operating
    systems that do not distinguish between text mode and binary
-   mode, this function behaves like {!Pervasives.open_out}. *)
+   mode, this function behaves like {!Stdlib.open_out}. *)
 
 val open_out_gen : open_flag list -> int -> string -> out_channel
 (** [open_out_gen mode perm filename] opens the named file for writing,
    as described above. The extra argument [mode]
    specifies the opening mode. The extra argument [perm] specifies
    the file permissions, in case the file must be created.
-   {!Pervasives.open_out} and {!Pervasives.open_out_bin} are special
+   {!Stdlib.open_out} and {!Stdlib.open_out_bin} are special
    cases of this function. *)
 
 val flush : out_channel -> unit
@@ -874,15 +967,15 @@ val output_binary_int : out_channel -> int -> unit
    on the given output channel.
    The given integer is taken modulo 2{^32}.
    The only reliable way to read it back is through the
-   {!Pervasives.input_binary_int} function. The format is compatible across
+   {!Stdlib.input_binary_int} function. The format is compatible across
    all machines for a given version of OCaml. *)
 
 val output_value : out_channel -> 'a -> unit
 (** Write the representation of a structured value of any type
    to a channel. Circularities and sharing inside the value
    are detected and preserved. The object can be read back,
-   by the function {!Pervasives.input_value}. See the description of module
-   {!Marshal} for more information. {!Pervasives.output_value} is equivalent
+   by the function {!Stdlib.input_value}. See the description of module
+   {!Marshal} for more information. {!Stdlib.output_value} is equivalent
    to {!Marshal.to_channel} with an empty list of flags. *)
 
 val seek_out : out_channel -> int -> unit
@@ -930,16 +1023,16 @@ val open_in : string -> in_channel
    on that file, positioned at the beginning of the file. *)
 
 val open_in_bin : string -> in_channel
-(** Same as {!Pervasives.open_in}, but the file is opened in binary mode,
+(** Same as {!Stdlib.open_in}, but the file is opened in binary mode,
    so that no translation takes place during reads. On operating
    systems that do not distinguish between text mode and binary
-   mode, this function behaves like {!Pervasives.open_in}. *)
+   mode, this function behaves like {!Stdlib.open_in}. *)
 
 val open_in_gen : open_flag list -> int -> string -> in_channel
 (** [open_in_gen mode perm filename] opens the named file for reading,
    as described above. The extra arguments
    [mode] and [perm] specify the opening mode and file permissions.
-   {!Pervasives.open_in} and {!Pervasives.open_in_bin} are special
+   {!Stdlib.open_in} and {!Stdlib.open_in_bin} are special
    cases of this function. *)
 
 val input_char : in_channel -> char
@@ -965,7 +1058,7 @@ val input : in_channel -> bytes -> int -> int -> int
    no more characters were available at that time, or because
    the implementation found it convenient to do a partial read;
    [input] must be called again to read the remaining characters,
-   if desired.  (See also {!Pervasives.really_input} for reading
+   if desired.  (See also {!Stdlib.really_input} for reading
    exactly [len] characters.)
    Exception [Invalid_argument "input"] is raised if [pos] and [len]
    do not designate a valid range of [buf]. *)
@@ -986,19 +1079,19 @@ val really_input_string : in_channel -> int -> string
    @since 4.02.0 *)
 
 val input_byte : in_channel -> int
-(** Same as {!Pervasives.input_char}, but return the 8-bit integer representing
+(** Same as {!Stdlib.input_char}, but return the 8-bit integer representing
    the character.
    Raise [End_of_file] if an end of file was reached. *)
 
 val input_binary_int : in_channel -> int
 (** Read an integer encoded in binary format (4 bytes, big-endian)
-   from the given input channel. See {!Pervasives.output_binary_int}.
+   from the given input channel. See {!Stdlib.output_binary_int}.
    Raise [End_of_file] if an end of file was reached while reading the
    integer. *)
 
 val input_value : in_channel -> 'a
 (** Read the representation of a structured value, as produced
-   by {!Pervasives.output_value}, and return the corresponding value.
+   by {!Stdlib.output_value}, and return the corresponding value.
    This function is identical to {!Marshal.from_channel};
    see the description of module {!Marshal} for more information,
    in particular concerning the lack of type safety. *)
@@ -1057,7 +1150,6 @@ module LargeFile :
   regular integers (type [int]), these alternate functions allow
   operating on files whose sizes are greater than [max_int]. *)
 
-
 (** {1 References} *)
 
 type 'a ref = { mutable contents : 'a }
@@ -1070,12 +1162,14 @@ external ref : 'a -> 'a ref = "%makemutable"
 external ( ! ) : 'a ref -> 'a = "%field0"
 (** [!r] returns the current contents of reference [r].
    Equivalent to [fun r -> r.contents].
-   Unary operator at precedence level 11/11.*)
+   Unary operator, see {!Ocaml_operators} for more information.
+*)
 
 external ( := ) : 'a ref -> 'a -> unit = "%setfield0"
 (** [r := a] stores the value of [a] in reference [r].
    Equivalent to [fun r v -> r.contents <- v].
-   Right-associative operator at precedence level 1/11. *)
+   Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 external incr : int ref -> unit = "%incr"
 (** Increment the integer contained in the given reference.
@@ -1189,8 +1283,8 @@ val ( ^^ ) :
   [f2]: in case of formatted output, it accepts arguments from [f1], then
   arguments from [f2]; in case of formatted input, it returns results from
   [f1], then results from [f2].
-  Right-associative operator at precedence level 5/11. *)
-
+  Right-associative operator, see {!Ocaml_operators} for more information.
+*)
 
 (** {1 Program termination} *)
 
@@ -1207,7 +1301,7 @@ val at_exit : (unit -> unit) -> unit
 (** Register the given function to be called at program termination
    time. The functions registered with [at_exit] will be called when
    the program does any of the following:
-   - executes {!Pervasives.exit}
+   - executes {!Stdlib.exit}
    - terminates, either normally or because of an uncaught
      exception
    - executes the C function [caml_shutdown].
@@ -1223,15 +1317,17 @@ val valid_float_lexem : string -> string
 val unsafe_really_input : in_channel -> bytes -> int -> int -> unit
 
 val do_at_exit : unit -> unit
-end
 
-include module type of struct include Pervasives end
+(**/**)
+
+(** {1:modules Standard library modules } *)
 
 (*MODULE_ALIASES*)
 module Arg          = Arg
 module Array        = Array
 module ArrayLabels  = ArrayLabels
 module Bigarray     = Bigarray
+module Bool         = Bool
 module Buffer       = Buffer
 module Bytes        = Bytes
 module BytesLabels  = BytesLabels
@@ -1243,9 +1339,11 @@ module Ephemeron    = Ephemeron
 module Filename     = Filename
 module Float        = Float
 module Format       = Format
+module Fun          = Fun
 module Gc           = Gc
 module Genlex       = Genlex
 module Hashtbl      = Hashtbl
+module Int          = Int
 module Int32        = Int32
 module Int64        = Int64
 module Lazy         = Lazy
@@ -1258,15 +1356,21 @@ module MoreLabels   = MoreLabels
 module Nativeint    = Nativeint
 module Obj          = Obj
 module Oo           = Oo
+module Option       = Option
 module Parsing      = Parsing
+module Pervasives   = Pervasives
+[@@deprecated "Use Stdlib instead.\n\
+\n\
+If you need to stay compatible with OCaml < 4.07, you can use the \n\
+stdlib-shims library: https://github.com/ocaml/stdlib-shims"]
 module Printexc     = Printexc
 module Printf       = Printf
 module Queue        = Queue
 module Random       = Random
+module Result       = Result
 module Scanf        = Scanf
 module Seq          = Seq
 module Set          = Set
-module Sort         = Sort
 module Spacetime    = Spacetime
 module Stack        = Stack
 module StdLabels    = StdLabels
@@ -1275,4 +1379,5 @@ module String       = String
 module StringLabels = StringLabels
 module Sys          = Sys
 module Uchar        = Uchar
+module Unit         = Unit
 module Weak         = Weak

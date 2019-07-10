@@ -108,11 +108,11 @@ module Make2 (T' : S) : sig module Id : sig end module Id2 = Id end
   module Id2 = Id
 end;;
 [%%expect{|
-Line _, characters 57-107:
-  .........................................................struct
-    module Id = T'.T.Id
-    module Id2 = Id
-  end..
+Line 2, characters 57-107:
+2 | .........................................................struct
+3 |   module Id = T'.T.Id
+4 |   module Id2 = Id
+5 | end..
 Error: Signature mismatch:
        Modules do not match:
          sig module Id : sig  end module Id2 = Id end
@@ -148,9 +148,9 @@ module M = Make1 (struct module Term0 =
 M.Id.x;;
 [%%expect{|
 module M : sig module Id : sig  end module Id2 = Id end
-Line _, characters 0-6:
-  M.Id.x;;
-  ^^^^^^
+Line 3, characters 0-6:
+3 | M.Id.x;;
+    ^^^^^^
 Error: Unbound value M.Id.x
 |}]
 
@@ -240,6 +240,7 @@ module MkT :
       val remove : elt -> t -> t
       val union : t -> t -> t
       val inter : t -> t -> t
+      val disjoint : t -> t -> bool
       val diff : t -> t -> t
       val compare : t -> t -> int
       val equal : t -> t -> bool
@@ -310,10 +311,9 @@ module type S' =
   end
 module Asc : sig type t = int val compare : int -> int -> int end
 module Desc : sig type t = int val compare : int -> int -> int end
-module rec M1 :
-  sig
-    type t = M.t = E of (MkT(Desc).t, MkT(Desc).t) eq
-    type u = t = E of (MkT(Asc).t, MkT(Desc).t) eq
-  end
-val eq : (MkT(Asc).t, MkT(Desc).t) eq = Eq
+Line 15, characters 16-64:
+15 | module rec M1 : S' with module Term0 := Asc and module T := Desc = M1;;
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This variant or record definition does not match that of type M.t
+       The types for field E are not equal.
 |}]

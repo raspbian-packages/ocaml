@@ -55,24 +55,42 @@ let cd = make
         let reason = "Could not chidir to \"" ^ cwd ^ "\"" in
         let result = Result.fail_with_reason reason in
         (result, env)
-    end)    
+    end)
 
 let dumpenv = make
   "dumpenv"
   (fun log env ->
     Environments.dump log env; (Result.pass, env))
 
+let hasunix = make
+  "hasunix"
+  (Actions_helpers.pass_or_skip (Ocamltest_config.libunix <> None)
+    "unix library available"
+    "unix library not available")
+
 let libunix = make
   "libunix"
-  (Actions_helpers.pass_or_skip Ocamltest_config.libunix
+  (Actions_helpers.pass_or_skip (Ocamltest_config.libunix = Some true)
     "libunix available"
     "libunix not available")
 
 let libwin32unix = make
   "libwin32unix"
-  (Actions_helpers.pass_or_skip (not Ocamltest_config.libunix)
+  (Actions_helpers.pass_or_skip (Ocamltest_config.libunix = Some false)
     "libwin32unix available"
     "libwin32unix not available")
+
+let hassysthreads = make
+  "hassysthreads"
+  (Actions_helpers.pass_or_skip Ocamltest_config.systhreads
+    "systhreads library available"
+    "systhreads library not available")
+
+let hasstr = make
+  "hasstr"
+  (Actions_helpers.pass_or_skip Ocamltest_config.str
+    "str library available"
+    "str library not available")
 
 let windows_OS = "Windows_NT"
 
@@ -90,19 +108,30 @@ let not_windows = make
     "not running on Windows"
     "running on Windows")
 
-let bsd_system = "bsd_elf"
+let is_bsd_system s =
+  match s with
+  | "bsd_elf" | "netbsd" | "freebsd" | "openbsd" -> true
+  | _ -> false
 
 let bsd = make
   "bsd"
-  (Actions_helpers.pass_or_skip (Ocamltest_config.system = bsd_system)
+  (Actions_helpers.pass_or_skip (is_bsd_system Ocamltest_config.system)
     "on a BSD system"
     "not on a BSD system")
 
 let not_bsd = make
   "not-bsd"
-  (Actions_helpers.pass_or_skip (Ocamltest_config.system <> bsd_system)
+  (Actions_helpers.pass_or_skip (not (is_bsd_system Ocamltest_config.system))
     "not on a BSD system"
     "on a BSD system")
+
+let macos_system = "macosx"
+
+let macos = make
+  "macos"
+  (Actions_helpers.pass_or_skip (Ocamltest_config.system = macos_system)
+    "on a MacOS system"
+    "not on a MacOS system")
 
 let arch32 = make
   "arch32"
@@ -162,12 +191,16 @@ let _ =
     fail;
     cd;
     dumpenv;
+    hasunix;
+    hassysthreads;
+    hasstr;
     libunix;
     libwin32unix;
     windows;
     not_windows;
     bsd;
     not_bsd;
+    macos;
     arch32;
     arch64;
     has_symlink;

@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 let dependency (expr:Flambda.t) = Flambda.free_symbols expr
 
@@ -27,7 +28,7 @@ let constant_dependencies (const:Flambda.constant_defining_value) =
   | Allocated_const _ -> Symbol.Set.empty
   | Block (_, fields) ->
     let symbol_fields =
-      Misc.Stdlib.List.filter_map (function
+      List.filter_map (function
           | (Symbol s : Flambda.constant_defining_value_block_field) ->
             Some s
           | Flambda.Const _ -> None)
@@ -69,8 +70,10 @@ let rec loop (program : Flambda.program_body)
     let dep = let_rec_dep defs dep in
     let defs =
       List.filter (fun (sym, _) -> Symbol.Set.mem sym dep) defs
-    in
-    Let_rec_symbol (defs, program), dep
+    in begin match defs with
+      | [] -> program, dep
+      | _ -> Let_rec_symbol (defs, program), dep
+    end
   | Initialize_symbol (sym, tag, fields, program) ->
     let program, dep = loop program in
     if Symbol.Set.mem sym dep then

@@ -13,6 +13,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* An alias for the type of lists. *)
+type 'a t = 'a list = [] | (::) of 'a * 'a list
+
 (* List operations *)
 
 let rec length_aux len = function
@@ -69,7 +72,8 @@ let rec init_aux i n f =
 let rev_init_threshold =
   match Sys.backend_type with
   | Sys.Native | Sys.Bytecode -> 10_000
-  (* We don't known the size of the stack, better be safe and assume it's small. *)
+  (* We don't know the size of the stack, better be safe and assume it's
+     small. *)
   | Sys.Other _ -> 50
 
 let init len f =
@@ -231,6 +235,16 @@ let find_all p =
   find []
 
 let filter = find_all
+
+let filter_map f =
+  let rec aux accu = function
+    | [] -> rev accu
+    | x :: l ->
+        match f x with
+        | None -> aux accu l
+        | Some v -> aux (v :: accu) l
+  in
+  aux []
 
 let partition p l =
   let rec part yes no = function
@@ -490,7 +504,7 @@ let rec compare_length_with l n =
       compare_length_with l (n-1)
 ;;
 
-(** {6 Iterators} *)
+(** {1 Iterators} *)
 
 let to_seq l =
   let rec aux l () = match l with

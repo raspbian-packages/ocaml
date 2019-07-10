@@ -15,9 +15,9 @@ let ret_e1 (type a b) (b : bool) (wit : (a, b) eq) (x : a) (y : b) =
   | _ -> x
 ;;
 [%%expect{|
-Line _, characters 29-30:
-    | Refl -> if b then x else y
-                               ^
+Line 3, characters 29-30:
+3 |   | Refl -> if b then x else y
+                                 ^
 Error: This expression has type b = a but an expression was expected of type
          a
        This instance of a is ambiguous:
@@ -30,9 +30,9 @@ let ret_e2 (type a b) (b : bool) (wit : (a, b) eq) (x : a) (y : b) =
   | _ -> y
 ;;
 [%%expect{|
-Line _, characters 29-30:
-    | Refl -> if b then x else y
-                               ^
+Line 3, characters 29-30:
+3 |   | Refl -> if b then x else y
+                                 ^
 Error: This expression has type b = a but an expression was expected of type
          a
        This instance of a is ambiguous:
@@ -45,9 +45,9 @@ let ret_ei1 (type a) (b : bool) (wit : (a, int) eq) (x : a) =
   | _ -> x
 ;;
 [%%expect{|
-Line _, characters 29-30:
-    | Refl -> if b then x else 0
-                               ^
+Line 3, characters 29-30:
+3 |   | Refl -> if b then x else 0
+                                 ^
 Error: This expression has type int but an expression was expected of type
          a = int
        This instance of int is ambiguous:
@@ -60,9 +60,9 @@ let ret_ei2 (type a) (b : bool) (wit : (a, int) eq) (x : a) =
   | _ -> x
 ;;
 [%%expect{|
-Line _, characters 29-30:
-    | Refl -> if b then x else 0
-                               ^
+Line 3, characters 29-30:
+3 |   | Refl -> if b then x else 0
+                                 ^
 Error: This expression has type int but an expression was expected of type
          a = int
        This instance of int is ambiguous:
@@ -76,9 +76,9 @@ let ret_f (type a b) (wit : (a, b) eq) (x : a) (y : b) =
   | _ -> [x]
 ;;
 [%%expect{|
-Line _, characters 16-17:
-    | Refl -> [x; y]
-                  ^
+Line 3, characters 16-17:
+3 |   | Refl -> [x; y]
+                    ^
 Error: This expression has type b = a but an expression was expected of type
          a
        This instance of a is ambiguous:
@@ -91,9 +91,9 @@ let ret_g1 (type a b) (wit : (a, b) eq) (x : a) (y : b) =
   | _ -> [y]
 ;;
 [%%expect{|
-Line _, characters 16-17:
-    | Refl -> [x; y]
-                  ^
+Line 3, characters 16-17:
+3 |   | Refl -> [x; y]
+                    ^
 Error: This expression has type b = a but an expression was expected of type
          a
        This instance of a is ambiguous:
@@ -113,11 +113,10 @@ let f (type a b) (x : (a, b) eq) =
   | _, [(_ : a)] -> []
 ;;
 [%%expect{|
-Line _, characters 4-29:
-    | Refl, [(_ : a) | (_ : b)] -> []
-      ^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 3, characters 4-29:
+3 |   | Refl, [(_ : a) | (_ : b)] -> []
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This pattern matches values of type (a, b) eq * b list
-       but a pattern was expected which matches values of type 'a
        This instance of b is ambiguous:
        it would escape the scope of its equation
 |}]
@@ -128,11 +127,10 @@ let g1 (type a b) (x : (a, b) eq) =
   | _, [(_ : b)] -> []
 ;;
 [%%expect{|
-Line _, characters 4-29:
-    | Refl, [(_ : a) | (_ : b)] -> []
-      ^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 3, characters 4-29:
+3 |   | Refl, [(_ : a) | (_ : b)] -> []
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This pattern matches values of type (a, b) eq * b list
-       but a pattern was expected which matches values of type 'a
        This instance of b is ambiguous:
        it would escape the scope of its equation
 |}]
@@ -143,11 +141,10 @@ let g2 (type a b) (x : (a, b) eq) =
   | _, [(_ : a)] -> []
 ;;
 [%%expect{|
-Line _, characters 4-29:
-    | Refl, [(_ : b) | (_ : a)] -> []
-      ^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 3, characters 4-29:
+3 |   | Refl, [(_ : b) | (_ : a)] -> []
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This pattern matches values of type (a, b) eq * b list
-       but a pattern was expected which matches values of type 'a
        This instance of b is ambiguous:
        it would escape the scope of its equation
 |}]
@@ -158,11 +155,10 @@ let h1 (type a b) (x : (a, b) eq) =
   | Refl, [(_ : a) | (_ : b)] -> []
 ;;
 [%%expect{|
-Line _, characters 4-29:
-    | Refl, [(_ : a) | (_ : b)] -> []
-      ^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 4, characters 4-29:
+4 |   | Refl, [(_ : a) | (_ : b)] -> []
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This pattern matches values of type (a, b) eq * b list
-       but a pattern was expected which matches values of type 'a
        This instance of b is ambiguous:
        it would escape the scope of its equation
 |}]
@@ -173,11 +169,10 @@ let h2 (type a b) (x : (a, b) eq) =
   | Refl, [(_ : a) | (_ : b)] -> []
 ;;
 [%%expect{|
-Line _, characters 4-29:
-    | Refl, [(_ : a) | (_ : b)] -> []
-      ^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 4, characters 4-29:
+4 |   | Refl, [(_ : a) | (_ : b)] -> []
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This pattern matches values of type (a, b) eq * b list
-       but a pattern was expected which matches values of type 'a
        This instance of b is ambiguous:
        it would escape the scope of its equation
 |}]
@@ -188,11 +183,10 @@ let h3 (type a b) (x : (a, b) eq) =
   | Refl, [(_ : b) | (_ : a)] -> []
 ;;
 [%%expect{|
-Line _, characters 4-29:
-    | Refl, [(_ : b) | (_ : a)] -> []
-      ^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 4, characters 4-29:
+4 |   | Refl, [(_ : b) | (_ : a)] -> []
+        ^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: This pattern matches values of type (a, b) eq * b list
-       but a pattern was expected which matches values of type 'a
        This instance of b is ambiguous:
        it would escape the scope of its equation
 |}]

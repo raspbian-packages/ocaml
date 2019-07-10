@@ -14,10 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
-  (* Variable.rename var *)
-  (*   ~current_compilation_unit:(Compilation_unit.get_current_exn ()) *)
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 let variables_not_used_as_local_reference (tree:Flambda.t) =
   let set = ref Variable.Set.empty in

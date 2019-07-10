@@ -216,10 +216,13 @@ val stats : ('a, 'b) t -> statistics
    buckets by size.
    @since 4.00.0 *)
 
-(** {6 Iterators} *)
+(** {1 Iterators} *)
 
 val to_seq : ('a,'b) t -> ('a * 'b) Seq.t
-(** Iterate on the whole table, in unspecified order.
+(** Iterate on the whole table.  The order in which the bindings
+    appear in the sequence is unspecified. However, if the table contains
+    several bindings for the same key, they appear in reversed order of
+    introduction, that is, the most recent binding appears first.
 
     The behavior is not defined if the hash table is modified
     during the iteration.
@@ -227,11 +230,11 @@ val to_seq : ('a,'b) t -> ('a * 'b) Seq.t
     @since 4.07 *)
 
 val to_seq_keys : ('a,_) t -> 'a Seq.t
-(** Iterate on 'as, in ascending order
+(** Same as [Seq.map fst (to_seq m)]
     @since 4.07 *)
 
 val to_seq_values : (_,'b) t -> 'b Seq.t
-(** Iterate on values, in ascending order of their corresponding 'a
+(** Same as [Seq.map snd (to_seq m)]
     @since 4.07 *)
 
 val add_seq : ('a,'b) t -> ('a * 'b) Seq.t -> unit
@@ -298,7 +301,7 @@ module type HashedType =
               (provided objects do not contain floats)
 -         ([(fun x y -> compare x y = 0)], {!Hashtbl.hash})
               for comparing objects by structure
-              and handling {!Pervasives.nan} correctly
+              and handling {!Stdlib.nan} correctly
 -         ([(==)], {!Hashtbl.hash}) for comparing objects by physical
               equality (e.g. for mutable or cyclic objects). *)
    end
@@ -446,7 +449,7 @@ module MakeSeeded (H : SeededHashedType) : SeededS with type key = H.t
 val hash : 'a -> int
 (** [Hashtbl.hash x] associates a nonnegative integer to any value of
    any type. It is guaranteed that
-   if [x = y] or [Pervasives.compare x y = 0], then [hash x = hash y].
+   if [x = y] or [Stdlib.compare x y = 0], then [hash x = hash y].
    Moreover, [hash] always terminates, even on cyclic structures. *)
 
 val seeded_hash : int -> 'a -> int

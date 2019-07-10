@@ -1,3 +1,4 @@
+channel_of.ml
 cloexec.ml
 dup2.ml
 dup.ml
@@ -7,3 +8,5 @@ rename.ml
 test_unix_cmdline.ml
 utimes.ml
 wait_nohang.ml
+getaddrinfo.ml
+process_pid.ml

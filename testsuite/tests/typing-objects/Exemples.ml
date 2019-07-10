@@ -95,12 +95,12 @@ class ref x_init = object
   method set y = x <- y
 end;;
 [%%expect{|
-Line _, characters 0-95:
-  class ref x_init = object
-    val mutable x = x_init
-    method get = x
-    method set y = x <- y
-  end..
+Line 1, characters 0-95:
+1 | class ref x_init = object
+2 |   val mutable x = x_init
+3 |   method get = x
+4 |   method set y = x <- y
+5 | end..
 Error: Some type variables are unbound in this type:
          class ref :
            'a ->
@@ -204,9 +204,9 @@ class ['a] color_circle :
 
 let c'' = new color_circle p;;
 [%%expect{|
-Line _, characters 27-28:
-  let c'' = new color_circle p;;
-                             ^
+Line 1, characters 27-28:
+1 | let c'' = new color_circle p;;
+                               ^
 Error: This expression has type point but an expression was expected of type
          #color_point
        The first object type has no method color
@@ -222,9 +222,9 @@ val c'' : color_point color_circle = <obj>
 |}];;
 (c'' :> point circle);;
 [%%expect{|
-Line _, characters 0-21:
-  (c'' :> point circle);;
-  ^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 0-21:
+1 | (c'' :> point circle);;
+    ^^^^^^^^^^^^^^^^^^^^^
 Error: Type
          color_point color_circle =
            < center : color_point; color : string; move : int -> unit;
@@ -233,12 +233,13 @@ Error: Type
          point circle =
            < center : point; move : int -> unit; set_center : point -> unit >
        Type point is not a subtype of color_point
+       The first object type has no method color
 |}];;                 (* Fail *)
 fun x -> (x : color_point color_circle :> point circle);;
 [%%expect{|
-Line _, characters 9-55:
-  fun x -> (x : color_point color_circle :> point circle);;
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 9-55:
+1 | fun x -> (x : color_point color_circle :> point circle);;
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: Type
          color_point color_circle =
            < center : color_point; color : string; move : int -> unit;
@@ -247,6 +248,7 @@ Error: Type
          point circle =
            < center : point; move : int -> unit; set_center : point -> unit >
        Type point is not a subtype of color_point
+       The first object type has no method color
 |}];;
 
 class printable_point y = object (s)
@@ -284,9 +286,9 @@ class printable_color_point y c = object (self)
     Format.print_string ")"
 end;;
 [%%expect{|
-Line _, characters 10-27:
-    inherit printable_point y as super
-            ^^^^^^^^^^^^^^^^^
+Line 3, characters 10-27:
+3 |   inherit printable_point y as super
+              ^^^^^^^^^^^^^^^^^
 Warning 13: the following instance variables are overridden by the class printable_point :
   x
 The behaviour changed in ocaml 3.10 (previous behaviour was hiding.)
@@ -532,9 +534,9 @@ val c2 : int_comparable2 = <obj>
 |}];;
 l#add (c2 :> int_comparable);;
 [%%expect{|
-Line _, characters 6-28:
-  l#add (c2 :> int_comparable);;
-        ^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 6-28:
+1 | l#add (c2 :> int_comparable);;
+          ^^^^^^^^^^^^^^^^^^^^^^
 Error: Type
          int_comparable2 =
            < cmp : int_comparable2 -> int; set_x : int -> unit; x : int >
@@ -544,6 +546,7 @@ Error: Type
        is not a subtype of
          int_comparable2 =
            < cmp : int_comparable2 -> int; set_x : int -> unit; x : int >
+       The first object type has no method set_x
 |}];;      (* Fail : 'a comp2 is not a subtype *)
 (new sorted_list ())#add c2;;
 [%%expect{|
@@ -577,9 +580,9 @@ l#add (c3 :> int_comparable);;
 |}];;
 (new sorted_list ())#add c3;;
 [%%expect{|
-Line _, characters 25-27:
-  (new sorted_list ())#add c3;;
-                           ^^
+Line 1, characters 25-27:
+1 | (new sorted_list ())#add c3;;
+                             ^^
 Error: This expression has type
          int_comparable3 =
            < cmp : int_comparable -> int; setx : int -> unit; x : int >
@@ -591,9 +594,9 @@ Error: This expression has type
            < cmp : int_comparable -> int; setx : int -> unit; x : int >
        The first object type has no method setx
 |}, Principal{|
-Line _, characters 25-27:
-  (new sorted_list ())#add c3;;
-                           ^^
+Line 1, characters 25-27:
+1 | (new sorted_list ())#add c3;;
+                             ^^
 Error: This expression has type
          int_comparable3 =
            < cmp : int_comparable -> int; setx : int -> unit; x : int >
@@ -612,9 +615,9 @@ let pr l =
   List.map (fun c -> Format.print_int c#x; Format.print_string " ") l;
   Format.print_newline ();;
 [%%expect{|
-Line _, characters 2-69:
-    List.map (fun c -> Format.print_int c#x; Format.print_string " ") l;
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 2, characters 2-69:
+2 |   List.map (fun c -> Format.print_int c#x; Format.print_string " ") l;
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 10: this expression should have type unit.
 val pr : < x : int; .. > list -> unit = <fun>
 |}];;

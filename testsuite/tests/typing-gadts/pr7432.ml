@@ -21,9 +21,9 @@ let f : [`L of (s, t) eql | `R of silly] -> 'a =
   function `R {silly} -> silly
 ;;
 [%%expect{|
-Line _, characters 2-30:
-    function `R {silly} -> silly
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 2, characters 2-30:
+2 |   function `R {silly} -> silly
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 `L Refl

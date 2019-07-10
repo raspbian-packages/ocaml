@@ -18,9 +18,9 @@ let magic : 'a 'b. 'a -> 'b =
 ;;
 [%%expect{|
 type (_, _) eq = Refl : ('a, 'a) eq
-Line _, characters 44-52:
-           let f (Refl : (a T.t, b T.t) eq) = (x :> b)
-                                              ^^^^^^^^
+Line 8, characters 44-52:
+8 |          let f (Refl : (a T.t, b T.t) eq) = (x :> b)
+                                                ^^^^^^^^
 Error: Type a is not a subtype of b
 |}];;
 
@@ -37,9 +37,9 @@ let magic : 'a 'b. 'a -> 'b =
     (downcast bad_proof ((object method m = x end) :> < >)) # m
 ;;
 [%%expect{|
-Line _, characters 0-36:
-  type (_, +_) eq = Refl : ('a, 'a) eq
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 1, characters 0-36:
+1 | type (_, +_) eq = Refl : ('a, 'a) eq
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In this GADT definition, the variance of some parameter
        cannot be checked
 |}];;
@@ -56,10 +56,10 @@ let check : type s . s t * s -> bool = function
 ;;
 [%%expect{|
 type _ t = IntLit : int t | BoolLit : bool t
-Line _, characters 39-99:
-  .......................................function
-    | BoolLit, false -> false
-    | IntLit , 6 -> false
+Line 5, characters 39-99:
+5 | .......................................function
+6 |   | BoolLit, false -> false
+7 |   | IntLit , 6 -> false
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 (IntLit, 0)
@@ -74,10 +74,10 @@ let check : type s . (s t, s) pair -> bool = function
 ;;
 [%%expect{|
 type ('a, 'b) pair = { fst : 'a; snd : 'b; }
-Line _, characters 45-134:
-  .............................................function
-    | {fst = BoolLit; snd = false} -> false
-    | {fst = IntLit ; snd =  6} -> false
+Line 3, characters 45-134:
+3 | .............................................function
+4 |   | {fst = BoolLit; snd = false} -> false
+5 |   | {fst = IntLit ; snd =  6} -> false
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 {fst=IntLit; snd=0}

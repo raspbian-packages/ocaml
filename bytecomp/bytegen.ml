@@ -154,7 +154,7 @@ let rec size_of_lambda env = function
       | Record_regular | Record_inlined _ -> RHS_block size
       | Record_unboxed _ -> assert false
       | Record_float -> RHS_floatblock size
-      | Record_extension -> RHS_block (size + 1)
+      | Record_extension _ -> RHS_block (size + 1)
       end
   | Llet(_str, _k, id, arg, body) ->
       size_of_lambda (Ident.add id (size_of_lambda env arg) env) body
@@ -177,7 +177,7 @@ let rec size_of_lambda env = function
       RHS_block size
   | Lprim (Pduprecord (Record_unboxed _, _), _, _) ->
       assert false
-  | Lprim (Pduprecord (Record_extension, size), _, _) ->
+  | Lprim (Pduprecord (Record_extension _, size), _, _) ->
       RHS_block (size + 1)
   | Lprim (Pduprecord (Record_float, size), _, _) -> RHS_floatblock size
   | Levent (lam, _) -> size_of_lambda env lam
@@ -272,7 +272,7 @@ let find_raise_label i =
   with
   | Not_found ->
       Misc.fatal_error
-        ("exit("^string_of_int i^") outside appropriated catch")
+        ("exit("^Int.to_string i^") outside appropriated catch")
 
 (* Will the translation of l lead to a jump to label ? *)
 let code_as_jump l sz = match l with
@@ -424,9 +424,9 @@ let comp_primitive p args =
   | Pbintcomp(_, Cgt) -> Kccall("caml_greaterthan", 2)
   | Pbintcomp(_, Cle) -> Kccall("caml_lessequal", 2)
   | Pbintcomp(_, Cge) -> Kccall("caml_greaterequal", 2)
-  | Pbigarrayref(_, n, _, _) -> Kccall("caml_ba_get_" ^ string_of_int n, n + 1)
-  | Pbigarrayset(_, n, _, _) -> Kccall("caml_ba_set_" ^ string_of_int n, n + 2)
-  | Pbigarraydim(n) -> Kccall("caml_ba_dim_" ^ string_of_int n, 1)
+  | Pbigarrayref(_, n, _, _) -> Kccall("caml_ba_get_" ^ Int.to_string n, n + 1)
+  | Pbigarrayset(_, n, _, _) -> Kccall("caml_ba_set_" ^ Int.to_string n, n + 2)
+  | Pbigarraydim(n) -> Kccall("caml_ba_dim_" ^ Int.to_string n, 1)
   | Pbigstring_load_16(_) -> Kccall("caml_ba_uint8_get16", 2)
   | Pbigstring_load_32(_) -> Kccall("caml_ba_uint8_get32", 2)
   | Pbigstring_load_64(_) -> Kccall("caml_ba_uint8_get64", 2)
@@ -445,7 +445,7 @@ let is_immed n = immed_min <= n && n <= immed_max
 module Storer =
   Switch.Store
     (struct type t = lambda type key = lambda
-      let compare_key = Pervasives.compare
+      let compare_key = Stdlib.compare
       let make_key = Lambda.make_key end)
 
 (* Compile an expression.
@@ -520,7 +520,7 @@ let rec comp_expr env exp sz cont =
       let lbl = new_label() in
       let fv = Ident.Set.elements(free_variables exp) in
       let to_compile =
-        { params = params; body = body; label = lbl;
+        { params = List.map fst params; body = body; label = lbl;
           free_vars = fv; num_defs = 1; rec_vars = []; rec_pos = 0 } in
       Stack.push to_compile functions_to_compile;
       comp_args env (List.map (fun n -> Lvar n) fv) sz
@@ -542,8 +542,9 @@ let rec comp_expr env exp sz cont =
           | (_id, Lfunction{params; body}) :: rem ->
               let lbl = new_label() in
               let to_compile =
-                { params = params; body = body; label = lbl; free_vars = fv;
-                  num_defs = ndecl; rec_vars = rec_idents; rec_pos = pos} in
+                { params = List.map fst params; body = body; label = lbl;
+                  free_vars = fv; num_defs = ndecl; rec_vars = rec_idents;
+                  rec_pos = pos} in
               Stack.push to_compile functions_to_compile;
               lbl :: comp_fun (pos + 1) rem
           | _ -> assert false in
@@ -554,7 +555,8 @@ let rec comp_expr env exp sz cont =
                        (add_pop ndecl cont)))
       end else begin
         let decl_size =
-          List.map (fun (id, exp) -> (id, exp, size_of_lambda Ident.empty exp)) decl in
+          List.map (fun (id, exp) -> (id, exp, size_of_lambda Ident.empty exp))
+            decl in
         let rec comp_init new_env sz = function
           | [] -> comp_nonrec new_env sz ndecl decl_size
           | (id, _exp, RHS_floatblock blocksize) :: rem ->
@@ -703,6 +705,7 @@ let rec comp_expr env exp sz cont =
   | Lprim(p, args, _) ->
       comp_args env args sz (comp_primitive p args :: cont)
   | Lstaticcatch (body, (i, vars) , handler) ->
+      let vars = List.map fst vars in
       let nvars = List.length vars in
       let branch1, cont1 = make_branch cont in
       let r =
@@ -842,7 +845,7 @@ let rec comp_expr env exp sz cont =
           ev_loc = lev.lev_loc;
           ev_kind = kind;
           ev_info = info;
-          ev_typenv = lev.lev_env;
+          ev_typenv = Env.summary lev.lev_env;
           ev_typsubst = Subst.identity;
           ev_compenv = env;
           ev_stacksize = sz;

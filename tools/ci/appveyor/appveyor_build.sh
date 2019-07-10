@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #**************************************************************************
 #*                                                                        *
 #*                                 OCaml                                  *
@@ -33,16 +33,33 @@ function run {
     fi
 }
 
+# Function: set_configuration
+# Takes 3 arguments
+# $1:the Windows port. Recognized values: mingw, msvc and msvc64
+# $2: the prefix to use to install
+# $3: C compiler flags to use to turn warnings into errors
 function set_configuration {
-    cp config/m-nt.h byterun/caml/m.h
-    cp config/s-nt.h byterun/caml/s.h
+    case "$1" in
+        mingw)
+            build='--build=i686-pc-cygwin'
+            host='--host=i686-w64-mingw32'
+        ;;
+        msvc)
+            build='--build=i686-pc-cygwin'
+            host='--host=i686-pc-windows'
+        ;;
+        msvc64)
+            build='--build=x86_64-unknown-cygwin'
+            host='--host=x86_64-pc-windows'
+        ;;
+    esac
 
-    FILE=$(pwd | cygpath -f - -m)/config/Makefile
-    echo "Edit $FILE to set PREFIX=$2"
-    sed -e "/PREFIX=/s|=.*|=$2|" \
-        -e "/^ *CFLAGS *=/s/\r\?$/ $3\0/" \
-         config/Makefile.$1 > config/Makefile
-#    run "Content of $FILE" cat config/Makefile
+    ./configure $build $host --prefix="$2"
+
+    FILE=$(pwd | cygpath -f - -m)/Makefile.config
+    echo "Edit $FILE to turn C compiler warnings into errors"
+    sed -i -e "/^ *OC_CFLAGS *=/s/\r\?$/ $3\0/" $FILE
+#    run "Content of $FILE" cat Makefile.config
 }
 
 APPVEYOR_BUILD_FOLDER=$(echo $APPVEYOR_BUILD_FOLDER| cygpath -f -)
@@ -64,7 +81,10 @@ case "$1" in
     for f in flexdll.h flexlink.exe flexdll*_msvc.obj default*.manifest ; do
       cp $f "$OCAMLROOT/bin/flexdll/"
     done
-    echo 'eval $($APPVEYOR_BUILD_FOLDER/tools/msvs-promote-path)' >> ~/.bash_profile
+    if [ "$PORT" = "msvc64" ] ; then
+      echo 'eval $($APPVEYOR_BUILD_FOLDER/tools/msvs-promote-path)' \
+        >> ~/.bash_profile
+    fi
     ;;
   msvc32-only)
     cd $APPVEYOR_BUILD_FOLDER/../$BUILD_PREFIX-msvc32
@@ -80,46 +100,50 @@ case "$1" in
     ;;
   test)
     FULL_BUILD_PREFIX=$APPVEYOR_BUILD_FOLDER/../$BUILD_PREFIX
-    run "ocamlc.opt -version" $FULL_BUILD_PREFIX-msvc64/ocamlc.opt -version
-    run "test msvc64" make -C $FULL_BUILD_PREFIX-msvc64 tests
-    run "test mingw32" make -C $FULL_BUILD_PREFIX-mingw32 tests
-    run "install msvc64" make -C $FULL_BUILD_PREFIX-msvc64 install
-    run "install mingw32" make -C $FULL_BUILD_PREFIX-mingw32 install
+    run "ocamlc.opt -version" $FULL_BUILD_PREFIX-$PORT/ocamlc.opt -version
+    run "test $PORT" make -C $FULL_BUILD_PREFIX-$PORT tests
+    run "install $PORT" make -C $FULL_BUILD_PREFIX-$PORT install
+    if [ "$PORT" = "msvc64" ] ; then
+      run "check_all_arches" make -C $FULL_BUILD_PREFIX-$PORT check_all_arches
+    fi
     ;;
   *)
-    cd $APPVEYOR_BUILD_FOLDER/../$BUILD_PREFIX-msvc64
+    cd $APPVEYOR_BUILD_FOLDER/../$BUILD_PREFIX-$PORT
 
-    tar -xzf $APPVEYOR_BUILD_FOLDER/flexdll.tar.gz
-    cd flexdll-$FLEXDLL_VERSION
-    make MSVC_DETECT=0 CHAINS=msvc64 support
-    cp flexdll*_msvc64.obj "$OCAMLROOT/bin/flexdll/"
-    cd ..
+    if [ "$PORT" = "msvc64" ] ; then
+      tar -xzf $APPVEYOR_BUILD_FOLDER/flexdll.tar.gz
+      cd flexdll-$FLEXDLL_VERSION
+      make MSVC_DETECT=0 CHAINS=msvc64 support
+      cp flexdll*_msvc64.obj "$OCAMLROOT/bin/flexdll/"
+      cd ..
+    fi
 
-    set_configuration msvc64 "$OCAMLROOT" -WX
+    if [ "$PORT" = "msvc64" ] ; then
+      set_configuration msvc64 "$OCAMLROOT" -WX
+    else
+      set_configuration mingw "$OCAMLROOT-mingw32" -Werror
+    fi
 
-    cd ../$BUILD_PREFIX-mingw32
-
-    set_configuration mingw "$OCAMLROOT-mingw32" -Werror
-
-    cd $APPVEYOR_BUILD_FOLDER/../$BUILD_PREFIX-msvc64
+    cd $APPVEYOR_BUILD_FOLDER/../$BUILD_PREFIX-$PORT
 
     export TERM=ansi
-    script --quiet --return --command "make -C ../$BUILD_PREFIX-mingw32 flexdll world.opt" ../$BUILD_PREFIX-mingw32/build.log >/dev/null 2>/dev/null &
-    BUILD_PID=$!
 
-    run "make world" make world
-    run "make bootstrap" make bootstrap
-    run "make opt" make opt
-    run "make opt.opt" make opt.opt
+    if [ "$PORT" = "mingw32" ] ; then
+      set -o pipefail
+      # For an explanation of the sed command, see
+      # https://github.com/appveyor/ci/issues/1824
+      script --quiet --return --command \
+        "make -C ../$BUILD_PREFIX-mingw32 flexdll world.opt" \
+        ../$BUILD_PREFIX-mingw32/build.log |
+          sed -e 's/\d027\[K//g' \
+              -e 's/\d027\[m/\d027[0m/g' \
+              -e 's/\d027\[01\([m;]\)/\d027[1\1/g'
+    else
+      run "make world" make world
+      run "make bootstrap" make bootstrap
+      run "make opt" make opt
+      run "make opt.opt" make opt.opt
+    fi
 
-    set +e
-
-    # For an explanation of the sed command, see https://github.com/appveyor/ci/issues/1824
-    tail --pid=$BUILD_PID -n +1 -f ../$BUILD_PREFIX-mingw32/build.log | sed -e 's/\d027\[K//g' -e 's/\d027\[m/\d027[0m/g' -e 's/\d027\[01\([m;]\)/\d027[1\1/g' &
-    TAIL_PID=$!
-    wait $BUILD_PID
-    STATUS=$?
-    wait $TAIL_PID
-    exit $STATUS
     ;;
 esac

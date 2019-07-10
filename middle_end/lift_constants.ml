@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 (* CR-someday mshinwell: move to Flambda_utils *)
 let rec tail_variable : Flambda.t -> Variable.t option = function
@@ -526,7 +527,7 @@ let constant_dependencies ~backend:_
   | Allocated_const _ -> Symbol.Set.empty
   | Block (_, fields) ->
     let symbol_fields =
-      Misc.Stdlib.List.filter_map
+      List.filter_map
         (function
           | (Symbol s : Flambda.constant_defining_value_block_field) -> Some s
           | Flambda.Const _ -> None)

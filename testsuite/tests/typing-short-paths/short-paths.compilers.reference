@@ -61,9 +61,9 @@ module Core :
     module Std : sig module Int = Int end
   end
 val x : 'a Int.Map.t = <abstr>
-Characters 8-9:
-  let y = x + x ;;
-          ^
+Line 1, characters 8-9:
+1 | let y = x + x ;;
+            ^
 Error: This expression has type 'a Int.Map.t
        but an expression was expected of type int
 module M : sig type t = A type u = C end
@@ -85,9 +85,9 @@ type t1 = B
 module N2 : sig type u = v and v = N1.v end
 module type PR6566 = sig type t = string end
 module PR6566 : sig type t = int end
-Characters 26-32:
-  module PR6566' : PR6566 = PR6566;;
-                            ^^^^^^
+Line 1, characters 26-32:
+1 | module PR6566' : PR6566 = PR6566;;
+                              ^^^^^^
 Error: Signature mismatch:
        Modules do not match: sig type t = int end is not included in PR6566
        Type declarations do not match:

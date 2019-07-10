@@ -1,7 +1,7 @@
 (* TEST
 include config
 include testing
-binary_modules = "misc identifiable numbers"
+binary_modules = "config build_path_prefix_map misc identifiable numbers"
 * bytecode
 *)
 
@@ -16,7 +16,7 @@ let test =
   fun a b cutoff expected ->
     let show_result = function
       | None -> "None"
-      | Some d -> "Some " ^ string_of_int d in
+      | Some d -> "Some " ^ Int.to_string d in
     incr counter;
     Printf.printf "[%02d] (edit_distance %S %S %s), expected %s\n"
       !counter a b (show_cutoff cutoff) (show_result expected);

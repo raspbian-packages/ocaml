@@ -26,6 +26,7 @@ STDLIB_MODULES=\
   $(P)array \
   $(P)arrayLabels \
   $(P)bigarray \
+  $(P)bool \
   $(P)buffer \
   $(P)bytes \
   $(P)bytesLabels \
@@ -42,9 +43,11 @@ STDLIB_MODULES=\
   $(P)filename \
   $(P)float \
   $(P)format \
+  $(P)fun \
   $(P)gc \
   $(P)genlex \
   $(P)hashtbl \
+  $(P)int \
   $(P)int32 \
   $(P)int64 \
   $(P)lazy \
@@ -57,15 +60,17 @@ STDLIB_MODULES=\
   $(P)nativeint \
   $(P)obj \
   $(P)oo \
+  $(P)option \
   $(P)parsing \
+  $(P)pervasives \
   $(P)printexc \
   $(P)printf \
   $(P)queue \
   $(P)random \
+  $(P)result \
   $(P)scanf \
   $(P)seq \
   $(P)set \
-  $(P)sort \
   $(P)stack \
   $(P)stdLabels \
   stdlib \
@@ -74,4 +79,5 @@ STDLIB_MODULES=\
   $(P)stringLabels \
   $(P)sys \
   $(P)uchar \
+  $(P)unit \
   $(P)weak

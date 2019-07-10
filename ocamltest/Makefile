@@ -15,25 +15,54 @@
 
 # The Makefile for ocamltest
 
-include ../config/Makefile
+ROOTDIR = ..
+
+include $(ROOTDIR)/Makefile.config
+include $(ROOTDIR)/Makefile.common
+
+ifeq "$(filter str,$(OTHERLIBRARIES))" ""
+  str := false
+else
+  str := true
+endif
+
+ifeq "$(filter systhreads,$(OTHERLIBRARIES))" ""
+  systhreads := false
+else
+  systhreads := true
+endif
+
+ifeq "$(filter $(UNIXLIB),$(OTHERLIBRARIES))" ""
+  unix := None
+else
+  ifeq "$(UNIX_OR_WIN32)" "win32"
+    unix := Some false
+  else
+    unix := Some true
+  endif
+endif
 
 ifeq "$(UNIX_OR_WIN32)" "win32"
-  unix := false
   ocamlsrcdir := $(shell echo "$(abspath $(shell pwd)/..)"|cygpath -w -f - \
     | sed 's/\\/\\\\\\\\/g')
-  ifeq "$(wildcard ../flexdll/Makefile)" ""
-    FLEXLINK_ENV=
-  else
-    FLEXLINK_ENV=OCAML_FLEXLINK="../boot/ocamlrun ../flexdll/flexlink.exe"
-  endif
+  mkexe := $(MKEXE_ANSI) -link $(OC_LDFLAGS)
 else
-  unix := true
   ocamlsrcdir := $(abspath $(shell pwd)/..)
-  FLEXLINK_ENV=
+  mkexe := $(MKEXE)
 endif
 
 ifeq "$(TOOLCHAIN)" "msvc"
 CPP := $(CPP) 2> nul
+CSC := csc
+ifeq "$(HOST)" "i686-pc-windows"
+CSCFLAGS := /platform:x86
+else
+CSCFLAGS :=
+endif
+CSCFLAGS += /nologo /nowarn:1668
+else
+CSC :=
+CSCFLAGS :=
 endif
 
 ifeq "$(WITH_OCAMLDOC)" "ocamldoc"
@@ -48,7 +77,7 @@ else
 WITH_OCAMLDEBUG := false
 endif
 
-CPPFLAGS += -I../byterun -DCAML_INTERNALS
+OC_CPPFLAGS += -I$(ROOTDIR)/runtime -DCAML_INTERNALS
 
 run := run_$(UNIX_OR_WIN32)
 
@@ -67,13 +96,13 @@ core := \
   run_command.mli run_command.ml \
   filecompare.mli filecompare.ml \
   variables.mli variables.ml \
-  environments.mli environments.ml \
   result.mli result.ml \
   actions.mli actions.ml \
   tests.mli tests.ml \
   tsl_ast.mli tsl_ast.ml \
   tsl_parser.mly \
   tsl_lexer.mli tsl_lexer.mll \
+  environments.mli environments.ml \
   tsl_semantics.mli tsl_semantics.ml \
   builtin_variables.mli builtin_variables.ml \
   actions_helpers.mli actions_helpers.ml \
@@ -138,7 +167,8 @@ bytecode_modules := $(o_files) $(cmo_files)
 
 native_modules := $(o_files) $(cmx_files)
 
-directories := ../utils ../parsing ../stdlib ../compilerlibs
+directories := $(addprefix $(ROOTDIR)/,utils bytecomp parsing stdlib \
+                                       compilerlibs)
 
 include_directories := $(addprefix -I , $(directories))
 
@@ -146,28 +176,35 @@ flags := -g -nostdlib $(include_directories) \
   -strict-sequence -safe-string -strict-formats \
   -w +a-4-9-41-42-44-45-48 -warn-error A
 
-ocamlc := $(FLEXLINK_ENV) ../byterun/ocamlrun ../ocamlc $(flags)
+ocamlc := $(ROOTDIR)/runtime/ocamlrun $(ROOTDIR)/ocamlc $(flags)
 
-ocamlopt := $(FLEXLINK_ENV) ../byterun/ocamlrun ../ocamlopt $(flags)
+ocamlopt := $(ROOTDIR)/runtime/ocamlrun $(ROOTDIR)/ocamlopt $(flags)
 
-ocamldep := ../byterun/ocamlrun ../tools/ocamldep -slash
+ocamldep := $(ROOTDIR)/runtime/ocamlrun $(ROOTDIR)/boot/ocamlc -depend
+depflags := -slash
+depincludes :=
 
-ocamllex := ../byterun/ocamlrun ../lex/ocamllex
+ocamllex := $(ROOTDIR)/runtime/ocamlrun $(ROOTDIR)/lex/ocamllex
 
-ocamlyacc := ../yacc/ocamlyacc
+ocamlyacc := $(ROOTDIR)/yacc/ocamlyacc
 
 ocamlcdefaultflags :=
 
 ocamloptdefaultflags := $(shell ./getocamloptdefaultflags $(TARGET))
 
+.PHONY: all allopt opt.opt # allopt and opt.opt are synonyms
+all: ocamltest$(EXE)
+allopt: ocamltest.opt$(EXE)
+opt.opt: allopt
+
 ocamltest$(EXE): $(bytecode_modules)
-	$(ocamlc) -custom ocamlcommon.cma -o $@ $^
+	$(ocamlc_cmd) -custom ocamlcommon.cma ocamlbytecomp.cma -o $@ $^
 
 %.cmo: %.ml
 	$(ocamlc) -c $<
 
 ocamltest.opt$(EXE): $(native_modules)
-	$(ocamlopt) ocamlcommon.cmxa -o $@ $^
+	$(ocamlopt_cmd) ocamlcommon.cmxa ocamlbytecomp.cmxa -o $@ $^
 
 %.cmx: %.ml
 	$(ocamlopt) -c $<
@@ -182,14 +219,16 @@ ocamltest.opt$(EXE): $(native_modules)
 	$(ocamllex) -q $<
 
 %.$(O): %.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(BYTECCCOMPOPTS) -c $<
+	$(CC) $(OC_CFLAGS) $(OC_CPPFLAGS) -c $<
 
-ocamltest_config.ml: ocamltest_config.ml.in
+ocamltest_config.ml: ocamltest_config.ml.in Makefile ../Makefile.config
 	sed \
 	  -e 's|@@AFL_INSTRUMENT@@|$(AFL_INSTRUMENT)|' \
 	  -e 's|@@ARCH@@|$(ARCH)|' \
 	  -e 's|@@SHARED_LIBRARIES@@|$(SUPPORTS_SHARED_LIBRARIES)|' \
 	  -e 's|@@UNIX@@|$(unix)|' \
+	  -e 's|@@SYSTHREADS@@|$(systhreads)|' \
+	  -e 's|@@STR@@|$(str)|' \
 	  -e 's|@@SYSTEM@@|$(SYSTEM)|' \
 	  -e 's|@@CPP@@|$(CPP)|' \
 	  -e 's|@@OCAMLCDEFAULTFLAGS@@|$(ocamlcdefaultflags)|' \
@@ -201,6 +240,21 @@ ocamltest_config.ml: ocamltest_config.ml.in
 	  -e 's|@@FLAT_FLOAT_ARRAY@@|$(FLAT_FLOAT_ARRAY)|' \
 	  -e 's|@@OCAMLDOC@@|$(WITH_OCAMLDOC)|' \
 	  -e 's|@@OCAMLDEBUG@@|$(WITH_OCAMLDEBUG)|' \
+	  -e 's|@@OBJEXT@@|$(O)|' \
+	  -e 's|@@NATIVE_DYNLINK@@|$(NATDYNLINK)|' \
+	  -e 's|@@SHARED_LIBRARY_CFLAGS@@|$(SHAREDLIB_CFLAGS)|' \
+	  -e 's|@@SHAREDOBJEXT@@|$(SO)|' \
+	  -e 's|@@CSC@@|$(CSC)|' \
+	  -e 's|@@CSCFLAGS@@|$(CSCFLAGS)|' \
+	  -e 's|@@MKDLL@@|$(MKDLL)|' \
+	  -e 's|@@MKEXE@@|$(mkexe)|' \
+	  -e 's|@@BYTECCLIBS@@|$(BYTECCLIBS)|' \
+	  -e 's|@@NATIVECCLIBS@@|$(NATIVECCLIBS)|' \
+	  -e 's|@@ASM@@|$(ASM)|' \
+	  -e 's|@@CC@@|$(CC)|' \
+	  -e 's|@@CFLAGS@@|$(OC_CFLAGS)|' \
+	  -e 's|@@CCOMPTYPE@@|$(CCOMPTYPE)|' \
+	  -e 's|@@WINDOWS_UNICODE@@|$(WINDOWS_UNICODE)|' \
 	  $< > $@
 
 .PHONY: clean
@@ -215,9 +269,10 @@ clean:
 ifneq "$(TOOLCHAIN)" "msvc"
 .PHONY: depend
 depend: $(dependencies_generated_prereqs)
-	$(CC) -MM $(CPPFLAGS) $(c_files) \
+	$(CC) -MM $(OC_CPPFLAGS) $(c_files) \
 	  | sed -e 's/\.o/.$$(O)/' > .depend
-	$(ocamldep) $(mli_files) $(ml_files) >> .depend
+	$(ocamldep) $(depflags) $(depincludes) $(mli_files) $(ml_files) \
+	  >> .depend
 endif
 
 -include .depend

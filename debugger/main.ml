@@ -207,9 +207,9 @@ let main () =
         "Win32" ->
           (Unix.string_of_inet_addr Unix.inet_addr_loopback)^
           ":"^
-          (string_of_int (10000 + ((Unix.getpid ()) mod 10000)))
+          (Int.to_string (10000 + ((Unix.getpid ()) mod 10000)))
       | _ -> Filename.concat (Filename.get_temp_dir_name ())
-                                ("camldebug" ^ (string_of_int (Unix.getpid ())))
+                                ("camldebug" ^ (Int.to_string (Unix.getpid ())))
       );
     begin try
       Arg.parse speclist anonymous "";
@@ -226,7 +226,7 @@ let main () =
     if !Parameters.version
     then printf "\tOCaml Debugger version %s@.@." Config.version;
     Loadprinter.init();
-    Config.load_path := !default_load_path;
+    Load_path.init !default_load_path;
     Clflags.recursive_types := true;    (* Allow recursive types. *)
     toplevel_loop ();                   (* Toplevel. *)
     kill_program ();

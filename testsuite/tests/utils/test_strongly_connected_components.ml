@@ -1,7 +1,9 @@
 (* TEST
 include config
 include testing
-binary_modules = "misc identifiable numbers strongly_connected_components"
+binary_modules =
+  "config build_path_prefix_map misc identifiable numbers \
+   strongly_connected_components"
 * bytecode
 *)
 
@@ -23,7 +25,7 @@ let print_scc scc =
       | SCC.No_loop e -> Printf.printf "%i\n" e
       | SCC.Has_loop l ->
           Printf.printf "[%s]\n"
-            (String.concat "; " (List.map string_of_int l))) scc;
+            (String.concat "; " (List.map Stdlib.Int.to_string l))) scc;
   Printf.printf "end\n"
 
 let scc graph =

@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 module A = Simple_value_approx
 module B = Inlining_cost.Benefit
@@ -524,7 +525,7 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
 
    The rewriting occurs in an environment filled with:
    * The approximation of the free variables
-   * An explicitely unknown approximation for function parameters,
+   * An explicitly unknown approximation for function parameters,
      except for those where it is known to be safe: those present in the
      [specialised_args] set.
    * An approximation for the closures in the set. It contains the code of
@@ -936,7 +937,8 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
        the [Unbox_closures] output, this also prevents applying
        [Unbox_closures] over and over.) *)
     let set_of_closures =
-      match Remove_free_vars_equal_to_args.run set_of_closures with
+      let ppf_dump = Inline_and_simplify_aux.Env.ppf_dump env in
+      match Remove_free_vars_equal_to_args.run ~ppf_dump set_of_closures with
       | None -> set_of_closures
       | Some set_of_closures -> set_of_closures
     in
@@ -1361,7 +1363,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
         String_switch (arg, sw, def), ret r (A.value_unknown Other)
       | Some arg_string ->
         let branch =
-          match List.find (fun (str, _) -> str = arg_string) sw with
+          match List.find (fun (str, _) -> String.equal str arg_string) sw with
           | (_, branch) -> branch
           | exception Not_found ->
             match def with
@@ -1455,7 +1457,7 @@ let constant_defining_value_approx
     (* At toplevel, there is no freshening currently happening (this
        cannot be the body of a currently inlined function), so we can
        keep the original set_of_closures in the approximation. *)
-    assert(E.freshening env = Freshening.empty);
+    assert(Freshening.is_empty (E.freshening env));
     assert(Variable.Map.is_empty free_vars);
     assert(Variable.Map.is_empty specialised_args);
     let invariant_params =
@@ -1664,7 +1666,7 @@ let simplify_program env r (program : Flambda.program) =
 let add_predef_exns_to_environment ~env ~backend =
   let module Backend = (val backend : Backend_intf.S) in
   List.fold_left (fun env predef_exn ->
-      assert (Ident.is_predef_exn predef_exn);
+      assert (Ident.is_predef predef_exn);
       let symbol = Backend.symbol_for_global' predef_exn in
       let name = Ident.name predef_exn in
       let approx =
@@ -1677,13 +1679,13 @@ let add_predef_exns_to_environment ~env ~backend =
     env
     Predef.all_predef_exns
 
-let run ~never_inline ~backend ~prefixname ~round program =
+let run ~never_inline ~backend ~prefixname ~round ~ppf_dump program =
   let r = R.create () in
   let report = !Clflags.inlining_report in
   if never_inline then Clflags.inlining_report := false;
   let initial_env =
     add_predef_exns_to_environment
-      ~env:(E.create ~never_inline ~backend ~round)
+      ~env:(E.create ~never_inline ~backend ~round ~ppf_dump)
       ~backend
   in
   let result, r = simplify_program initial_env r program in

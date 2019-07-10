@@ -98,8 +98,6 @@ val name_expr_from_var
    -> Flambda.named
    -> Flambda.t
 
-val compare_const : Flambda.const -> Flambda.const -> int
-
 val initialize_symbols
    : Flambda.program
   -> (Symbol.t * Tag.t * Flambda.t list) list
@@ -180,14 +178,14 @@ end
 *)
 val fun_vars_referenced_in_decls
    : Flambda.function_declarations
-  -> backend:(module Backend_intf.S)
+  -> closure_symbol:(Closure_id.t -> Symbol.t)
   -> Variable.Set.t Variable.Map.t
 
 (** Computes the set of closure_id in the set of closures that are
     required used (transitively) the entry_point *)
 val closures_required_by_entry_point
    : entry_point:Closure_id.t
-  -> backend:(module Backend_intf.S)
+  -> closure_symbol:(Closure_id.t -> Symbol.t)
   -> Flambda.function_declarations
   -> Variable.Set.t
 

@@ -118,10 +118,10 @@ type primitive =
   | Plsrbint of boxed_integer
   | Pasrbint of boxed_integer
   | Pbintcomp of boxed_integer * integer_comparison
-  (* Operations on big arrays: (unsafe, #dimensions, kind, layout) *)
+  (* Operations on Bigarrays: (unsafe, #dimensions, kind, layout) *)
   | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout
   | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout
-  (* size of the nth dimension of a big array *)
+  (* size of the nth dimension of a Bigarray *)
   | Pbigarraydim of int
   (* load/set 16,32,64 bits from a string: (unsafe)*)
   | Pstring_load_16 of bool
@@ -188,6 +188,12 @@ and raise_kind =
   | Raise_reraise
   | Raise_notrace
 
+val equal_primitive : primitive -> primitive -> bool
+
+val equal_value_kind : value_kind -> value_kind -> bool
+
+val equal_boxed_integer : boxed_integer -> boxed_integer -> bool
+
 type structured_constant =
     Const_base of constant
   | Const_pointer of int
@@ -201,10 +207,22 @@ type inline_attribute =
   | Unroll of int (* [@unroll x] *)
   | Default_inline (* no [@inline] attribute *)
 
+val equal_inline_attribute : inline_attribute -> inline_attribute -> bool
+
 type specialise_attribute =
   | Always_specialise (* [@specialise] or [@specialise always] *)
   | Never_specialise (* [@specialise never] *)
   | Default_specialise (* no [@specialise] attribute *)
+
+val equal_specialise_attribute
+   : specialise_attribute
+  -> specialise_attribute
+  -> bool
+
+type local_attribute =
+  | Always_local (* [@local] or [@local always] *)
+  | Never_local (* [@local never] *)
+  | Default_local (* [@local maybe] or no [@local] attribute *)
 
 type function_kind = Curried | Tupled
 
@@ -222,11 +240,14 @@ type let_kind = Strict | Alias | StrictOpt | Variable
 
 type meth_kind = Self | Public | Cached
 
+val equal_meth_kind : meth_kind -> meth_kind -> bool
+
 type shared_code = (int * int) list     (* stack size -> code label *)
 
 type function_attribute = {
   inline : inline_attribute;
   specialise : specialise_attribute;
+  local: local_attribute;
   is_a_functor: bool;
   stub: bool;
 }
@@ -245,7 +266,7 @@ type lambda =
   | Lstringswitch of
       lambda * (string * lambda) list * lambda option * Location.t
   | Lstaticraise of int * lambda list
-  | Lstaticcatch of lambda * (int * Ident.t list) * lambda
+  | Lstaticcatch of lambda * (int * (Ident.t * value_kind) list) * lambda
   | Ltrywith of lambda * Ident.t * lambda
   | Lifthenelse of lambda * lambda * lambda
   | Lsequence of lambda * lambda
@@ -258,7 +279,8 @@ type lambda =
 
 and lfunction =
   { kind: function_kind;
-    params: Ident.t list;
+    params: (Ident.t * value_kind) list;
+    return: value_kind;
     body: lambda;
     attr: function_attribute; (* specified with [@inline] attribute *)
     loc : Location.t; }
@@ -281,7 +303,7 @@ and lambda_event =
   { lev_loc: Location.t;
     lev_kind: lambda_event_kind;
     lev_repr: int ref option;
-    lev_env: Env.summary }
+    lev_env: Env.t }
 
 and lambda_event_kind =
     Lev_before
@@ -319,28 +341,58 @@ val name_lambda_list: lambda list -> (lambda list -> lambda) -> lambda
 val iter_head_constructor: (lambda -> unit) -> lambda -> unit
 (** [iter_head_constructor f lam] apply [f] to only the first level of
     sub expressions of [lam]. It does not recursively traverse the
-    expression. *)
+    expression.
+*)
+
+val shallow_iter:
+  tail:(lambda -> unit) ->
+  non_tail:(lambda -> unit) ->
+  lambda -> unit
+(** Same as [iter_head_constructor], but use a different callback for
+    sub-terms which are in tail position or not. *)
+
+val transl_prim: string -> string -> lambda
+(** Translate a value from a persistent module. For instance:
+
+    {[
+      transl_internal_value "CamlinternalLazy" "force"
+    ]}
+*)
 
 val free_variables: lambda -> Ident.Set.t
 
-val transl_normal_path: Path.t -> lambda   (* Path.t is already normal *)
-val transl_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
-[@@ocaml.deprecated "use transl_{module,value,extension,class}_path instead"]
-
-val transl_module_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
-val transl_value_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
-val transl_extension_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
-val transl_class_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
+val transl_module_path: Location.t -> Env.t -> Path.t -> lambda
+val transl_value_path: Location.t -> Env.t -> Path.t -> lambda
+val transl_extension_path: Location.t -> Env.t -> Path.t -> lambda
+val transl_class_path: Location.t -> Env.t -> Path.t -> lambda
 
 val make_sequence: ('a -> lambda) -> 'a list -> lambda
 
-val subst: lambda Ident.Map.t -> lambda -> lambda
-(** Apply a substitution to a lambda-term.
+val subst: (Ident.t -> Types.value_description -> Env.t -> Env.t) ->
+  lambda Ident.Map.t -> lambda -> lambda
+(** [subst env_update_fun s lt] applies a substitution [s] to the lambda-term
+    [lt].
+
     Assumes that the image of the substitution is out of reach
-    of the bound variables of the lambda-term (no capture). *)
+    of the bound variables of the lambda-term (no capture).
+
+    [env_update_fun] is used to refresh the environment contained in debug
+    events.  *)
+
+val rename : Ident.t Ident.Map.t -> lambda -> lambda
+(** A version of [subst] specialized for the case where we're just renaming
+    idents. *)
 
 val map : (lambda -> lambda) -> lambda -> lambda
+  (** Bottom-up rewriting, applying the function on
+      each node from the leaves to the root. *)
+
+val shallow_map  : (lambda -> lambda) -> lambda -> lambda
+  (** Rewrite each immediate sub-term with the function. *)
+
 val bind : let_kind -> Ident.t -> lambda -> lambda -> lambda
+val bind_with_value_kind:
+  let_kind -> (Ident.t * value_kind) -> lambda -> lambda -> lambda
 
 val negate_integer_comparison : integer_comparison -> integer_comparison
 val swap_integer_comparison : integer_comparison -> integer_comparison
@@ -350,6 +402,8 @@ val swap_float_comparison : float_comparison -> float_comparison
 
 val default_function_attribute : function_attribute
 val default_stub_attribute : function_attribute
+
+val function_is_curried : lfunction -> bool
 
 (***********************)
 (* For static failures *)

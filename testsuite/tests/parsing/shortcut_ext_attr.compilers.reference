@@ -56,7 +56,9 @@
                           expression (shortcut_ext_attr.ml[13,261+3]..[13,261+29])
                             attribute "foo"
                               []
-                            Pexp_open Fresh ""M" (shortcut_ext_attr.ml[13,261+22]..[13,261+23])"
+                            Pexp_open Fresh
+                            module_expr (shortcut_ext_attr.ml[13,261+22]..[13,261+23])
+                              Pmod_ident "M" (shortcut_ext_attr.ml[13,261+22]..[13,261+23])
                             expression (shortcut_ext_attr.ml[13,261+27]..[13,261+29])
                               Pexp_construct "()" (shortcut_ext_attr.ml[13,261+27]..[13,261+29])
                               None
@@ -387,7 +389,7 @@
                       Pcf_method Public
                         "x" (shortcut_ext_attr.ml[42,939+17]..[42,939+18])
                         Concrete Fresh
-                        expression (shortcut_ext_attr.ml[42,939+10]..[42,939+22]) ghost
+                        expression (shortcut_ext_attr.ml[42,939+21]..[42,939+22]) ghost
                           Pexp_poly
                           expression (shortcut_ext_attr.ml[42,939+21]..[42,939+22])
                             Pexp_constant PConst_int (3,None)
@@ -407,7 +409,7 @@
                       Pcf_method Private
                         "x" (shortcut_ext_attr.ml[44,993+26]..[44,993+27])
                         Concrete Override
-                        expression (shortcut_ext_attr.ml[44,993+10]..[44,993+31]) ghost
+                        expression (shortcut_ext_attr.ml[44,993+30]..[44,993+31]) ghost
                           Pexp_poly
                           expression (shortcut_ext_attr.ml[44,993+30]..[44,993+31])
                             Pexp_constant PConst_int (3,None)
@@ -536,7 +538,7 @@
         module_type (shortcut_ext_attr.ml[71,1478+19]..[71,1478+20])
           Pmty_ident "S" (shortcut_ext_attr.ml[71,1478+19]..[71,1478+20])
         module_type (shortcut_ext_attr.ml[72,1503+4]..[73,1535+19])
-          Pmty_functor "_" (_none_[1,0+-1]..[1,0+-1]) ghost
+          Pmty_functor "_" (_none_[0,0+-1]..[0,0+-1]) ghost
           module_type (shortcut_ext_attr.ml[72,1503+5]..[72,1503+27])
             attribute "foo"
               []
@@ -687,14 +689,16 @@
     [
       structure_item (shortcut_ext_attr.ml[86,1759+0]..[86,1759+21])
         Pstr_exception
-        extension_constructor (shortcut_ext_attr.ml[86,1759+0]..[86,1759+21])
-          attribute "foo"
-            []
-          pext_name = "X"
-          pext_kind =
-            Pext_decl
-              []
-              None
+        type_exception
+          ptyext_constructor =
+            extension_constructor (shortcut_ext_attr.ml[86,1759+0]..[86,1759+21])
+              attribute "foo"
+                []
+              pext_name = "X"
+              pext_kind =
+                Pext_decl
+                  []
+                  None
     ]
   structure_item (shortcut_ext_attr.ml[88,1782+0]..[88,1782+22]) ghost
     Pstr_extension "foo"
@@ -756,7 +760,9 @@
     Pstr_extension "foo"
     [
       structure_item (shortcut_ext_attr.ml[94,1905+0]..[94,1905+16])
-        Pstr_open Fresh "M" (shortcut_ext_attr.ml[94,1905+15]..[94,1905+16])
+        Pstr_open Fresh
+        module_expr (shortcut_ext_attr.ml[94,1905+15]..[94,1905+16])
+          Pmod_ident "M" (shortcut_ext_attr.ml[94,1905+15]..[94,1905+16])
           attribute "foo"
             []
     ]
@@ -858,14 +864,16 @@
             [
               signature_item (shortcut_ext_attr.ml[105,2091+2]..[105,2091+23])
                 Psig_exception
-                extension_constructor (shortcut_ext_attr.ml[105,2091+2]..[105,2091+23])
-                  attribute "foo"
-                    []
-                  pext_name = "X"
-                  pext_kind =
-                    Pext_decl
-                      []
-                      None
+                type_exception
+                  ptyext_constructor =
+                    extension_constructor (shortcut_ext_attr.ml[105,2091+2]..[105,2091+23])
+                      attribute "foo"
+                        []
+                      pext_name = "X"
+                      pext_kind =
+                        Pext_decl
+                          []
+                          None
             ]
           signature_item (shortcut_ext_attr.ml[107,2116+2]..[107,2116+24]) ghost
             Psig_extension "foo"
@@ -975,4 +983,6 @@
 ]
 
 File "shortcut_ext_attr.ml", line 10, characters 6-9:
+10 |   let%foo[@foo] x = 3
+           ^^^
 Error: Uninterpreted extension 'foo'.

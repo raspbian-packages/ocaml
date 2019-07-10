@@ -11,9 +11,9 @@ let _ = f (T (`Conj `B) :> s t);; (* warn *)
 type s = [ `A | `B ]
 and sub = [ `B ]
 type +'a t = T : [< `Conj of 'a & sub | `Other of string ] -> 'a t
-Line _, characters 6-47:
-  let f (T (`Other msg) : s t) = print_string msg;;
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 4, characters 6-47:
+4 | let f (T (`Other msg) : s t) = print_string msg;;
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 T (`Conj _)
@@ -39,9 +39,9 @@ module M :
     type t = T : [< `Conj of int & s | `Other of string ] -> t
     val x : t
   end
-Line _, characters 12-59:
-  let () = M.(match x with T (`Other msg) -> print_string msg);; (* warn *)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 11, characters 12-59:
+11 | let () = M.(match x with T (`Other msg) -> print_string msg);; (* warn *)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 T (`Conj _)
@@ -71,9 +71,9 @@ module M :
     }
     val e : elim -> unit
   end
-Line _, characters 21-57:
-  let () = M.(e { ex = fun (`Other msg) -> print_string msg });; (* warn *)
-                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Line 13, characters 21-57:
+13 | let () = M.(e { ex = fun (`Other msg) -> print_string msg });; (* warn *)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 `Conj _

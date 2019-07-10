@@ -13,10 +13,10 @@ struct
     | Two, Two -> "four"
 end;;
 [%%expect{|
-Line _, characters 43-100:
-  ...........................................function
-      | One, One -> "two"
-      | Two, Two -> "four"
+Line 7, characters 43-100:
+7 | ...........................................function
+8 |     | One, One -> "two"
+9 |     | Two, Two -> "four"
 Warning 8: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 (Two, One)

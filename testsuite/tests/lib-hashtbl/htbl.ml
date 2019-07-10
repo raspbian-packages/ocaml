@@ -35,17 +35,18 @@ module Test(H: Hashtbl.S) (M: Map.S with type key = H.key) = struct
 
   let to_list_ h : _ list =
     H.fold (fun k v acc -> (k,v) :: acc) h []
-    |> List.sort Pervasives.compare
+    |> List.sort Stdlib.compare
 
   let check_to_seq h =
     let l = to_list_ h in
     let l2 = List.of_seq (H.to_seq h) in
-    assert (l = List.sort Pervasives.compare l2)
+    assert (l = List.sort Stdlib.compare l2)
 
   let check_to_seq_of_seq h =
     let h' = H.create (H.length h) in
     H.add_seq h' (H.to_seq h);
-    (*printf "h.len=%d, h'.len=%d\n" (List.length @@ to_list_ h) (List.length @@ to_list_ h');*)
+    (*printf "h.len=%d, h'.len=%d\n" (List.length @@ to_list_ h)
+                                     (List.length @@ to_list_ h');*)
     assert (to_list_ h = to_list_ h')
 
   let test data =
@@ -82,31 +83,31 @@ end
 
 module SS = struct
   type t = string
-  let compare (x:t) (y:t) = Pervasives.compare x y
+  let compare (x:t) (y:t) = Stdlib.compare x y
   let equal (x:t) (y:t) = x=y
   let hash = Hashtbl.hash
 end
 module SI = struct
   type t = int
-  let compare (x:t) (y:t) = Pervasives.compare x y
+  let compare (x:t) (y:t) = Stdlib.compare x y
   let equal (x:t) (y:t) = x=y
   let hash = Hashtbl.hash
 end
 module SSP = struct
   type t = string*string
-  let compare (x:t) (y:t) = Pervasives.compare x y
+  let compare (x:t) (y:t) = Stdlib.compare x y
   let equal (x:t) (y:t) = x=y
   let hash = Hashtbl.hash
 end
 module SSL = struct
   type t = string list
-  let compare (x:t) (y:t) = Pervasives.compare x y
+  let compare (x:t) (y:t) = Stdlib.compare x y
   let equal (x:t) (y:t) = x=y
   let hash = Hashtbl.hash
 end
 module SSA = struct
   type t = string array
-  let compare (x:t) (y:t) = Pervasives.compare x y
+  let compare (x:t) (y:t) = Stdlib.compare x y
   let equal (x:t) (y:t) = x=y
   let hash = Hashtbl.hash
 end
@@ -233,7 +234,7 @@ let list_data data =
       hd :: tl
     end in
   for i = 0 to Array.length d - 1 do
-    d.(i) <- (mklist (Random.int 16), string_of_int i)
+    d.(i) <- (mklist (Random.int 16), Int.to_string i)
   done;
   d
 
