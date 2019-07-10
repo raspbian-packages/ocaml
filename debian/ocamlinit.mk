@@ -26,7 +26,7 @@ _ocaml_share_ocamlinit = 1
 
 include $(CURDIR)/debian/ocamlvars.mk
 include $(_ocaml_share_path)/ocamlvars.mk
--include $(CURDIR)/config/Makefile
+-include $(CURDIR)/Makefile.config
 
 # list of .in files contained (non-recursively) in debian/ that requires
 # pre-build filling.
@@ -71,7 +71,7 @@ OCAMLINIT_SED += $(if $(filter $(1),$(OTHERLIBRARIES)),\
 $(eval $(call otherlib,raw_spacetime_lib))
 
 ocamlinit: ocamlinit-stamp
-ocamlinit-stamp: config/Makefile
+ocamlinit-stamp: Makefile.config
 	for t in $(OCAML_IN_FILES); do \
 	  sed $(OCAMLINIT_SED) $$t.in > $$t; \
 	done

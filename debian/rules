@@ -55,20 +55,14 @@ export CCLINKFLAGS=$(shell dpkg-buildflags --get LDFLAGS)
 
 CONFIGURE_OPTS := \
   --host $(DEB_BUILD_GNU_TYPE)\
-  --with-pthread -prefix $(DEB_TEST_BUILD_PREFIX)/usr \
+  -prefix $(DEB_TEST_BUILD_PREFIX)/usr \
   -libdir $(DEB_TEST_BUILD_PREFIX)$(OCAML_STDLIB_DIR) \
-  -x11lib "$(shell pkg-config --variable=libdir x11)" \
+  --with-x \
   -mandir $(DEB_TEST_BUILD_PREFIX)/usr/share/man \
 
-CONFIGURE_SED := \
-  -e "/LIBBFD_LINK/s%-lbfd%-Wl,-Bstatic -lbfd -Wl,-Bdynamic%" \
-  -e "s%MANDIR=.*$$%MANDIR=\$$(PREFIX)/share/man%g" \
-  -e "s%LIBDIR=.*$$%LIBDIR=\$$(PREFIX)/lib/ocaml%g" \
-  -e "s%STUBLIBDIR=.*$$%STUBLIBDIR=\$$(PREFIX)/lib/ocaml/stublibs%g"
-
-# Upstream recommends dropping support, see https://caml.inria.fr/mantis/view.php?id=7642
+# Upstream recommends dropping support, see https://github.com/ocaml/ocaml/issues/7642
 ifneq (,$(filter $(DEB_HOST_ARCH),armel))
-CONFIGURE_OPTS += --no-native-compiler
+CONFIGURE_OPTS += --disable-native-compiler
 endif
 
 %:
@@ -100,8 +94,6 @@ pre-config-stamp: $(TARBALL_TARGET)
 ifeq (kfreebsd,$(DEB_HOST_ARCH_OS))
 	sed -i -e '/HAS_DUP3/d' -e '/HAS_PIPE2/d' ./configure
 endif
-# Create empty directory present in upstream tarball
-	mkdir -p compilerlibs
 	touch $@
 
 ifneq (,$(TARBALL_TARGET))
@@ -128,7 +120,6 @@ override_dh_auto_configure: config-stamp ocamlinit-stamp
 
 config-stamp: pre-config-stamp
 	./configure $(CONFIGURE_OPTS)
-	sed -i $(CONFIGURE_SED) config/Makefile
 	touch $@
 
 ocamlinit-stamp: $(TARBALL_TARGET) config-stamp
@@ -164,7 +155,7 @@ endif
 
 .PHONY: override_dh_auto_clean
 override_dh_auto_clean:
-ifneq ($(wildcard $(CURDIR)/config/Makefile),)
+ifneq ($(wildcard $(CURDIR)/Makefile.config),)
 	$(MAKE) clean
 	$(MAKE) -C emacs clean
 endif
@@ -204,7 +195,7 @@ endif
 
 install-stamp-arch:
 # Install OCaml
-	$(MAKE) install PREFIX=$(INSTDIR)
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 # Remove uninstalled files
 	rm -f \
