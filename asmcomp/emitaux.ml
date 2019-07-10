@@ -19,7 +19,7 @@ let output_channel = ref stdout
 
 let emit_string s = output_string !output_channel s
 
-let emit_int n = output_string !output_channel (string_of_int n)
+let emit_int n = output_string !output_channel (Int.to_string n)
 
 let emit_char c = output_char !output_channel c
 
@@ -273,7 +273,7 @@ let reset_debug_info () =
   file_pos_nums := [];
   file_pos_num_cnt := 1
 
-(* We only diplay .file if the file has not been seen before. We
+(* We only display .file if the file has not been seen before. We
    display .loc for every instruction. *)
 let emit_debug_info_gen dbg file_emitter loc_emitter =
   if is_cfi_enabled () &&

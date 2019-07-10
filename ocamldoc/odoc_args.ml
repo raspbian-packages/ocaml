@@ -144,16 +144,22 @@ let analyse_merge_options s =
 
 
 let f_latex_title s =
-  try
-    let pos = String.index s ',' in
-    let n = int_of_string (String.sub s 0 pos) in
-    let len = String.length s in
-    let command = String.sub s (pos + 1) (len - pos - 1) in
-    Odoc_latex.latex_titles := List.remove_assoc n !Odoc_latex.latex_titles ;
-    Odoc_latex.latex_titles := (n, command) :: !Odoc_latex.latex_titles
-  with
-    Not_found
-  | Invalid_argument _ ->
+  match String.split_on_char ',' s with
+  | [n;command] ->
+      let n = int_of_string n in
+      Odoc_latex.latex_titles := List.remove_assoc n !Odoc_latex.latex_titles ;
+      Odoc_latex.latex_titles := (n, command) :: !Odoc_latex.latex_titles
+  | _ ->
+      incr Odoc_global.errors ;
+      prerr_endline (M.wrong_format s)
+
+let f_texinfo_title s =
+  match String.split_on_char ',' s with
+  | [n;title;heading] ->
+      let n = int_of_string n in
+      Odoc_texi.titles_and_headings :=
+        (n, (title,heading) ) :: List.remove_assoc n !Odoc_texi.titles_and_headings;
+  | _ ->
       incr Odoc_global.errors ;
       prerr_endline (M.wrong_format s)
 
@@ -193,9 +199,9 @@ let anonymous f =
 module Options = Main_args.Make_ocamldoc_options(struct
   let set r () = r := true
   let unset r () = r := false
-  let _absname = set Location.absname
-  let _I s = Odoc_global.include_dirs :=
-       (Misc.expand_directory Config.standard_library s) :: !Odoc_global.include_dirs
+  let _absname = set Clflags.absname
+  let _alert = Warnings.parse_alert_option
+  let _I s = Odoc_global.include_dirs := s :: !Odoc_global.include_dirs
   let _impl s = Odoc_global.files := !Odoc_global.files @ [Odoc_global.Impl_file s]
   let _intf s = Odoc_global.files := !Odoc_global.files @ [Odoc_global.Intf_file s]
   let _intf_suffix s = Config.interface_suffix := s
@@ -235,6 +241,8 @@ module Options = Main_args.Make_ocamldoc_options(struct
   let _where = Compenv.print_standard_library
   let _verbose = set Clflags.verbose
   let _nopervasives = set Clflags.nopervasives
+  let _dno_unique_ids = unset Clflags.unique_ids
+  let _dunique_ids = set Clflags.unique_ids
   let _dsource = set Clflags.dump_source
   let _dparsetree = set Clflags.dump_parsetree
   let _dtypedtree = set Clflags.dump_typedtree
@@ -242,12 +250,16 @@ module Options = Main_args.Make_ocamldoc_options(struct
   let _dlambda = set Clflags.dump_lambda
   let _dflambda = set Clflags.dump_flambda
   let _dinstr = set Clflags.dump_instr
+  let _dcamlprimc = set Clflags.keep_camlprimc_file
   let anonymous = anonymous
 end)
 
 (** The default option list *)
 let default_options = Options.list @
 [
+  "-initially-opened-module", Arg.Set_string Odoc_global.initially_opened_module,
+  M.initially_opened_module;
+  "-lib", Arg.Set_string Odoc_global.library_namespace, M.library_namespace;
   "-text", Arg.String (fun s ->
        Odoc_global.files := !Odoc_global.files @ [Odoc_global.Text_file s]),
     M.option_text ;
@@ -352,6 +364,9 @@ let default_options = Options.list @
 (* texi only options *)
   "-noindex", Arg.Clear Odoc_global.with_index, M.no_index ;
   "-esc8", Arg.Set Odoc_texi.esc_8bits, M.esc_8bits ;
+  "-texinfotitle", Arg.String f_texinfo_title,
+  M.texinfo_title Odoc_texi.titles_and_headings ;
+
   "-info-section", Arg.String ((:=) Odoc_texi.info_section), M.info_section ;
   "-info-entry", Arg.String (fun s -> Odoc_texi.info_entry := !Odoc_texi.info_entry @ [ s ]),
   M.info_entry ^

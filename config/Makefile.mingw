@@ -28,11 +28,8 @@ WITH_OCAMLDOC=ocamldoc
 ### Where to install the binaries
 BINDIR=$(PREFIX)/bin
 
-### Standard runtime system
-BYTERUN=ocamlrun
-
 ### Where to install the standard library
-LIBDIR=$(PREFIX)/lib
+LIBDIR=$(PREFIX)/lib/ocaml
 
 ### Where to install the stub DLLs
 STUBLIBDIR=$(LIBDIR)/stublibs
@@ -59,22 +56,24 @@ A=a
 S=s
 SO=s.o
 EXE=.exe
+EMPTY=
+OUTPUTEXE=-o $(EMPTY)
 EXT_DLL=.dll
 EXT_OBJ=.$(O)
+OUTPUTOBJ=-o $(EMPTY)
 EXT_LIB=.$(A)
 EXT_ASM=.$(S)
-MANEXT=1
+PROGRAMS_MAN_SECTION=1
+LIBRARIES_MAN_SECTION=3
 HASHBANGSCRIPTS=false
 PTHREAD_LINK=
 PTHREAD_CAML_LINK=
 X11_INCLUDES=
 X11_LINK=
-BYTECCRPATH=
+RPATH=
 SUPPORTS_SHARED_LIBRARIES=true
-SHAREDCCCOMPOPTS=
+SHAREDLIB_CFLAGS=
 MKSHAREDLIBRPATH=
-NATIVECCPROFOPTS=
-NATIVECCRPATH=
 ASM=$(TOOLPREF)as
 ASPP=$(TOOLPREF)gcc -c
 ASPPPROFFLAGS=
@@ -93,47 +92,47 @@ UNIX_OR_WIN32=win32
 UNIXLIB=win32unix
 GRAPHLIB=win32graph
 FLAMBDA=false
+WITH_FLAMBDA_INVARIANTS=false
 WITH_SPACETIME=false
+ENABLE_CALL_COUNTS=false
 WITH_PROFINFO=false
 LIBUNWIND_AVAILABLE=false
 LIBUNWIND_LINK_FLAGS=
-PROFINFO_WIDTH=26
-SAFE_STRING=false
+PROFINFO_WIDTH=0
+FORCE_SAFE_STRING=false
+DEFAULT_SAFE_STRING=true
+WINDOWS_UNICODE=1
 AFL_INSTRUMENT=false
+AWK=gawk
+CC_HAS_DEBUG_PREFIX_MAP=false
+AS_HAS_DEBUG_PREFIX_MAP=false
 
 ########## Configuration for the bytecode compiler
 
 ### Which C compiler to use for the bytecode interpreter.
-BYTECC=$(TOOLPREF)gcc -O -mms-bitfields
-BYTECODE_C_COMPILER=$(BYTECC)
-
-### Additional compile-time options for $(BYTECC).  (For static linking.)
+CC=$(TOOLPREF)gcc
+OC_CFLAGS=-O -mms-bitfields -Wall -Wno-unused -fno-tree-vrp
 # -fno-tree-vrp is here to try to work around the Skylake/Kaby lake bug,
 # and only works on GCC 4.2 and later.
-BYTECCCOMPOPTS=-DCAML_NAME_SPACE -Wall -Wno-unused -fno-tree-vrp
+OC_CPPFLAGS=-DCAML_NAME_SPACE -DUNICODE -D_UNICODE \
+  -DWINDOWS_UNICODE=$(WINDOWS_UNICODE)
+OCAMLC_CFLAGS=-O -mms-bitfields
 
-### Additional compile-time options for $(BYTECC).  (For debug version.)
-BYTECCDBGCOMPOPTS=-g
-
-### Flag to use to rename object files.  (for debug version.)
-NAME_OBJ_FLAG=-o
-
-### Additional link-time options for $(BYTECC).  (For static linking.)
-BYTECCLINKOPTS=
+OC_LDFLAGS=-municode
 
 ### Libraries needed
-BYTECCLIBS=-lws2_32
-NATIVECCLIBS=-lws2_32
+BYTECCLIBS=-lws2_32 -lversion
+NATIVECCLIBS=-lws2_32 -lversion
 
 ### How to invoke the C preprocessor
-CPP=$(BYTECC) -E
+CPP=cpp
 
 ### Flexlink
 FLEXLINK_CMD=flexlink
 FLEXDLL_CHAIN=mingw
 # FLEXLINK_FLAGS must be safe to insert in an OCaml string
 #   (see ocamlmklibconfig.ml in tools/Makefile)
-FLEXLINK_FLAGS=-chain $(FLEXDLL_CHAIN) -stack 16777216 -link -static-libgcc
+FLEXLINK_FLAGS=-chain $(FLEXDLL_CHAIN) -stack 16777216
 FLEXLINK=$(FLEXLINK_CMD) $(FLEXLINK_FLAGS)
 FLEXDIR:=$(shell $(FLEXLINK) -where 2>/dev/null)
 ifeq ($(FLEXDIR),)
@@ -145,22 +144,21 @@ endif
 #   $(FLEXLINK_CMD) $(FLEXLINK_FLAGS) [-exe|-maindll]
 # or OCAML_FLEXLINK overriding will not work (see utils/config.mlp)
 MKDLL=$(FLEXLINK)
-MKEXE=$(FLEXLINK) -exe
+MKEXE=$(MKEXE_ANSI) $(if $(OC_LDFLAGS),-link "$(OC_LDFLAGS)")
 MKEXEDEBUGFLAG=-g
 MKMAINDLL=$(FLEXLINK) -maindll
 
 ### Native command to build ocamlrun.exe without flexlink
-MKEXE_BOOT=$(BYTECC) -o $(1) $(2)
+MKEXE_BOOT=$(CC) $(OC_CFLAGS) $(OC_LDFLAGS) $(OUTPUTEXE)$(1) $(2)
+
+### Native command to build an ANSI executable
+MKEXE_ANSI=$(FLEXLINK) -exe
 
 ### How to build a static library
-MKLIB=rm -f $(1); $(TOOLPREF)ar rc $(1) $(2); $(RANLIB) $(1)
-#ml let mklib out files opts =
-#ml   Printf.sprintf "rm -f %s && %sar rcs %s %s %s"
-#ml                  out toolpref opts out files;;
+MKLIB=rm -f $(1) && $(TOOLPREF)ar rcs $(1) $(2)
 
 ### Canonicalize the name of a system library
 SYSLIB=-l$(1)
-#ml let syslib x = "-l"^x;;
 
 ### The ranlib command
 RANLIB=$(TOOLPREF)ranlib
@@ -173,6 +171,7 @@ ARCMD=$(TOOLPREF)ar
 
 ### Name of architecture for the native-code compiler
 ARCH=i386
+ARCH64=false
 
 ### Name of architecture model for the native-code compiler.
 MODEL=default
@@ -180,34 +179,23 @@ MODEL=default
 ### Name of operating system family for the native-code compiler.
 SYSTEM=mingw
 
-### Which C compiler to use for the native-code compiler.
-NATIVECC=$(BYTECC)
-NATIVE_C_COMPILER=$(NATIVECC)
-
-### Additional compile-time options for $(NATIVECC).
-# -fno-tree-vrp is here to try to work around the Skylake/Kaby lake bug,
-# and only works on GCC 4.2 and later.
-NATIVECCCOMPOPTS=-DCAML_NAME_SPACE -Wall -Wno-unused -fno-tree-vrp
-
-### Additional link-time options for $(NATIVECC)
-NATIVECCLINKOPTS=
+OCAMLOPT_CFLAGS=-O -mms-bitfields
 
 ### Build partially-linked object file
-PACKLD=$(TOOLPREF)ld -r $(NATIVECCLINKOPTS) -o # must have a space after '-o'
+PACKLD=$(TOOLPREF)ld -r -o # must have a space after '-o'
+
+### Set to "true" to install ".byte" executables (ocamlc.byte, etc.)
+INSTALL_BYTECODE_PROGRAMS=true
 
 ############# Configuration for the contributed libraries
 
-OTHERLIBRARIES=win32unix str num win32graph dynlink bigarray systhreads
-
-### Name of the target architecture for the "num" library
-BNG_ARCH=ia32
-BNG_ASM_LEVEL=1
+OTHERLIBRARIES=win32unix str win32graph dynlink bigarray systhreads
 
 ############# for the testsuite makefiles
-#ml let topdir = "" and wintopdir = "";;
 OTOPDIR=$(WINTOPDIR)
 CTOPDIR=$(TOPDIR)
 CYGPATH=cygpath -m
 DIFF=/usr/bin/diff -q --strip-trailing-cr
 SET_LD_PATH=PATH="$(PATH):$(LD_PATH)"
 MAX_TESTSUITE_DIR_RETRIES=1
+FLAT_FLOAT_ARRAY=true

@@ -19,6 +19,9 @@ open Format
 open Cmm
 open Reg
 open Mach
+open Interval
+
+module V = Backend_var
 
 let reg ppf r =
   if not (Reg.anonymous r) then
@@ -67,11 +70,11 @@ let regsetaddr ppf s =
     s
 
 let intcomp = function
-  | Isigned c -> Printf.sprintf " %ss " (Printcmm.comparison c)
-  | Iunsigned c -> Printf.sprintf " %su " (Printcmm.comparison c)
+  | Isigned c -> Printf.sprintf " %ss " (Printcmm.integer_comparison c)
+  | Iunsigned c -> Printf.sprintf " %su " (Printcmm.integer_comparison c)
 
 let floatcomp c =
-    Printf.sprintf " %sf " (Printcmm.comparison c)
+    Printf.sprintf " %sf " (Printcmm.float_comparison c)
 
 let intop = function
   | Iadd -> " + "
@@ -94,7 +97,7 @@ let intop = function
         begin
           match label_after_error with
           | None -> ""
-          | Some lbl -> string_of_int lbl
+          | Some lbl -> Int.to_string lbl
         end
         spacetime_index
 
@@ -104,9 +107,8 @@ let test tst ppf arg =
   | Ifalsetest -> fprintf ppf "not %a" reg arg.(0)
   | Iinttest cmp -> fprintf ppf "%a%s%a" reg arg.(0) (intcomp cmp) reg arg.(1)
   | Iinttest_imm(cmp, n) -> fprintf ppf "%a%s%i" reg arg.(0) (intcomp cmp) n
-  | Ifloattest(cmp, neg) ->
-      fprintf ppf "%s%a%s%a"
-       (if neg then "not " else "")
+  | Ifloattest cmp ->
+      fprintf ppf "%a%s%a"
        reg arg.(0) (floatcomp cmp) reg arg.(1)
   | Ieventest -> fprintf ppf "%a & 1 == 0" reg arg.(0)
   | Ioddtest -> fprintf ppf "%a & 1 == 1" reg arg.(0)
@@ -141,7 +143,7 @@ let operation op arg ppf res =
        (Array.sub arg 1 (Array.length arg - 1))
        reg arg.(0)
        (if is_assign then "(assign)" else "(init)")
-  | Ialloc { words = n; _ } ->
+  | Ialloc { bytes = n; _ } ->
     fprintf ppf "alloc %i" n;
     if Config.spacetime then begin
       fprintf ppf "(spacetime node = %a)" reg arg.(0)
@@ -156,6 +158,13 @@ let operation op arg ppf res =
   | Idivf -> fprintf ppf "%a /f %a" reg arg.(0) reg arg.(1)
   | Ifloatofint -> fprintf ppf "floatofint %a" reg arg.(0)
   | Iintoffloat -> fprintf ppf "intoffloat %a" reg arg.(0)
+  | Iname_for_debugger { ident; which_parameter; } ->
+    fprintf ppf "name_for_debugger %a%s=%a"
+      V.print ident
+      (match which_parameter with
+        | None -> ""
+        | Some index -> sprintf "[P%d]" index)
+      reg arg.(0)
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
 
@@ -164,6 +173,16 @@ let rec instr ppf i =
     fprintf ppf "@[<1>{%a" regsetaddr i.live;
     if Array.length i.arg > 0 then fprintf ppf "@ +@ %a" regs i.arg;
     fprintf ppf "}@]@,";
+    if !Clflags.dump_avail then begin
+      let module RAS = Reg_availability_set in
+      fprintf ppf "@[<1>AB={%a}" (RAS.print ~print_reg:reg) i.available_before;
+      begin match i.available_across with
+      | None -> ()
+      | Some available_across ->
+        fprintf ppf ",AA={%a}" (RAS.print ~print_reg:reg) available_across
+      end;
+      fprintf ppf "@]@,"
+    end
   end;
   begin match i.desc with
   | Iend -> ()
@@ -241,6 +260,18 @@ let interference ppf r =
 let interferences ppf () =
   fprintf ppf "*** Interferences@.";
   List.iter (interference ppf) (Reg.all_registers())
+
+let interval ppf i =
+  let interv ppf =
+    List.iter
+      (fun r -> fprintf ppf "@ [%d;%d]" r.rbegin r.rend)
+      i.ranges in
+  fprintf ppf "@[<2>%a:%t@]@." reg i.reg interv
+
+let intervals ppf () =
+  fprintf ppf "*** Intervals@.";
+  List.iter (interval ppf) (Interval.all_fixed_intervals());
+  List.iter (interval ppf) (Interval.all_intervals())
 
 let preference ppf r =
   let prefs ppf =

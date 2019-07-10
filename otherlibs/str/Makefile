@@ -20,21 +20,17 @@ COBJS=strstubs.$(O)
 CLIBNAME=camlstr
 CAMLOBJS=str.cmo
 
-include ../Makefile
-
+include ../Makefile.otherlibs.common
 str.cmo: str.cmi
 str.cmx: str.cmi
 
+.PHONY: depend
 depend:
-	$(CC) -MM $(CFLAGS) *.c > .depend
-	$(CAMLRUN) $(ROOTDIR)/tools/ocamldep -slash *.mli *.ml >> .depend
-
 ifeq "$(TOOLCHAIN)" "msvc"
-
-.depend.nt: .depend
-	sed -e 's/\.o/.$(O)/g' $< > $@
-
-include .depend.nt
+	$(error Dependencies cannot be regenerated using the MSVC ports)
 else
-include .depend
+	$(CC) -MM $(OC_CPPFLAGS) *.c | sed -e 's/\.o/.$$(O)/g' > .depend
+	$(CAMLRUN) $(ROOTDIR)/boot/ocamlc -depend -slash *.mli *.ml >> .depend
 endif
+
+include .depend

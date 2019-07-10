@@ -242,6 +242,25 @@ The environment variable "OCAML_COLOR" is considered if \-color is not
 provided. Its values are auto/always/never as above.
 
 .TP
+.BI \-error\-style \ mode
+Control the way error messages and warnings are printed.
+The following modes are supported:
+
+.B short
+only print the error and its location;
+
+.B contextual
+like "short", but also display the source code snippet corresponding
+to the location of the error.
+
+The default setting is
+.B contextual.
+
+The environment variable "OCAML_ERROR_STYLE" is considered if
+\-error\-style is not provided. Its values are short/contextual as
+above.
+
+.TP
 .B \-compact
 Optimize the produced code for space rather than for time. This
 results in smaller but slightly slower programs. The default is to
@@ -251,6 +270,16 @@ optimize for speed.
 Print the version number of
 .BR ocamlopt (1)
 and a detailed summary of its configuration, then exit.
+.TP
+.BI \-config-var
+Print the value of a specific configuration variable
+from the
+.B \-config
+output, then exit. If the variable does not exist,
+the exit code is non-zero.
+.TP
+.BI \-depend\ ocamldep-args
+Compute dependencies, as ocamldep would do.
 .TP
 .BI \-for\-pack \ module\-path
 Generate an object file (.cmx and .o files) that can later be included
@@ -330,7 +359,7 @@ Recognize file names ending with
 .I string
 as interface files (instead of the default .mli).
 .TP
-.B \-keep-locs
+.B \-keep-docs
 Keep documentation strings in generated .cmi files.
 .TP
 .B \-keep-locs
@@ -356,6 +385,17 @@ setting the
 .B \-linkall
 option ensures that this module will
 always be linked if it is put in a library and this library is linked.
+.TP
+.B \-linscan
+Use linear scan register allocation.  Compiling with this allocator is faster
+than with the usual graph coloring allocator, sometimes quite drastically so for
+long functions and modules. On the other hand, the generated code can be a bit
+slower.
+.TP
+.B \-match\-context\-rows
+Set number of rows of context used during pattern matching
+compilation. Lower values cause faster compilation, but
+less optimized code. The default value is 32.
 .TP
 .B \-no-alias-deps
 Do not record dependencies for module aliases.
@@ -387,7 +427,7 @@ Allow the compiler to use some optimizations that are valid only for code
 that is never dynlinked.
 .TP
 .B -nostdlib
-Do not automatically add the standard library directory the list of
+Do not automatically add the standard library directory to the list of
 directories searched for compiled interface files (.cmi), compiled
 object code files (.cmx), and libraries (.cmxa). See also option
 .BR \-I .
@@ -548,11 +588,16 @@ code for the source file
 is saved in the file
 .IR x .s.
 .TP
+.BI \-stop\-after \ pass
+Stop compilation after the given compilation pass. The currently
+supported passes are:
+.BR parsing ,
+.BR typing .
+.TP
 .B \-safe\-string
 Enforce the separation between types
 .BR string \ and\  bytes ,
-thereby making strings read-only. This will become the default in
-a future version of OCaml.
+thereby making strings read-only. This is the default.
 .TP
 .B \-shared
 Build a plugin (usually .cmxs) that can be dynamically loaded with
@@ -579,11 +624,6 @@ warning messages.
 .TP
 .B \-strict\-sequence
 The left-hand part of a sequence must have type unit.
-.TP
-.B \-thread
-Compile or link multithreaded programs, in combination with the
-system threads library described in
-.IR "The OCaml user's manual" .
 .TP
 .B \-unboxed\-types
 When a type is unboxable (i.e. a record with a single argument or a
@@ -615,9 +655,9 @@ exception.
 .B \-unsafe\-string
 Identify the types
 .BR string \ and\  bytes ,
-thereby making strings writable. For reasons of backward compatibility,
-this is the default setting for the moment, but this will change in a future
-version of OCaml.
+thereby making strings writable.
+This is intended for compatibility with old source code and should not
+be used with new software.
 .TP
 .B \-v
 Print the version number of the compiler and the location of the
@@ -716,18 +756,6 @@ Generate position-independent machine code.  This is the default.
 .TP
 .B \-fno\-PIC
 Generate position-dependent machine code.
-
-.SH OPTIONS FOR THE SPARC ARCHITECTURE
-The Sparc code generator supports the following additional options:
-.TP
-.B \-march=v8
-Generate SPARC version 8 code.
-.TP
-.B \-march=v9
-Generate SPARC version 9 code.
-.P
-The default is to generate code for SPARC version 7, which runs on all
-SPARC processors.
 
 .SH OPTIONS FOR THE ARM ARCHITECTURE
 The ARM code generator supports the following additional options:

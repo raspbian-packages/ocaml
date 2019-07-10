@@ -39,8 +39,10 @@
 #include "caml/spacetime.h"
 #endif
 
+#ifndef NATIVE_CODE
 /* Initial size of bytecode stack when a thread is created (4 Ko) */
 #define Thread_stack_size (Stack_size / 4)
+#endif
 
 /* Max computation time before rescheduling, in milliseconds */
 #define Thread_timeout 50
@@ -64,7 +66,7 @@ struct caml_thread_descr {
 #define Start_closure(v) (((struct caml_thread_descr *)(v))->start_closure)
 #define Terminated(v) (((struct caml_thread_descr *)(v))->terminated)
 
-/* The infos on threads (allocated via malloc()) */
+/* The infos on threads (allocated via caml_stat_alloc()) */
 
 struct caml_thread_struct {
   value descr;                  /* The heap-allocated descriptor (root) */
@@ -85,17 +87,17 @@ struct caml_thread_struct {
   value* spacetime_finaliser_trie_root;
 #endif
 #else
-  value * stack_low;            /* The execution stack for this thread */
+  value * stack_low;         /* The execution stack for this thread */
   value * stack_high;
   value * stack_threshold;
-  value * sp;                   /* Saved value of caml_extern_sp for this thread */
-  value * trapsp;               /* Saved value of caml_trapsp for this thread */
+  value * sp;                /* Saved value of caml_extern_sp for this thread */
+  value * trapsp;            /* Saved value of caml_trapsp for this thread */
   struct caml__roots_block * local_roots; /* Saved value of caml_local_roots */
   struct longjmp_buffer * external_raise; /* Saved caml_external_raise */
 #endif
-  int backtrace_pos;            /* Saved caml_backtrace_pos */
-  backtrace_slot * backtrace_buffer;    /* Saved caml_backtrace_buffer */
-  value backtrace_last_exn;     /* Saved caml_backtrace_last_exn (root) */
+  int backtrace_pos;         /* Saved caml_backtrace_pos */
+  backtrace_slot * backtrace_buffer; /* Saved caml_backtrace_buffer */
+  value backtrace_last_exn;  /* Saved caml_backtrace_last_exn (root) */
 };
 
 typedef struct caml_thread_struct * caml_thread_t;
@@ -337,7 +339,7 @@ static uintnat caml_thread_stack_usage(void)
 static caml_thread_t caml_thread_new_info(void)
 {
   caml_thread_t th;
-  th = (caml_thread_t) malloc(sizeof(struct caml_thread_struct));
+  th = (caml_thread_t) caml_stat_alloc_noexc(sizeof(struct caml_thread_struct));
   if (th == NULL) return NULL;
   th->descr = Val_unit;         /* filled later */
 #ifdef NATIVE_CODE
@@ -410,7 +412,7 @@ static void caml_thread_remove_info(caml_thread_t th)
 #ifndef NATIVE_CODE
   caml_stat_free(th->stack_low);
 #endif
-  if (th->backtrace_buffer != NULL) free(th->backtrace_buffer);
+  if (th->backtrace_buffer != NULL) caml_stat_free(th->backtrace_buffer);
 #ifndef WITH_SPACETIME
   caml_stat_free(th);
   /* CR-soon mshinwell: consider what to do about the Spacetime trace.  Could
@@ -505,7 +507,9 @@ CAMLprim value caml_thread_initialize(value unit)   /* ML */
   return Val_unit;
 }
 
-/* Cleanup the thread machinery on program exit or DLL unload. */
+/* Cleanup the thread machinery when the runtime is shut down. Joining the tick
+   thread take 25ms on average / 50ms in the worst case, so we don't do it on
+   program exit. */
 
 CAMLprim value caml_thread_cleanup(value unit)   /* ML */
 {
@@ -546,6 +550,8 @@ static ST_THREAD_FUNCTION caml_thread_start(void * arg)
 #ifdef NATIVE_CODE
   struct longjmp_buffer termination_buf;
   char tos;
+  /* Record top of stack (approximative) */
+  th->top_of_stack = &tos;
 #endif
 
   /* Associate the thread descriptor with the thread */
@@ -553,8 +559,6 @@ static ST_THREAD_FUNCTION caml_thread_start(void * arg)
   /* Acquire the global mutex */
   caml_leave_blocking_section();
 #ifdef NATIVE_CODE
-  /* Record top of stack (approximative) */
-  th->top_of_stack = &tos;
   /* Setup termination handler (for caml_thread_exit) */
   if (sigsetjmp(termination_buf.buf, 0) == 0) {
     th->exit_buf = &termination_buf;
@@ -672,7 +676,8 @@ CAMLexport int caml_c_thread_unregister(void)
 
 CAMLprim value caml_thread_self(value unit)         /* ML */
 {
-  if (curr_thread == NULL) caml_invalid_argument("Thread.self: not initialized");
+  if (curr_thread == NULL)
+    caml_invalid_argument("Thread.self: not initialized");
   return curr_thread->descr;
 }
 
@@ -690,7 +695,7 @@ CAMLprim value caml_thread_uncaught_exception(value exn)  /* ML */
   char * msg = caml_format_exception(exn);
   fprintf(stderr, "Thread %d killed on uncaught exception %s\n",
           Int_val(Ident(curr_thread->descr)), msg);
-  free(msg);
+  caml_stat_free(msg);
   if (caml_backtrace_active) caml_print_exception_backtrace();
   fflush(stderr);
   return Val_unit;
@@ -702,7 +707,8 @@ CAMLprim value caml_thread_exit(value unit)   /* ML */
 {
   struct longjmp_buffer * exit_buf = NULL;
 
-  if (curr_thread == NULL) caml_invalid_argument("Thread.exit: not initialized");
+  if (curr_thread == NULL)
+    caml_invalid_argument("Thread.exit: not initialized");
 
   /* In native code, we cannot call pthread_exit here because on some
      systems this raises a C++ exception, and ocamlopt-generated stack
@@ -773,7 +779,9 @@ static struct custom_operations caml_mutex_ops = {
   caml_mutex_compare,
   caml_mutex_hash,
   custom_serialize_default,
-  custom_deserialize_default
+  custom_deserialize_default,
+  custom_compare_ext_default,
+  custom_fixed_length_default
 };
 
 CAMLprim value caml_mutex_new(value unit)        /* ML */
@@ -852,7 +860,8 @@ static struct custom_operations caml_condition_ops = {
   caml_condition_hash,
   custom_serialize_default,
   custom_deserialize_default,
-  custom_compare_ext_default
+  custom_compare_ext_default,
+  custom_fixed_length_default
 };
 
 CAMLprim value caml_condition_new(value unit)        /* ML */
@@ -918,7 +927,8 @@ static struct custom_operations caml_threadstatus_ops = {
   custom_hash_default,
   custom_serialize_default,
   custom_deserialize_default,
-  custom_compare_ext_default
+  custom_compare_ext_default,
+  custom_fixed_length_default
 };
 
 static value caml_threadstatus_new (void)

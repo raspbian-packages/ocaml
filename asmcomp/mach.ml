@@ -18,8 +18,8 @@
 type label = Cmm.label
 
 type integer_comparison =
-    Isigned of Cmm.comparison
-  | Iunsigned of Cmm.comparison
+    Isigned of Cmm.integer_comparison
+  | Iunsigned of Cmm.integer_comparison
 
 type integer_operation =
     Iadd | Isub | Imul | Imulh | Idiv | Imod
@@ -28,12 +28,14 @@ type integer_operation =
   | Icheckbound of { label_after_error : label option;
         spacetime_index : int; }
 
+type float_comparison = Cmm.float_comparison
+
 type test =
     Itruetest
   | Ifalsetest
   | Iinttest of integer_comparison
   | Iinttest_imm of integer_comparison * int
-  | Ifloattest of Cmm.comparison * bool
+  | Ifloattest of float_comparison
   | Ioddtest
   | Ieventest
 
@@ -52,13 +54,15 @@ type operation =
   | Istackoffset of int
   | Iload of Cmm.memory_chunk * Arch.addressing_mode
   | Istore of Cmm.memory_chunk * Arch.addressing_mode * bool
-  | Ialloc of { words : int; label_after_call_gc : label option;
+  | Ialloc of { bytes : int; label_after_call_gc : label option;
         spacetime_index : int; }
   | Iintop of integer_operation
   | Iintop_imm of integer_operation * int
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
+  | Iname_for_debugger of { ident : Backend_var.t; which_parameter : int option;
+      provenance : unit option; is_assignment : bool; }
 
 type instruction =
   { desc: instruction_desc;
@@ -66,7 +70,10 @@ type instruction =
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    mutable live: Reg.Set.t }
+    mutable live: Reg.Set.t;
+    mutable available_before: Reg_availability_set.t;
+    mutable available_across: Reg_availability_set.t option;
+  }
 
 and instruction_desc =
     Iend
@@ -91,7 +98,7 @@ type fundecl =
   { fun_name: string;
     fun_args: Reg.t array;
     fun_body: instruction;
-    fun_fast: bool;
+    fun_codegen_options : Cmm.codegen_option list;
     fun_dbg : Debuginfo.t;
     fun_spacetime_shape : spacetime_shape option;
   }
@@ -102,7 +109,10 @@ let rec dummy_instr =
     arg = [||];
     res = [||];
     dbg = Debuginfo.none;
-    live = Reg.Set.empty }
+    live = Reg.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
+    available_across = None;
+  }
 
 let end_instr () =
   { desc = Iend;
@@ -110,14 +120,23 @@ let end_instr () =
     arg = [||];
     res = [||];
     dbg = Debuginfo.none;
-    live = Reg.Set.empty }
+    live = Reg.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
+    available_across = None;
+  }
 
 let instr_cons d a r n =
   { desc = d; next = n; arg = a; res = r;
-    dbg = Debuginfo.none; live = Reg.Set.empty }
+    dbg = Debuginfo.none; live = Reg.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
+    available_across = None;
+  }
 
 let instr_cons_debug d a r dbg n =
-  { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty }
+  { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
+    available_across = None;
+  }
 
 let rec instr_iter f i =
   match i.desc with
@@ -175,7 +194,15 @@ let spacetime_node_hole_pointer_is_live_before insn =
     | Imove | Ispill | Ireload | Iconst_int _ | Iconst_float _
     | Iconst_symbol _ | Istackoffset _ | Iload _ | Istore _
     | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
-    | Ifloatofint | Iintoffloat -> false
+    | Ifloatofint | Iintoffloat
+    | Iname_for_debugger _ -> false
     end
   | Iend | Ireturn | Iifthenelse _ | Iswitch _ | Iloop _ | Icatch _
   | Iexit _ | Itrywith _ | Iraise _ -> false
+
+let operation_can_raise op =
+  match op with
+  | Icall_ind _ | Icall_imm _ | Iextcall _
+  | Iintop (Icheckbound _) | Iintop_imm (Icheckbound _, _)
+  | Ialloc _ -> true
+  | _ -> false

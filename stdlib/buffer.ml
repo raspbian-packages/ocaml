@@ -80,6 +80,84 @@ let add_char b c =
   Bytes.unsafe_set b.buffer pos c;
   b.position <- pos + 1
 
+ let add_utf_8_uchar b u = match Uchar.to_int u with
+ | u when u < 0 -> assert false
+ | u when u <= 0x007F ->
+     add_char b (Char.unsafe_chr u)
+ | u when u <= 0x07FF ->
+     let pos = b.position in
+     if pos + 2 > b.length then resize b 2;
+     Bytes.unsafe_set b.buffer (pos    )
+       (Char.unsafe_chr (0xC0 lor (u lsr 6)));
+     Bytes.unsafe_set b.buffer (pos + 1)
+       (Char.unsafe_chr (0x80 lor (u land 0x3F)));
+     b.position <- pos + 2
+ | u when u <= 0xFFFF ->
+     let pos = b.position in
+     if pos + 3 > b.length then resize b 3;
+     Bytes.unsafe_set b.buffer (pos    )
+       (Char.unsafe_chr (0xE0 lor (u lsr 12)));
+     Bytes.unsafe_set b.buffer (pos + 1)
+       (Char.unsafe_chr (0x80 lor ((u lsr 6) land 0x3F)));
+     Bytes.unsafe_set b.buffer (pos + 2)
+       (Char.unsafe_chr (0x80 lor (u land 0x3F)));
+     b.position <- pos + 3
+ | u when u <= 0x10FFFF ->
+     let pos = b.position in
+     if pos + 4 > b.length then resize b 4;
+     Bytes.unsafe_set b.buffer (pos    )
+       (Char.unsafe_chr (0xF0 lor (u lsr 18)));
+     Bytes.unsafe_set b.buffer (pos + 1)
+       (Char.unsafe_chr (0x80 lor ((u lsr 12) land 0x3F)));
+     Bytes.unsafe_set b.buffer (pos + 2)
+       (Char.unsafe_chr (0x80 lor ((u lsr 6) land 0x3F)));
+     Bytes.unsafe_set b.buffer (pos + 3)
+       (Char.unsafe_chr (0x80 lor (u land 0x3F)));
+     b.position <- pos + 4
+ | _ -> assert false
+
+ let add_utf_16be_uchar b u = match Uchar.to_int u with
+ | u when u < 0 -> assert false
+ | u when u <= 0xFFFF ->
+     let pos = b.position in
+     if pos + 2 > b.length then resize b 2;
+     Bytes.unsafe_set b.buffer (pos    ) (Char.unsafe_chr (u lsr 8));
+     Bytes.unsafe_set b.buffer (pos + 1) (Char.unsafe_chr (u land 0xFF));
+     b.position <- pos + 2
+ | u when u <= 0x10FFFF ->
+     let u' = u - 0x10000 in
+     let hi = 0xD800 lor (u' lsr 10) in
+     let lo = 0xDC00 lor (u' land 0x3FF) in
+     let pos = b.position in
+     if pos + 4 > b.length then resize b 4;
+     Bytes.unsafe_set b.buffer (pos    ) (Char.unsafe_chr (hi lsr 8));
+     Bytes.unsafe_set b.buffer (pos + 1) (Char.unsafe_chr (hi land 0xFF));
+     Bytes.unsafe_set b.buffer (pos + 2) (Char.unsafe_chr (lo lsr 8));
+     Bytes.unsafe_set b.buffer (pos + 3) (Char.unsafe_chr (lo land 0xFF));
+     b.position <- pos + 4
+ | _ -> assert false
+
+ let add_utf_16le_uchar b u = match Uchar.to_int u with
+ | u when u < 0 -> assert false
+ | u when u <= 0xFFFF ->
+     let pos = b.position in
+     if pos + 2 > b.length then resize b 2;
+     Bytes.unsafe_set b.buffer (pos    ) (Char.unsafe_chr (u land 0xFF));
+     Bytes.unsafe_set b.buffer (pos + 1) (Char.unsafe_chr (u lsr 8));
+     b.position <- pos + 2
+ | u when u <= 0x10FFFF ->
+     let u' = u - 0x10000 in
+     let hi = 0xD800 lor (u' lsr 10) in
+     let lo = 0xDC00 lor (u' land 0x3FF) in
+     let pos = b.position in
+     if pos + 4 > b.length then resize b 4;
+     Bytes.unsafe_set b.buffer (pos    ) (Char.unsafe_chr (hi land 0xFF));
+     Bytes.unsafe_set b.buffer (pos + 1) (Char.unsafe_chr (hi lsr 8));
+     Bytes.unsafe_set b.buffer (pos + 2) (Char.unsafe_chr (lo land 0xFF));
+     Bytes.unsafe_set b.buffer (pos + 3) (Char.unsafe_chr (lo lsr 8));
+     b.position <- pos + 4
+ | _ -> assert false
+
 let add_substring b s offset len =
   if offset < 0 || len < 0 || offset > String.length s - len
   then invalid_arg "Buffer.add_substring/add_subbytes";
@@ -194,3 +272,88 @@ let truncate b len =
       invalid_arg "Buffer.truncate"
     else
       b.position <- len
+
+(** {1 Iterators} *)
+
+let to_seq b =
+  let rec aux i () =
+    if i >= b.position then Seq.Nil
+    else
+      let x = Bytes.get b.buffer i in
+      Seq.Cons (x, aux (i+1))
+  in
+  aux 0
+
+let to_seqi b =
+  let rec aux i () =
+    if i >= b.position then Seq.Nil
+    else
+      let x = Bytes.get b.buffer i in
+      Seq.Cons ((i,x), aux (i+1))
+  in
+  aux 0
+
+let add_seq b seq = Seq.iter (add_char b) seq
+
+let of_seq i =
+  let b = create 32 in
+  add_seq b i;
+  b
+
+(** {6 Binary encoding of integers} *)
+
+external unsafe_set_int8 : bytes -> int -> int -> unit = "%bytes_unsafe_set"
+external unsafe_set_int16 : bytes -> int -> int -> unit = "%caml_bytes_set16u"
+external unsafe_set_int32 : bytes -> int -> int32 -> unit = "%caml_bytes_set32u"
+external unsafe_set_int64 : bytes -> int -> int64 -> unit = "%caml_bytes_set64u"
+external swap16 : int -> int = "%bswap16"
+external swap32 : int32 -> int32 = "%bswap_int32"
+external swap64 : int64 -> int64 = "%bswap_int64"
+
+
+let add_int8 b x =
+  let new_position = b.position + 1 in
+  if new_position > b.length then resize b 1;
+  unsafe_set_int8 b.buffer b.position x;
+  b.position <- new_position
+
+let add_int16_ne b x =
+  let new_position = b.position + 2 in
+  if new_position > b.length then resize b 2;
+  unsafe_set_int16 b.buffer b.position x;
+  b.position <- new_position
+
+let add_int32_ne b x =
+  let new_position = b.position + 4 in
+  if new_position > b.length then resize b 4;
+  unsafe_set_int32 b.buffer b.position x;
+  b.position <- new_position
+
+let add_int64_ne b x =
+  let new_position = b.position + 8 in
+  if new_position > b.length then resize b 8;
+  unsafe_set_int64 b.buffer b.position x;
+  b.position <- new_position
+
+let add_int16_le b x =
+  add_int16_ne b (if Sys.big_endian then swap16 x else x)
+
+let add_int16_be b x =
+  add_int16_ne b (if Sys.big_endian then x else swap16 x)
+
+let add_int32_le b x =
+  add_int32_ne b (if Sys.big_endian then swap32 x else x)
+
+let add_int32_be b x =
+  add_int32_ne b (if Sys.big_endian then x else swap32 x)
+
+let add_int64_le b x =
+  add_int64_ne b (if Sys.big_endian then swap64 x else x)
+
+let add_int64_be b x =
+  add_int64_ne b (if Sys.big_endian then x else swap64 x)
+
+let add_uint8 = add_int8
+let add_uint16_ne = add_int16_ne
+let add_uint16_le = add_int16_le
+let add_uint16_be = add_int16_be

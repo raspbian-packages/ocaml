@@ -38,8 +38,8 @@ type spec =
                                   function with each remaining argument *)
   | Expand of (string -> string array) (* If the remaining arguments to process
                                           are of the form
-                                          [["-foo"; "arg"] @ rest] where "foo" is
-                                          registered as [Expand f], then the
+                                          [["-foo"; "arg"] @ rest] where "foo"
+                                          is registered as [Expand f], then the
                                           arguments [f "arg" @ rest] are
                                           processed. Only allowed in
                                           [parse_and_expand_argv_dynamic]. *)
@@ -129,7 +129,8 @@ let float_of_string_opt x =
   try Some (float_of_string x)
   with Failure _ -> None
 
-let parse_and_expand_argv_dynamic_aux allow_expand current argv speclist anonfun errmsg =
+let parse_and_expand_argv_dynamic_aux allow_expand current argv speclist anonfun
+                                      errmsg =
   let initpos = !current in
   let convert_error error =
     (* convert an internal error to a Bad/Help exception
@@ -137,7 +138,8 @@ let parse_and_expand_argv_dynamic_aux allow_expand current argv speclist anonfun
        to an user-raised Bad exception.
     *)
     let b = Buffer.create 200 in
-    let progname = if initpos < (Array.length !argv) then !argv.(initpos) else "(?)" in
+    let progname =
+      if initpos < (Array.length !argv) then !argv.(initpos) else "(?)" in
     begin match error with
       | Unknown "-help" -> ()
       | Unknown "--help" -> ()
@@ -186,7 +188,7 @@ let parse_and_expand_argv_dynamic_aux allow_expand current argv speclist anonfun
           | Some _ -> ()
         in
         let rec treat_action = function
-        | Unit f -> f ();
+        | Unit f -> no_arg (); f ();
         | Bool f ->
             let arg = get_arg () in
             begin match bool_of_string_opt arg with
@@ -241,20 +243,25 @@ let parse_and_expand_argv_dynamic_aux allow_expand current argv speclist anonfun
             end;
             consume_arg ();
         | Tuple specs ->
+            no_arg ();
             List.iter treat_action specs;
         | Rest f ->
+            no_arg ();
             while !current < (Array.length !argv) - 1 do
               f !argv.(!current + 1);
               consume_arg ();
             done;
         | Expand f ->
             if not allow_expand then
-              raise (Invalid_argument "Arg.Expand is is only allowed with Arg.parse_and_expand_argv_dynamic");
+              raise (Invalid_argument "Arg.Expand is is only allowed with \
+                                       Arg.parse_and_expand_argv_dynamic");
             let arg = get_arg () in
             let newarg = f arg in
             consume_arg ();
             let before = Array.sub !argv 0 (!current + 1)
-            and after = Array.sub !argv (!current + 1) ((Array.length !argv) - !current - 1) in
+            and after =
+              Array.sub !argv (!current + 1)
+                        ((Array.length !argv) - !current - 1) in
             argv:= Array.concat [before;newarg;after];
         in
         treat_action action end
@@ -269,7 +276,8 @@ let parse_and_expand_argv_dynamic current argv speclist anonfun errmsg =
   parse_and_expand_argv_dynamic_aux true current argv speclist anonfun errmsg
 
 let parse_argv_dynamic ?(current=current) argv speclist anonfun errmsg =
-  parse_and_expand_argv_dynamic_aux false current (ref argv) speclist anonfun errmsg
+  parse_and_expand_argv_dynamic_aux false current (ref argv) speclist anonfun
+    errmsg
 
 
 let parse_argv ?(current=current) argv speclist anonfun errmsg =
@@ -309,8 +317,13 @@ let second_word s =
     else if s.[n] = ' ' then loop (n+1)
     else n
   in
-  try loop (String.index s ' ')
-  with Not_found -> len
+  match String.index s '\t' with
+  | n -> loop (n+1)
+  | exception Not_found ->
+      begin match String.index s ' ' with
+      | n -> loop (n+1)
+      | exception Not_found -> len
+      end
 
 
 let max_arg_len cur (kwd, spec, doc) =
@@ -318,6 +331,10 @@ let max_arg_len cur (kwd, spec, doc) =
   | Symbol _ -> max cur (String.length kwd)
   | _ -> max cur (String.length kwd + second_word doc)
 
+
+let replace_leading_tab s =
+  let seen = ref false in
+  String.map (function '\t' when not !seen -> seen := true; ' ' | c -> c) s
 
 let add_padding len ksd =
   match ksd with
@@ -328,16 +345,16 @@ let add_padding len ksd =
   | (kwd, (Symbol _ as spec), msg) ->
       let cutcol = second_word msg in
       let spaces = String.make ((max 0 (len - cutcol)) + 3) ' ' in
-      (kwd, spec, "\n" ^ spaces ^ msg)
+      (kwd, spec, "\n" ^ spaces ^ replace_leading_tab msg)
   | (kwd, spec, msg) ->
       let cutcol = second_word msg in
       let kwd_len = String.length kwd in
       let diff = len - kwd_len - cutcol in
       if diff <= 0 then
-        (kwd, spec, msg)
+        (kwd, spec, replace_leading_tab msg)
       else
         let spaces = String.make diff ' ' in
-        let prefix = String.sub msg 0 cutcol in
+        let prefix = String.sub (replace_leading_tab msg) 0 cutcol in
         let suffix = String.sub msg cutcol (String.length msg - cutcol) in
         (kwd, spec, prefix ^ spaces ^ suffix)
 
@@ -360,23 +377,19 @@ let read_aux trim sep file =
   let buf = Buffer.create 200 in
   let words = ref [] in
   let stash () =
-    let word =  (Buffer.contents buf) in
+    let word = Buffer.contents buf in
     let word = if trim then trim_cr word else word in
     words := word :: !words;
     Buffer.clear buf
   in
-  let rec read () =
-    try
-      let c = input_char ic in
-      if c = sep then begin
-        stash (); read ()
-      end else begin
-        Buffer.add_char buf c; read ()
-      end
-    with End_of_file ->
-      if Buffer.length buf > 0 then
-        stash () in
-  read ();
+  begin
+    try while true do
+        let c = input_char ic in
+        if c = sep then stash () else Buffer.add_char buf c
+      done
+    with End_of_file -> ()
+  end;
+  if Buffer.length buf > 0 then stash ();
   close_in ic;
   Array.of_list (List.rev !words)
 

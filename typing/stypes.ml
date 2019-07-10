@@ -27,7 +27,7 @@ open Lexing;;
 open Location;;
 open Typedtree;;
 
-let output_int oc i = output_string oc (string_of_int i)
+let output_int oc i = output_string oc (Int.to_string i)
 
 type annotation =
   | Ti_pat   of pattern
@@ -159,7 +159,7 @@ let print_info pp prev_loc ti =
       printtyp_reset_maybe loc;
       Printtyp.mark_loops typ;
       Format.pp_print_string Format.str_formatter "  ";
-      Printtyp.wrap_printing_env env
+      Printtyp.wrap_printing_env ~error:false env
                        (fun () -> Printtyp.type_sch Format.str_formatter typ);
       Format.pp_print_newline Format.str_formatter ();
       let s = Format.flush_str_formatter () in
@@ -194,16 +194,14 @@ let get_info () =
 
 let dump filename =
   if !Clflags.annotations then begin
-    let info = get_info () in
-    let pp =
-      match filename with
-          None -> stdout
-        | Some filename -> open_out filename in
-    sort_filter_phrases ();
-    ignore (List.fold_left (print_info pp) Location.none info);
+    let do_dump _temp_filename pp =
+      let info = get_info () in
+      sort_filter_phrases ();
+      ignore (List.fold_left (print_info pp) Location.none info) in
     begin match filename with
-    | None -> ()
-    | Some _ -> close_out pp
+    | None -> do_dump "" stdout
+    | Some filename ->
+        Misc.output_to_file_via_temporary ~mode:[Open_text] filename do_dump
     end;
     phrases := [];
   end else begin

@@ -18,7 +18,7 @@
    add [module Unix = UnixLabels] in your implementation.
 *)
 
-(** {6 Error report} *)
+(** {1 Error report} *)
 
 
 type error = Unix.error =
@@ -114,7 +114,7 @@ val handle_unix_error : ('a -> 'b) -> 'a -> 'b
    describing the error and exits with code 2. *)
 
 
-(** {6 Access to the process environment} *)
+(** {1 Access to the process environment} *)
 
 
 val environment : unit -> string array
@@ -126,7 +126,6 @@ val getenv : string -> string
    environment. Raise [Not_found] if the variable is unbound.
    (This function is identical to [Sys.getenv].) *)
 
-(*
 val unsafe_getenv : string -> string
 (** Return the value associated to a variable in the process
    environment.
@@ -138,8 +137,8 @@ val unsafe_getenv : string -> string
    for executables, the locations for temporary files or logs, and the
    like.
 
-   @raise Not_found if the variable is unbound.  *)
-*)
+   @raise Not_found if the variable is unbound.
+   @since 4.06.0  *)
 
 val putenv : string -> string -> unit
 (** [Unix.putenv name value] sets the value associated to a
@@ -148,7 +147,7 @@ val putenv : string -> string -> unit
    and [value] its new associated value. *)
 
 
-(** {6 Process handling} *)
+(** {1 Process handling} *)
 
 
 type process_status = Unix.process_status =
@@ -228,7 +227,7 @@ val nice : int -> int
    lower priorities.) Return the new nice value. *)
 
 
-(** {6 Basic file input/output} *)
+(** {1 Basic file input/output} *)
 
 
 type file_descr = Unix.file_descr
@@ -308,7 +307,7 @@ val single_write_substring :
     a byte sequence.
     @since 4.02.0 *)
 
-(** {6 Interfacing with the standard input/output library} *)
+(** {1 Interfacing with the standard input/output library} *)
 
 
 
@@ -329,7 +328,7 @@ val descr_of_out_channel : out_channel -> file_descr
 (** Return the descriptor corresponding to an output channel. *)
 
 
-(** {6 Seeking and truncating} *)
+(** {1 Seeking and truncating} *)
 
 
 type seek_command = Unix.seek_command =
@@ -351,7 +350,7 @@ val ftruncate : file_descr -> len:int -> unit
    to the given size. *)
 
 
-(** {6 File status} *)
+(** {1 File status} *)
 
 
 type file_kind = Unix.file_kind =
@@ -371,7 +370,7 @@ type stats = Unix.stats =
     st_nlink : int;             (** Number of links *)
     st_uid : int;               (** User id of the owner *)
     st_gid : int;               (** Group ID of the file's group *)
-    st_rdev : int;              (** Device minor number *)
+    st_rdev : int;              (** Device ID (if special file) *)
     st_size : int;              (** Size in bytes *)
     st_atime : float;           (** Last access time *)
     st_mtime : float;           (** Last modification time *)
@@ -394,7 +393,7 @@ val isatty : file_descr -> bool
 (** Return [true] if the given file descriptor refers to a terminal or
    console window, [false] otherwise. *)
 
-(** {6 File operations on large files} *)
+(** {1 File operations on large files} *)
 
 module LargeFile :
   sig
@@ -409,7 +408,7 @@ module LargeFile :
         st_nlink : int;             (** Number of links *)
         st_uid : int;               (** User id of the owner *)
         st_gid : int;               (** Group ID of the file's group *)
-        st_rdev : int;              (** Device minor number *)
+        st_rdev : int;              (** Device ID (if special file) *)
         st_size : int64;            (** Size in bytes *)
         st_atime : float;           (** Last access time *)
         st_mtime : float;           (** Last modification time *)
@@ -431,7 +430,60 @@ module LargeFile :
   whose sizes are greater than [max_int]. *)
 
 
-(** {6 Operations on file names} *)
+(** {1 Mapping files into memory} *)
+
+val map_file :
+  file_descr -> ?pos:int64 -> kind:('a, 'b) Stdlib.Bigarray.kind ->
+  layout:'c Stdlib.Bigarray.layout -> shared:bool -> dims:int array ->
+  ('a, 'b, 'c) Stdlib.Bigarray.Genarray.t
+(** Memory mapping of a file as a Bigarray.
+  [map_file fd kind layout shared dims]
+  returns a Bigarray of kind [kind], layout [layout],
+  and dimensions as specified in [dims].  The data contained in
+  this Bigarray are the contents of the file referred to by
+  the file descriptor [fd] (as opened previously with
+  [Unix.openfile], for example).  The optional [pos] parameter
+  is the byte offset in the file of the data being mapped;
+  it defaults to 0 (map from the beginning of the file).
+
+  If [shared] is [true], all modifications performed on the array
+  are reflected in the file.  This requires that [fd] be opened
+  with write permissions.  If [shared] is [false], modifications
+  performed on the array are done in memory only, using
+  copy-on-write of the modified pages; the underlying file is not
+  affected.
+
+  [Genarray.map_file] is much more efficient than reading
+  the whole file in a Bigarray, modifying that Bigarray,
+  and writing it afterwards.
+
+  To adjust automatically the dimensions of the Bigarray to
+  the actual size of the file, the major dimension (that is,
+  the first dimension for an array with C layout, and the last
+  dimension for an array with Fortran layout) can be given as
+  [-1].  [Genarray.map_file] then determines the major dimension
+  from the size of the file.  The file must contain an integral
+  number of sub-arrays as determined by the non-major dimensions,
+  otherwise [Failure] is raised.
+
+  If all dimensions of the Bigarray are given, the file size is
+  matched against the size of the Bigarray.  If the file is larger
+  than the Bigarray, only the initial portion of the file is
+  mapped to the Bigarray.  If the file is smaller than the big
+  array, the file is automatically grown to the size of the Bigarray.
+  This requires write permissions on [fd].
+
+  Array accesses are bounds-checked, but the bounds are determined by
+  the initial call to [map_file]. Therefore, you should make sure no
+  other process modifies the mapped file while you're accessing it,
+  or a SIGBUS signal may be raised. This happens, for instance, if the
+  file is shrunk.
+
+  [Invalid_argument] or [Failure] may be raised in cases where argument
+  validation fails.
+  @since 4.06.0 *)
+
+(** {1 Operations on file names} *)
 
 
 val unlink : string -> unit
@@ -440,12 +492,22 @@ val unlink : string -> unit
 val rename : src:string -> dst:string -> unit
 (** [rename old new] changes the name of a file from [old] to [new]. *)
 
-val link : src:string -> dst:string -> unit
-(** [link source dest] creates a hard link named [dest] to the file
-   named [source]. *)
+val link : ?follow:bool -> src:string -> dst:string -> unit
+(** [link ?follow source dest] creates a hard link named [dest] to the file
+   named [source].
+
+   @param follow indicates whether a [source] symlink is followed or a
+   hardlink to [source] itself will be created. On {e Unix} systems this is
+   done using the [linkat(2)] function. If [?follow] is not provided, then the
+   [link(2)] function is used whose behaviour is OS-dependent, but more widely
+   available.
+
+   @raise ENOSYS On {e Unix} if [~follow:_] is requested, but linkat is
+                 unavailable.
+   @raise ENOSYS On {e Windows} if [~follow:false] is requested. *)
 
 
-(** {6 File permissions and ownership} *)
+(** {1 File permissions and ownership} *)
 
 
 type access_permission = Unix.access_permission =
@@ -477,7 +539,7 @@ val access : string -> perm:access_permission list -> unit
    file. Raise [Unix_error] otherwise. *)
 
 
-(** {6 Operations on file descriptors} *)
+(** {1 Operations on file descriptors} *)
 
 
 val dup : ?cloexec:bool -> file_descr -> file_descr
@@ -511,7 +573,7 @@ val clear_close_on_exec : file_descr -> unit
    See {!UnixLabels.set_close_on_exec}.*)
 
 
-(** {6 Directories} *)
+(** {1 Directories} *)
 
 
 val mkdir : string -> perm:file_perm -> unit
@@ -547,7 +609,7 @@ val closedir : dir_handle -> unit
 
 
 
-(** {6 Pipes and redirections} *)
+(** {1 Pipes and redirections} *)
 
 
 val pipe : ?cloexec:bool -> unit -> file_descr * file_descr
@@ -559,7 +621,7 @@ val mkfifo : string -> perm:file_perm -> unit
 (** Create a named pipe with the given permissions. *)
 
 
-(** {6 High-level process and redirection management} *)
+(** {1 High-level process and redirection management} *)
 
 
 val create_process :
@@ -598,7 +660,7 @@ val open_process_out : string -> out_channel
    the command to a pipe.  Data written to the returned output channel
    is sent to the standard input of the command.
    Warning: writes on output channels are buffered, hence be careful
-   to call {!Pervasives.flush} at the right times to ensure
+   to call {!Stdlib.flush} at the right times to ensure
    correct synchronization. *)
 
 val open_process : string -> in_channel * out_channel
@@ -613,6 +675,42 @@ val open_process_full :
    the environment passed to the command.  The result is a triple
    of channels connected respectively to the standard output, standard input,
    and standard error of the command. *)
+
+val open_process_args_in : string -> string array -> in_channel
+(** High-level pipe and process management. The first argument specifies the
+   command to run, and the second argument specifies the argument array passed
+   to the command.  This function runs the command in parallel with the program.
+   The standard output of the command is redirected to a pipe, which can be read
+   via the returned input channel.
+
+    @since 4.08.0 *)
+
+val open_process_args_out : string -> string array -> out_channel
+(** Same as {!Unix.open_process_args_in}, but redirect the standard input of the
+   command to a pipe.  Data written to the returned output channel is sent to
+   the standard input of the command.  Warning: writes on output channels are
+   buffered, hence be careful to call {!Stdlib.flush} at the right times to
+   ensure correct synchronization.
+
+    @since 4.08.0 *)
+
+val open_process_args : string -> string array -> in_channel * out_channel
+(** Same as {!Unix.open_process_args_out}, but redirects both the standard input
+   and standard output of the command to pipes connected to the two returned
+   channels.  The input channel is connected to the output of the command, and
+   the output channel to the input of the command.
+
+    @since 4.08.0 *)
+
+val open_process_args_full :
+  string -> string array -> string array ->
+    in_channel * out_channel * in_channel
+(** Similar to {!Unix.open_process_args}, but the third argument specifies the
+   environment passed to the command.  The result is a triple of channels
+   connected respectively to the standard output, standard input, and standard
+   error of the command.
+
+    @since 4.08.0 *)
 
 val close_process_in : in_channel -> process_status
 (** Close channels opened by {!UnixLabels.open_process_in},
@@ -636,7 +734,7 @@ val close_process_full :
    and return its termination status. *)
 
 
-(** {6 Symbolic links} *)
+(** {1 Symbolic links} *)
 
 
 val symlink : ?to_dir:bool -> src:string -> dst:string -> unit
@@ -654,7 +752,7 @@ val readlink : string -> string
 (** Read the contents of a link. *)
 
 
-(** {6 Polling} *)
+(** {1 Polling} *)
 
 
 val select :
@@ -671,7 +769,7 @@ val select :
    and over which an exceptional condition is pending (third
    component). *)
 
-(** {6 Locking} *)
+(** {1 Locking} *)
 
 
 type lock_command = Unix.lock_command =
@@ -710,7 +808,7 @@ val lockf : file_descr -> mode:lock_command -> len:int -> unit
    It returns immediately if successful, or fails otherwise. *)
 
 
-(** {6 Signals}
+(** {1 Signals}
    Note: installation of signal handlers is performed via
    the functions {!Sys.signal} and {!Sys.set_signal}.
 *)
@@ -746,7 +844,7 @@ val pause : unit -> unit
 (** Wait until a non-ignored, non-blocked signal is delivered. *)
 
 
-(** {6 Time functions} *)
+(** {1 Time functions} *)
 
 
 type process_times = Unix.process_times =
@@ -845,7 +943,7 @@ val setitimer :
    after its next expiration. *)
 
 
-(** {6 User id, group id} *)
+(** {1 User id, group id} *)
 
 
 val getuid : unit -> int
@@ -904,22 +1002,22 @@ val getlogin : unit -> string
 
 val getpwnam : string -> passwd_entry
 (** Find an entry in [passwd] with the given name, or raise
-   [Not_found]. *)
+   [Not_found] if the matching entry is not found. *)
 
 val getgrnam : string -> group_entry
 (** Find an entry in [group] with the given name, or raise
-   [Not_found]. *)
+   [Not_found] if the matching entry is not found. *)
 
 val getpwuid : int -> passwd_entry
 (** Find an entry in [passwd] with the given user id, or raise
-   [Not_found]. *)
+   [Not_found] if the matching entry is not found. *)
 
 val getgrgid : int -> group_entry
 (** Find an entry in [group] with the given group id, or raise
-   [Not_found]. *)
+   [Not_found] if the matching entry is not found. *)
 
 
-(** {6 Internet addresses} *)
+(** {1 Internet addresses} *)
 
 
 type inet_addr = Unix.inet_addr
@@ -953,7 +1051,7 @@ val inet6_addr_loopback : inet_addr
 (** A special IPv6 address representing the host machine ([::1]). *)
 
 
-(** {6 Sockets} *)
+(** {1 Sockets} *)
 
 
 type socket_domain = Unix.socket_domain =
@@ -1070,7 +1168,7 @@ val sendto_substring :
 
 
 
-(** {6 Socket options} *)
+(** {1 Socket options} *)
 
 
 type socket_bool_option =
@@ -1148,13 +1246,13 @@ val getsockopt_error : file_descr -> error option
 (** Return the error condition associated with the given socket,
     and clear it. *)
 
-(** {6 High-level network connection functions} *)
+(** {1 High-level network connection functions} *)
 
 
 val open_connection : sockaddr -> in_channel * out_channel
 (** Connect to a server at the given address.
    Return a pair of buffered channels connected to the server.
-   Remember to call {!Pervasives.flush} on the output channel at the right
+   Remember to call {!Stdlib.flush} on the output channel at the right
    times to ensure correct synchronization. *)
 
 val shutdown_connection : in_channel -> unit
@@ -1171,7 +1269,7 @@ val establish_server :
    never returns normally. *)
 
 
-(** {6 Host and protocol databases} *)
+(** {1 Host and protocol databases} *)
 
 
 type host_entry = Unix.host_entry =
@@ -1286,7 +1384,7 @@ val getnameinfo : sockaddr -> getnameinfo_option list -> name_info
     Raise [Not_found] if an error occurs. *)
 
 
-(** {6 Terminal interface} *)
+(** {1 Terminal interface} *)
 
 
 (** The following functions implement the POSIX standard terminal

@@ -65,19 +65,19 @@ CAMLprim value unix_getaddrinfo(value vnode, value vserv, value vopts)
   int retcode;
 
   if (! (caml_string_is_c_safe(vnode) && caml_string_is_c_safe(vserv)))
-    return Val_int(0);
+    CAMLreturn (Val_int(0));
 
   /* Extract "node" parameter */
   if (caml_string_length(vnode) == 0) {
     node = NULL;
   } else {
-    node = caml_strdup(String_val(vnode));
+    node = caml_stat_strdup(String_val(vnode));
   }
   /* Extract "service" parameter */
   if (caml_string_length(vserv) == 0) {
     serv = NULL;
   } else {
-    serv = caml_strdup(String_val(vserv));
+    serv = caml_stat_strdup(String_val(vserv));
   }
   /* Parse options, set hints */
   memset(&hints, 0, sizeof(hints));

@@ -17,6 +17,17 @@ let mk_a f =
   "-a", Arg.Unit f, " Build a library"
 ;;
 
+let mk_alert f =
+  "-alert", Arg.String f,
+  Printf.sprintf
+    "<list>  Enable or disable alerts according to <list>:\n\
+    \        +<alertname>  enable alert <alertname>\n\
+    \        -<alertname>  disable alert <alertname>\n\
+    \        ++<alertname> treat <alertname> as fatal error\n\
+    \        --<alertname> treat <alertname> as non-fatal\n\
+    \        @<alertname>  enable <alertname> and treat it as fatal error\n\
+    \    <alertname> can be 'all' to refer to all alert names";;
+
 let mk_absname f =
   "-absname", Arg.Unit f, " Show absolute filenames in error messages"
 ;;
@@ -64,6 +75,12 @@ let mk_config f =
   "-config", Arg.Unit f, " Print configuration values and exit"
 ;;
 
+let mk_config_var f =
+  "-config-var", Arg.String f,
+  " Print the value of a configuration variable, a newline, and exit\n\
+\    (print nothing and exit with error value if the variable does not exist)"
+;;
+
 let mk_custom f =
   "-custom", Arg.Unit f, " Link in custom mode"
 ;;
@@ -75,6 +92,11 @@ let mk_dllib f =
 let mk_dllpath f =
   "-dllpath", Arg.String f,
   "<dir>  Add <dir> to the run-time search path for shared libraries"
+;;
+
+let mk_stop_after f =
+  "-stop-after", Arg.Symbol (Clflags.Compiler_pass.pass_names, f),
+  " Stop after the given compilation pass."
 ;;
 
 let mk_dtypes f =
@@ -233,11 +255,11 @@ let mk_no_keep_docs f =
 ;;
 
 let mk_keep_locs f =
-  "-keep-locs", Arg.Unit f, " Keep locations in .cmi files"
+  "-keep-locs", Arg.Unit f, " Keep locations in .cmi files (default)"
 ;;
 
 let mk_no_keep_locs f =
-  "-no-keep-locs", Arg.Unit f, " Do not keep locations in .cmi files (default)"
+  "-no-keep-locs", Arg.Unit f, " Do not keep locations in .cmi files"
 ;;
 
 let mk_labels f =
@@ -246,6 +268,10 @@ let mk_labels f =
 
 let mk_linkall f =
   "-linkall", Arg.Unit f, " Link all modules, even unused ones"
+;;
+
+let mk_linscan f =
+  "-linscan", Arg.Unit f, " Use the linear scan register allocator"
 ;;
 
 let mk_make_runtime f =
@@ -424,7 +450,8 @@ let mk_S f =
 
 let mk_safe_string f =
   "-safe-string", Arg.Unit f,
-  if Config.safe_string then " Make strings immutable (default)"
+  if Config.safe_string then " (was set when configuring the compiler)"
+  else if Config.default_safe_string then " Make strings immutable (default)"
   else " Make strings immutable"
 ;;
 
@@ -452,11 +479,15 @@ let mk_strict_sequence f =
 
 let mk_thread f =
   "-thread", Arg.Unit f,
-  " Generate code that supports the system threads library"
+  " (deprecated) same as -I +threads"
 ;;
 
 let mk_dtimings f =
-  "-dtimings", Arg.Unit f, " Print timings"
+  "-dtimings", Arg.Unit f, " Print timings information for each pass";
+;;
+
+let mk_dprofile f =
+  "-dprofile", Arg.Unit f, Profile.options_doc
 ;;
 
 let mk_unbox_closures f =
@@ -490,10 +521,12 @@ let mk_unsafe f =
 let mk_unsafe_string f =
   if Config.safe_string then
     let err () =
-      raise (Arg.Bad "OCaml has been configured with -safe-string: \
+      raise (Arg.Bad "OCaml has been configured with -force-safe-string: \
                       -unsafe-string is not available")
     in
     "-unsafe-string", Arg.Unit err, " (option not available)"
+  else if Config.default_safe_string then
+    "-unsafe-string", Arg.Unit f, " Make strings mutable"
   else
     "-unsafe-string", Arg.Unit f, " Make strings mutable (default)"
 ;;
@@ -531,8 +564,8 @@ let mk_no_version f =
 
 let mk_vmthread f =
   "-vmthread", Arg.Unit f,
-  " Generate code that supports the threads library with VM-level\n\
-  \     scheduling"
+  " (deprecated) Generate code that supports the threads library\n\
+  \     with VM-level scheduling"
 ;;
 
 let mk_vnum f =
@@ -575,7 +608,22 @@ let mk_color f =
   \      never   disable colors\n\
   \    The default setting is 'auto', and the current heuristic\n\
   \    checks that the TERM environment variable exists and is\n\
-  \    not empty or \"dumb\", and that isatty(stderr) holds."
+  \    not empty or \"dumb\", and that isatty(stderr) holds.\n\
+  \  If the option is not specified, these setting can alternatively\n\
+  \  be set through the OCAML_COLOR environment variable."
+;;
+
+let mk_error_style f =
+  "-error-style", Arg.Symbol (["contextual"; "short"], f),
+  Printf.sprintf
+    "  Control the way error messages and warnings are printed\n\
+    \    The following settings are supported:\n\
+    \      short       only print the error and its location\n\
+    \      contextual  like \"short\", but also display the source code\n\
+    \                  snippet corresponding to the location of the error\n\
+    \    The default setting is 'contextual'.\n\
+    \  If the option is not specified, these setting can alternatively\n\
+    \  be set through the OCAML_ERROR_STYLE environment variable."
 ;;
 
 let mk_where f =
@@ -586,8 +634,19 @@ let mk_nopervasives f =
   "-nopervasives", Arg.Unit f, " (undocumented)"
 ;;
 
+let mk_match_context_rows f =
+  "-match-context-rows", Arg.Int f,
+  let[@manual.ref "s:comp-options"] chapter, section = 9, 2 in
+  Printf.sprintf
+  "<n>  (advanced, see manual section %d.%d.)" chapter section
+;;
+
 let mk_use_prims f =
   "-use-prims", Arg.String f, "<file>  (undocumented)"
+;;
+
+let mk_dump_into_file f =
+  "-dump-into-file", Arg.Unit f, " dump output like -dlambda into <target>.dump"
 ;;
 
 let mk_dparsetree f =
@@ -600,6 +659,14 @@ let mk_dtypedtree f =
 
 let mk_drawlambda f =
   "-drawlambda", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_dno_unique_ids f =
+  "-dno-unique-ids", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_dunique_ids f =
+  "-dunique-ids", Arg.Unit f, " (undocumented)"
 ;;
 
 let mk_dsource f =
@@ -626,6 +693,11 @@ let mk_drawflambda f =
   "-drawflambda", Arg.Unit f, " Print Flambda terms after closure conversion"
 ;;
 
+let mk_dflambda_invariants f =
+  "-dflambda-invariants", Arg.Unit f, " Check Flambda invariants \
+      around each pass"
+;;
+
 let mk_dflambda_no_invariants f =
   "-dflambda-no-invariants", Arg.Unit f, " Do not Check Flambda invariants \
       around each pass"
@@ -643,6 +715,10 @@ let mk_dflambda_verbose f =
 
 let mk_dinstr f =
   "-dinstr", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_dcamlprimc f =
+  "-dcamlprimc", Arg.Unit f, " (undocumented)"
 ;;
 
 let mk_dcmm f =
@@ -663,6 +739,16 @@ let mk_dcse f =
 
 let mk_dlive f =
   "-dlive", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_davail f =
+  "-davail", Arg.Unit f, " Print register availability info when printing \
+    liveness"
+;;
+
+let mk_drunavail f =
+  "-drunavail", Arg.Unit f, " Run register availability pass (for testing \
+    only; needs -g)"
 ;;
 
 let mk_dspill f =
@@ -695,6 +781,10 @@ let mk_dscheduling f =
 
 let mk_dlinear f =
   "-dlinear", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_dinterval f =
+  "-dinterval", Arg.Unit f, " (undocumented)"
 ;;
 
 let mk_dstartup f =
@@ -753,6 +843,7 @@ let mk__ f =
 
 module type Common_options = sig
   val _absname : unit -> unit
+  val _alert : string -> unit
   val _I : string -> unit
   val _labels : unit -> unit
   val _alias_deps : unit -> unit
@@ -762,6 +853,7 @@ module type Common_options = sig
   val _noassert : unit -> unit
   val _nolabels : unit -> unit
   val _nostdlib : unit -> unit
+  val _nopervasives : unit -> unit
   val _open : string -> unit
   val _ppx : string -> unit
   val _principal : unit -> unit
@@ -784,6 +876,8 @@ module type Common_options = sig
   val _warn_error : string -> unit
   val _warn_help : unit -> unit
 
+  val _dno_unique_ids : unit -> unit
+  val _dunique_ids : unit -> unit
   val _dsource : unit -> unit
   val _dparsetree : unit -> unit
   val _dtypedtree : unit -> unit
@@ -802,8 +896,10 @@ module type Compiler_options = sig
   val _cclib : string -> unit
   val _ccopt : string -> unit
   val _config : unit -> unit
+  val _config_var : string -> unit
   val _for_pack : string -> unit
   val _g : unit -> unit
+  val _stop_after : string -> unit
   val _i : unit -> unit
   val _impl : string -> unit
   val _intf : string -> unit
@@ -832,9 +928,12 @@ module type Compiler_options = sig
   val _verbose : unit -> unit
   val _where : unit -> unit
   val _color : string -> unit
+  val _error_style : string -> unit
 
-  val _nopervasives : unit -> unit
+  val _match_context_rows : int -> unit
   val _dtimings : unit -> unit
+  val _dprofile : unit -> unit
+  val _dump_into_file : unit -> unit
 
   val _args: string -> string array
   val _args0: string -> string array
@@ -848,10 +947,11 @@ module type Toplevel_options = sig
   val _no_version : unit -> unit
   val _noprompt : unit -> unit
   val _nopromptcont : unit -> unit
-  val _plugin : string -> unit
   val _stdin : unit -> unit
   val _args : string -> string array
   val _args0 : string -> string array
+  val _color : string -> unit
+  val _error_style : string -> unit
 end
 ;;
 
@@ -868,6 +968,7 @@ module type Bytecomp_options = sig
   val _use_runtime : string -> unit
 
   val _dinstr : unit -> unit
+  val _dcamlprimc : unit -> unit
 
   val _use_prims : string -> unit
 end;;
@@ -906,6 +1007,7 @@ module type Optcommon_options = sig
   val _clambda_checks : unit -> unit
   val _dflambda : unit -> unit
   val _drawflambda : unit -> unit
+  val _dflambda_invariants : unit -> unit
   val _dflambda_no_invariants : unit -> unit
   val _dflambda_let : int -> unit
   val _dflambda_verbose : unit -> unit
@@ -916,6 +1018,8 @@ module type Optcommon_options = sig
   val _dcombine : unit -> unit
   val _dcse : unit -> unit
   val _dlive : unit -> unit
+  val _davail : unit -> unit
+  val _drunavail : unit -> unit
   val _dspill : unit -> unit
   val _dsplit : unit -> unit
   val _dinterf : unit -> unit
@@ -931,6 +1035,7 @@ module type Optcomp_options = sig
   include Common_options
   include Compiler_options
   include Optcommon_options
+  val _linscan : unit -> unit
   val _no_float_const_prop : unit -> unit
   val _nodynlink : unit -> unit
   val _p : unit -> unit
@@ -939,6 +1044,7 @@ module type Optcomp_options = sig
   val _shared : unit -> unit
   val _afl_instrument : unit -> unit
   val _afl_inst_ratio : int -> unit
+  val _dinterval : unit -> unit
 end;;
 
 module type Opttop_options = sig
@@ -972,6 +1078,7 @@ module Make_bytecomp_options (F : Bytecomp_options) =
 struct
   let list = [
     mk_a F._a;
+    mk_alert F._alert;
     mk_absname F._absname;
     mk_annot F._annot;
     mk_binannot F._binannot;
@@ -980,14 +1087,17 @@ struct
     mk_cclib F._cclib;
     mk_ccopt F._ccopt;
     mk_color F._color;
+    mk_error_style F._error_style;
     mk_compat_32 F._compat_32;
     mk_config F._config;
+    mk_config_var F._config_var;
     mk_custom F._custom;
     mk_dllib F._dllib;
     mk_dllpath F._dllpath;
     mk_dtypes F._annot;
     mk_for_pack_byt F._for_pack;
     mk_g_byt F._g;
+    mk_stop_after F._stop_after;
     mk_i F._i;
     mk_I F._I;
     mk_impl F._impl;
@@ -1012,6 +1122,7 @@ struct
     mk_noautolink_byt F._noautolink;
     mk_nolabels F._nolabels;
     mk_nostdlib F._nostdlib;
+    mk_nopervasives F._nopervasives;
     mk_o F._o;
     mk_opaque F._opaque;
     mk_open F._open;
@@ -1051,15 +1162,20 @@ struct
     mk_where F._where;
     mk__ F.anonymous;
 
-    mk_nopervasives F._nopervasives;
+    mk_match_context_rows F._match_context_rows;
     mk_use_prims F._use_prims;
+    mk_dno_unique_ids F._dno_unique_ids;
+    mk_dunique_ids F._dunique_ids;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
+    mk_dcamlprimc F._dcamlprimc;
     mk_dtimings F._dtimings;
+    mk_dprofile F._dprofile;
+    mk_dump_into_file F._dump_into_file;
 
     mk_args F._args;
     mk_args0 F._args0;
@@ -1070,6 +1186,7 @@ module Make_bytetop_options (F : Bytetop_options) =
 struct
   let list = [
     mk_absname F._absname;
+    mk_alert F._alert;
     mk_I F._I;
     mk_init F._init;
     mk_labels F._labels;
@@ -1083,9 +1200,9 @@ struct
     mk_noprompt F._noprompt;
     mk_nopromptcont F._nopromptcont;
     mk_nostdlib F._nostdlib;
+    mk_nopervasives F._nopervasives;
     mk_open F._open;
     mk_ppx F._ppx;
-    mk_plugin F._plugin;
     mk_principal F._principal;
     mk_no_principal F._no_principal;
     mk_rectypes F._rectypes;
@@ -1109,7 +1226,11 @@ struct
     mk_warn_error F._warn_error;
     mk_warn_help F._warn_help;
     mk__ F.anonymous;
+    mk_color F._color;
+    mk_error_style F._error_style;
 
+    mk_dno_unique_ids F._dno_unique_ids;
+    mk_dunique_ids F._dunique_ids;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
@@ -1126,6 +1247,7 @@ module Make_optcomp_options (F : Optcomp_options) =
 struct
   let list = [
     mk_a F._a;
+    mk_alert F._alert;
     mk_absname F._absname;
     mk_afl_instrument F._afl_instrument;
     mk_afl_inst_ratio F._afl_inst_ratio;
@@ -1139,11 +1261,14 @@ struct
     mk_clambda_checks F._clambda_checks;
     mk_classic_inlining F._classic_inlining;
     mk_color F._color;
+    mk_error_style F._error_style;
     mk_compact F._compact;
     mk_config F._config;
+    mk_config_var F._config_var;
     mk_dtypes F._annot;
     mk_for_pack_opt F._for_pack;
     mk_g_opt F._g;
+    mk_stop_after F._stop_after;
     mk_i F._i;
     mk_I F._I;
     mk_impl F._impl;
@@ -1167,6 +1292,7 @@ struct
     mk_inline_max_depth F._inline_max_depth;
     mk_alias_deps F._alias_deps;
     mk_no_alias_deps F._no_alias_deps;
+    mk_linscan F._linscan;
     mk_app_funct F._app_funct;
     mk_no_app_funct F._no_app_funct;
     mk_no_float_const_prop F._no_float_const_prop;
@@ -1175,6 +1301,7 @@ struct
     mk_nodynlink F._nodynlink;
     mk_nolabels F._nolabels;
     mk_nostdlib F._nostdlib;
+    mk_nopervasives F._nopervasives;
     mk_no_unbox_free_vars_of_closures F._no_unbox_free_vars_of_closures;
     mk_no_unbox_specialised_args F._no_unbox_specialised_args;
     mk_o F._o;
@@ -1223,7 +1350,9 @@ struct
     mk_where F._where;
     mk__ F.anonymous;
 
-    mk_nopervasives F._nopervasives;
+    mk_match_context_rows F._match_context_rows;
+    mk_dno_unique_ids F._dno_unique_ids;
+    mk_dunique_ids F._dunique_ids;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
@@ -1233,6 +1362,7 @@ struct
     mk_dclambda F._dclambda;
     mk_dflambda F._dflambda;
     mk_drawflambda F._drawflambda;
+    mk_dflambda_invariants F._dflambda_invariants;
     mk_dflambda_no_invariants F._dflambda_no_invariants;
     mk_dflambda_let F._dflambda_let;
     mk_dflambda_verbose F._dflambda_verbose;
@@ -1241,6 +1371,8 @@ struct
     mk_dcombine F._dcombine;
     mk_dcse F._dcse;
     mk_dlive F._dlive;
+    mk_davail F._davail;
+    mk_drunavail F._drunavail;
     mk_dspill F._dspill;
     mk_dsplit F._dsplit;
     mk_dinterf F._dinterf;
@@ -1249,8 +1381,11 @@ struct
     mk_dreload F._dreload;
     mk_dscheduling F._dscheduling;
     mk_dlinear F._dlinear;
+    mk_dinterval F._dinterval;
     mk_dstartup F._dstartup;
     mk_dtimings F._dtimings;
+    mk_dprofile F._dprofile;
+    mk_dump_into_file F._dump_into_file;
     mk_dump_pass F._dump_pass;
 
     mk_args F._args;
@@ -1261,6 +1396,7 @@ end;;
 module Make_opttop_options (F : Opttop_options) = struct
   let list = [
     mk_absname F._absname;
+    mk_alert F._alert;
     mk_compact F._compact;
     mk_I F._I;
     mk_init F._init;
@@ -1288,12 +1424,12 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_noprompt F._noprompt;
     mk_nopromptcont F._nopromptcont;
     mk_nostdlib F._nostdlib;
+    mk_nopervasives F._nopervasives;
     mk_no_unbox_free_vars_of_closures F._no_unbox_free_vars_of_closures;
     mk_no_unbox_specialised_args F._no_unbox_specialised_args;
     mk_o2 F._o2;
     mk_o3 F._o3;
     mk_open F._open;
-    mk_plugin F._plugin;
     mk_ppx F._ppx;
     mk_principal F._principal;
     mk_no_principal F._no_principal;
@@ -1323,6 +1459,8 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_warn_error F._warn_error;
     mk_warn_help F._warn_help;
     mk__ F.anonymous;
+    mk_color F._color;
+    mk_error_style F._error_style;
 
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
@@ -1337,6 +1475,8 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dcombine F._dcombine;
     mk_dcse F._dcse;
     mk_dlive F._dlive;
+    mk_davail F._davail;
+    mk_drunavail F._drunavail;
     mk_dspill F._dspill;
     mk_dsplit F._dsplit;
     mk_dinterf F._dinterf;
@@ -1354,6 +1494,7 @@ module Make_ocamldoc_options (F : Ocamldoc_options) =
 struct
   let list = [
     mk_absname F._absname;
+    mk_alert F._alert;
     mk_I F._I;
     mk_impl F._impl;
     mk_intf F._intf;

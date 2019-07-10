@@ -77,7 +77,7 @@ module Typedtree_search =
           | ext :: _ -> Hashtbl.add table (X (Name.from_ident ext.ext_id)) tt
         end
       | Typedtree.Tstr_exception ext ->
-          Hashtbl.add table (E (Name.from_ident ext.ext_id)) tt
+          Hashtbl.add table (E (Name.from_ident ext.tyexn_constructor.ext_id)) tt
       | Typedtree.Tstr_type (rf, ident_type_decl_list) ->
           List.iter
             (fun td ->
@@ -219,12 +219,12 @@ module Analyser =
     (** The name of the analysed file. *)
     let file_name = Sig.file_name
 
-    (** This function takes two indexes (start and end) and return the string
+    (** This function takes two indexes (start and end) and returns the string
        corresponding to the indexes in the file global variable. The function
        prepare_file must have been called to fill the file global variable.*)
     let get_string_of_file = Sig.get_string_of_file
 
-    (** This function loads the given file in the file global variable.
+    (** This function loads the given file in the file global variable
        and sets file_name.*)
     let prepare_file = Sig.prepare_file
 
@@ -677,7 +677,7 @@ module Analyser =
       in
       iter [] [] last_pos (p_cls.Parsetree.pcstr_fields)
 
-    (** Analysis of a [Parsetree.class_expr] and a [Typedtree.class_expr] to get a a couple (class parameters, class kind). *)
+    (** Analysis of a [Parsetree.class_expr] and a [Typedtree.class_expr] to get a pair (class parameters, class kind). *)
     let rec analyse_class_kind env current_class_name comment_opt last_pos p_class_expr tt_class_exp table =
       match (p_class_expr.Parsetree.pcl_desc, tt_class_exp.Typedtree.cl_desc) with
         (Parsetree.Pcl_constr (lid, _), tt_class_exp_desc ) ->
@@ -935,7 +935,7 @@ module Analyser =
         let f = match ele with
           Element_module m ->
             (function
-                Types.Sig_module (ident,md,_) ->
+                Types.Sig_module (ident,_,md,_,_) ->
                   let n1 = Name.simple m.m_name
                   and n2 = Ident.name ident in
                   (
@@ -946,7 +946,7 @@ module Analyser =
               | _ -> false)
         | Element_module_type mt ->
             (function
-                Types.Sig_modtype (ident,{Types.mtd_type=Some t}) ->
+                Types.Sig_modtype (ident,{Types.mtd_type=Some t},_) ->
                   let n1 = Name.simple mt.mt_name
                   and n2 = Ident.name ident in
                   (
@@ -957,14 +957,14 @@ module Analyser =
               | _ -> false)
         | Element_value v ->
             (function
-                Types.Sig_value (ident,_) ->
+                Types.Sig_value (ident,_, _) ->
                   let n1 = Name.simple v.val_name
                   and n2 = Ident.name ident in
                   n1 = n2
               | _ -> false)
         | Element_type t ->
              (function
-                Types.Sig_type (ident,_,_) ->
+                Types.Sig_type (ident,_,_,_) ->
                   (* FIXME: type details can be hidden *)
                   let n1 = Name.simple t.ty_name
                   and n2 = Ident.name ident in
@@ -980,21 +980,21 @@ module Analyser =
               else (fun _ -> false)
         | Element_exception e ->
             (function
-                Types.Sig_typext (ident,_,_) ->
+                Types.Sig_typext (ident,_,_, _) ->
                   let n1 = Name.simple e.ex_name
                   and n2 = Ident.name ident in
                   n1 = n2
               | _ -> false)
         | Element_class c ->
             (function
-                Types.Sig_class (ident,_,_) ->
+                Types.Sig_class (ident,_,_, _) ->
                   let n1 = Name.simple c.cl_name
                   and n2 = Ident.name ident in
                   n1 = n2
               | _ -> false)
         | Element_class_type ct ->
             (function
-                Types.Sig_class_type (ident,_,_) ->
+                Types.Sig_class_type (ident,_,_, _) ->
                   let n1 = Name.simple ct.clt_name
                   and n2 = Ident.name ident in
                   n1 = n2
@@ -1010,7 +1010,7 @@ module Analyser =
       let pred xt =
         List.exists
           (function
-              Types.Sig_typext (ident, _, _) ->
+              Types.Sig_typext (ident, _, _, _) ->
                 let n1 = Name.simple xt.xt_name
                 and n2 = Ident.name ident in
                   n1 = n2
@@ -1344,7 +1344,7 @@ module Analyser =
               (maybe_more, new_env, [ Element_type_extension new_te ])
 
       | Parsetree.Pstr_exception ext ->
-          let name = ext.Parsetree.pext_name in
+          let name = ext.Parsetree.ptyexn_constructor.Parsetree.pext_name in
           (* a new exception is defined *)
           let complete_name = Name.concat current_module_name name.txt in
           (* we get the exception declaration in the typed tree *)
@@ -1355,7 +1355,7 @@ module Analyser =
           in
           let new_env = Odoc_env.add_extension env complete_name in
           let new_ext =
-            match tt_ext.ext_kind with
+            match tt_ext.Typedtree.tyexn_constructor.ext_kind with
               Text_decl(tt_args, tt_ret_type) ->
                 let loc_start = loc.Location.loc_start.Lexing.pos_cnum in
                 let loc_end =  loc.Location.loc_end.Lexing.pos_cnum in
@@ -1424,7 +1424,7 @@ module Analyser =
              let new_env = Odoc_env.add_module env new_module.m_name in
              let new_env2 =
                match new_module.m_type with
-                 (* FIXME : can this be Tmty_ident? In this case, we would'nt have the signature *)
+                 (* FIXME : can this be Tmty_ident? In this case, we wouldn't have the signature *)
                  Types.Mty_signature s ->
                    Odoc_env.add_signature new_env new_module.m_name
                      ~rel: (Name.simple new_module.m_name) s
@@ -1528,7 +1528,7 @@ module Analyser =
           let new_env = Odoc_env.add_module_type env mt.mt_name in
           let new_env2 =
             match sig_mtype with
-              (* FIXME : can this be Tmty_ident? In this case, we would'nt have the signature *)
+              (* FIXME : can this be Tmty_ident? In this case, we wouldn't have the signature *)
               Some (Types.Mty_signature s) ->
                 Odoc_env.add_signature new_env mt.mt_name ~rel: (Name.simple mt.mt_name) s
             | _ ->
@@ -1870,8 +1870,8 @@ module Analyser =
        prepare_file source_file input_file;
        (* We create the t_module for this file. *)
        let mod_name = String.capitalize_ascii (Filename.basename (Filename.chop_extension source_file)) in
-       let (len,info_opt) = My_ir.first_special !file_name !file in
-
+       let len, info_opt = Sig.preamble !file_name !file
+           (fun x -> x.Parsetree.pstr_loc) parsetree in
        (* we must complete the included modules *)
        let elements = analyse_structure Odoc_env.empty mod_name len (String.length !file) parsetree tree_structure in
        let included_modules_from_tt = tt_get_included_module_list tree_structure in

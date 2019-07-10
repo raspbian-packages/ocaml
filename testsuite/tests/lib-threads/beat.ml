@@ -1,3 +1,10 @@
+(* TEST
+
+* hassysthreads
+include systhreads
+
+*)
+
 (* Test Thread.delay and its scheduling *)
 
 open Printf

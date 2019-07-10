@@ -29,14 +29,14 @@
    the [Marshal.from_*] functions is given as ['a], but this is
    misleading: the returned OCaml value does not possess type ['a]
    for all ['a]; it has one, unique type which cannot be determined
-   at compile-type.  The programmer should explicitly give the expected
+   at compile-time.  The programmer should explicitly give the expected
    type of the returned value, using the following syntax:
    - [(Marshal.from_channel chan : type)].
    Anything can happen at run-time if the object in the file does not
    belong to the given type.
 
    Values of extensible variant types, for example exceptions (of
-   extensible type [exn]), returned by the unmarhsaller should not be
+   extensible type [exn]), returned by the unmarshaller should not be
    pattern-matched over through [match ... with] or [try ... with],
    because unmarshalling does not preserve the information required for
    matching their constructors. Structural equalities with other
@@ -112,7 +112,7 @@ val to_channel : out_channel -> 'a -> extern_flags list -> unit
  *)
 
 external to_bytes :
-  'a -> extern_flags list -> bytes = "caml_output_value_to_string"
+  'a -> extern_flags list -> bytes = "caml_output_value_to_bytes"
 (** [Marshal.to_bytes v flags] returns a byte sequence containing
    the representation of [v].
    The [flags] argument has the same meaning as for

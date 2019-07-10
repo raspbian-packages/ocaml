@@ -122,11 +122,11 @@ let rec print_obj x =
     else if tag = Obj.double_tag then
         printf "%.12g" (Obj.magic x : float)
     else if tag = Obj.double_array_tag then begin
-        let a = (Obj.magic x : float array) in
+        let a = (Obj.magic x : floatarray) in
         printf "[|";
-        for i = 0 to Array.length a - 1 do
+        for i = 0 to Array.Floatarray.length a - 1 do
           if i > 0 then printf ", ";
-          printf "%.12g" a.(i)
+          printf "%.12g" (Array.Floatarray.get a i)
         done;
         printf "|]"
     end else if tag = Obj.custom_tag && same_custom x 0l then
@@ -335,7 +335,8 @@ let op_shapes = [
   opGETVECTITEM, Nothing;
   opSETVECTITEM, Nothing;
   opGETSTRINGCHAR, Nothing;
-  opSETSTRINGCHAR, Nothing;
+  opGETBYTESCHAR, Nothing;
+  opSETBYTESCHAR, Nothing;
   opBRANCH, Disp;
   opBRANCHIF, Disp;
   opBRANCHIFNOT, Disp;
@@ -528,8 +529,9 @@ let dump_exe ic =
     !globals.(i) <- Constant (init_data.(i))
   done;
   ignore(Bytesections.seek_section ic "SYMB");
-  let (_, sym_table) = (input_value ic : int * (Ident.t, int) Tbl.t) in
-  Tbl.iter (fun id pos -> !globals.(pos) <- Global id) sym_table;
+  let sym_table = (input_value ic : Symtable.global_map) in
+  Symtable.iter_global_map
+    (fun id pos -> !globals.(pos) <- Global id) sym_table;
   begin try
     ignore (Bytesections.seek_section ic "DBUG");
     let num_eventlists = input_binary_int ic in

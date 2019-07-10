@@ -1,3 +1,8 @@
+(* TEST
+   include ocamlcommon
+   files = "source.ml"
+*)
+
 (* (c) Alain Frisch / Lexifi *)
 (* cf. PR#7200 *)
 
@@ -7,15 +12,7 @@ let diff =
   | _ -> "diff -u"
 
 let report_err exn =
-  match exn with
-    | Sys_error msg ->
-        Format.printf "@[I/O error:@ %s@]@." msg
-    | x ->
-        match Location.error_of_exn x with
-        | Some err ->
-            Format.printf "@[%a@]@."
-              Location.report_error err
-        | None -> raise x
+  Location.report_exception Format.std_formatter exn
 
 let remove_locs =
   let open Ast_mapper in
@@ -24,8 +21,9 @@ let remove_locs =
     attributes =
       (fun mapper attrs ->
          let attrs = default_mapper.attributes mapper attrs in
-         List.filter (fun (s, _) -> s.Location.txt <> "#punning#")
-           attrs (* this is to accomodate a LexiFi custom extension *)
+         List.filter (fun a ->
+           a.Parsetree.attr_name.Location.txt <> "#punning#")
+           attrs (* this is to accommodate a LexiFi custom extension *)
       )
   }
 

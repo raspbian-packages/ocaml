@@ -45,12 +45,14 @@ static struct custom_operations win_handle_ops = {
   win_handle_hash,
   custom_serialize_default,
   custom_deserialize_default,
-  custom_compare_ext_default
+  custom_compare_ext_default,
+  custom_fixed_length_default
 };
 
 value win_alloc_handle(HANDLE h)
 {
-  value res = caml_alloc_custom(&win_handle_ops, sizeof(struct filedescr), 0, 1);
+  value res =
+    caml_alloc_custom(&win_handle_ops, sizeof(struct filedescr), 0, 1);
   Handle_val(res) = h;
   Descr_kind_val(res) = KIND_HANDLE;
   CRT_fd_val(res) = NO_CRT_FD;
@@ -60,7 +62,8 @@ value win_alloc_handle(HANDLE h)
 
 value win_alloc_socket(SOCKET s)
 {
-  value res = caml_alloc_custom(&win_handle_ops, sizeof(struct filedescr), 0, 1);
+  value res =
+    caml_alloc_custom(&win_handle_ops, sizeof(struct filedescr), 0, 1);
   Socket_val(res) = s;
   Descr_kind_val(res) = KIND_SOCKET;
   CRT_fd_val(res) = NO_CRT_FD;
@@ -280,7 +283,7 @@ value unix_error_of_code (int errcode)
   return err;
 }
 
-void unix_error(int errcode, char *cmdname, value cmdarg)
+void unix_error(int errcode, const char *cmdname, value cmdarg)
 {
   value res;
   value name = Val_unit, err = Val_unit, arg = Val_unit;
@@ -305,12 +308,12 @@ void unix_error(int errcode, char *cmdname, value cmdarg)
   caml_raise(res);
 }
 
-void uerror(char * cmdname, value cmdarg)
+void uerror(const char * cmdname, value cmdarg)
 {
   unix_error(errno, cmdname, cmdarg);
 }
 
-void caml_unix_check_path(value path, char * cmdname)
+void caml_unix_check_path(value path, const char * cmdname)
 {
   if (! caml_string_is_c_safe(path)) unix_error(ENOENT, cmdname, path);
 }

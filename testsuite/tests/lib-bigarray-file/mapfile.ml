@@ -1,3 +1,8 @@
+(* TEST
+   * hasunix
+   include unix
+*)
+
 open Bigarray
 
 (* Test harness *)
@@ -26,21 +31,21 @@ let test test_number answer correct_answer =
 (* Tests *)
 
 let tests () =
-  testing_function "map_file";
   let mapped_file = Filename.temp_file "bigarray" ".data" in
   begin
+    testing_function "map_file";
     let fd =
      Unix.openfile mapped_file
                    [Unix.O_RDWR; Unix.O_TRUNC; Unix.O_CREAT] 0o666 in
     let a =
-      array1_of_genarray (Genarray.map_file fd float64 c_layout true [|10000|])
+      array1_of_genarray (Unix.map_file fd float64 c_layout true [|10000|])
     in
     Unix.close fd;
     for i = 0 to 9999 do a.{i} <- float i done;
     let fd = Unix.openfile mapped_file [Unix.O_RDONLY] 0 in
     let b =
       array2_of_genarray
-        (Genarray.map_file fd float64 fortran_layout false [|100; -1|])
+        (Unix.map_file fd float64 fortran_layout false [|100; -1|])
     in
     Unix.close fd;
     let ok = ref true in
@@ -53,7 +58,7 @@ let tests () =
     b.{50,50} <- (-1.0);
     let fd = Unix.openfile mapped_file [Unix.O_RDONLY] 0 in
     let c =
-      array2_of_genarray (Genarray.map_file fd float64 c_layout false [|-1; 100|])
+      array2_of_genarray (Unix.map_file fd float64 c_layout false [|-1; 100|])
     in
     Unix.close fd;
     let ok = ref true in
@@ -66,7 +71,7 @@ let tests () =
     let fd = Unix.openfile mapped_file [Unix.O_RDONLY] 0 in
     let c =
       array2_of_genarray
-        (Genarray.map_file fd ~pos:800L float64 c_layout false [|-1; 100|])
+        (Unix.map_file fd ~pos:800L float64 c_layout false [|-1; 100|])
     in
     Unix.close fd;
     let ok = ref true in
@@ -79,14 +84,39 @@ let tests () =
     let fd = Unix.openfile mapped_file [Unix.O_RDONLY] 0 in
     let c =
       array2_of_genarray
-        (Genarray.map_file fd ~pos:79200L float64 c_layout false [|-1; 100|])
+        (Unix.map_file fd ~pos:79200L float64 c_layout false [|-1; 100|])
     in
     Unix.close fd;
     let ok = ref true in
     for j = 0 to 99 do
       if c.{0,j} <> float (100 * 99 + j) then ok := false
     done;
-    test 4 !ok true
+    test 4 !ok true;
+
+    testing_function "map_file errors";
+    (* Insufficient permissions *)
+    let fd = Unix.openfile mapped_file [Unix.O_RDONLY] 0 in
+    test 1 true
+      begin try
+        ignore (Unix.map_file fd float64 c_layout true [|-1; 100|]); false
+      with
+      | Unix.Unix_error((Unix.EACCES | Unix.EPERM), _, _) -> true
+      | Unix.Unix_error(err, _, _) ->
+          Printf.eprintf "Unexpected error %s\n%!" (Unix.error_message err);
+          false
+      end;
+    Unix.close fd;
+    (* Invalid handle *)
+    test 2 true
+      begin try
+        ignore (Unix.map_file fd float64 c_layout true [|-1; 100|]); false
+      with
+      | Unix.Unix_error((Unix.EBADF|Unix.EINVAL), _, _) -> true
+      | Unix.Unix_error(err, _, _) ->
+          Printf.eprintf "Unexpected error %s\n%!" (Unix.error_message err);
+          false
+      end
+
   end;
   (* Force garbage collection of the mapped bigarrays above, otherwise
      Win32 doesn't let us erase the file.  Notice the begin...end above
@@ -96,7 +126,6 @@ let tests () =
 
   ()
   [@@inline never]
-
 
 (********* End of test *********)
 

@@ -61,8 +61,8 @@ type spec =
                                    function with each remaining argument *)
   | Expand of (string -> string array) (** If the remaining arguments to process
                                            are of the form
-                                           [["-foo"; "arg"] @ rest] where "foo" is
-                                           registered as [Expand f], then the
+                                           [["-foo"; "arg"] @ rest] where "foo"
+                                           is registered as [Expand f], then the
                                            arguments [f "arg" @ rest] are
                                            processed. Only allowed in
                                            [parse_and_expand_argv_dynamic]. *)
@@ -168,14 +168,13 @@ val usage_string : (key * spec * doc) list -> usage_msg -> string
     if provided with the same parameters. *)
 
 val align: ?limit: int -> (key * spec * doc) list -> (key * spec * doc) list
-(** Align the documentation strings by inserting spaces at the first
-    space, according to the length of the keyword.  Use a
-    space as the first character in a doc string if you want to
-    align the whole string.  The doc strings corresponding to
-    [Symbol] arguments are aligned on the next line.
-    @param limit options with keyword and message longer than
-    [limit] will not be used to compute the alignement.
-*)
+(** Align the documentation strings by inserting spaces at the first alignment
+    separator (tab or, if tab is not found, space), according to the length of
+    the keyword.  Use a alignment separator as the first character in a doc
+    string if you want to align the whole string.  The doc strings corresponding
+    to [Symbol] arguments are aligned on the next line.
+    @param limit options with keyword and message longer than [limit] will not
+    be used to compute the alignment. *)
 
 val current : int ref
 (** Position (in {!Sys.argv}) of the argument being processed.  You can
@@ -190,8 +189,8 @@ val read_arg: string -> string array
     @since 4.05.0 *)
 
 val read_arg0: string -> string array
-(** Identical to {!Arg.read_arg} but assumes null character terminated command line
-    arguments.
+(** Identical to {!Arg.read_arg} but assumes null character terminated command
+    line arguments.
     @since 4.05.0 *)
 
 
