@@ -206,12 +206,6 @@ endif
 	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
 	  fi \
 	done
-	set -e; for pkg in ocaml ocaml-nox ocaml-base; do ( \
-	  mkdir -p debian/$$pkg/usr/share/doc/$$pkg && \
-	  cd debian/$$pkg/usr/share/doc/$$pkg && \
-	  ln -sf ../ocaml-base-nox/README.gz . && \
-	  ln -sf ../ocaml-base-nox/README.Debian .; \
-	); done
 endif
 # Remaining stuff
 	touch $@
@@ -269,7 +263,8 @@ endif
 
 .PHONY: override_dh_installdocs
 override_dh_installdocs:
-	dh_installdocs --ignore debian/README.Debian
+	dh_installdocs --package=ocaml-base-nox --doc-main-package=ocaml
+	dh_installdocs --remaining-packages
 
 .PHONY: override_dh_missing
 override_dh_missing:

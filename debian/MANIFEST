@@ -1,5 +1,5 @@
 debian/MANIFEST
-debian/README.Debian
+debian/OCaml_for_Debian
 debian/README.source
 debian/TODO.Debian
 debian/changelog
@@ -15,7 +15,6 @@ debian/man/ocamldumpobj.1
 debian/man/ocamlmklib.1
 debian/man/ocamlobjinfo.1
 debian/native-archs
-debian/ocaml-base-nox.README.Debian
 debian/ocaml-base-nox.dirs.in
 debian/ocaml-base-nox.docs
 debian/ocaml-base-nox.install.in
