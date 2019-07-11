@@ -12,7 +12,6 @@ Build-Depends:
  debhelper (>= 12),
  pkg-config,
  quilt,
- autotools-dev,
  binutils-dev,
  libiberty-dev,
  libncurses5-dev,
