@@ -133,7 +133,6 @@ build-stamp: config-stamp
 	if test ! -d boot.debian; then \
 	  cp -xa boot boot.debian; \
 	fi
-	rm -Rf debian/examples && mkdir debian/examples
 ifeq ($(BUILDCACHE),)
 	$(MAKE) world
 	$(MAKE) bootstrap
@@ -171,7 +170,7 @@ endif
 	  fi; \
 	done
 # Remaining stuff
-	-rm -Rf debian/$(SRCTARBALL) debian/examples $(TESTDIR)
+	-rm -Rf debian/$(SRCTARBALL) $(TESTDIR)
 
 .PHONY: override_dh_auto_install-arch override_dh_auto_install-indep
 override_dh_auto_install-arch: install-stamp-arch
