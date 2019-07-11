@@ -46,7 +46,7 @@ export OCAMLOBJINFO = OCAMLLIB=tools boot/ocamlrun tools/ocamlobjinfo
 
 export DH_OPTIONS
 
-# This has to be exported to make gen_modules work
+# This has to be exported to make dispatch work
 export OCAML_OPT_ARCH
 export OCAML_STDLIB_DIR
 
@@ -80,7 +80,6 @@ debian/control:
 	sed -e 's/@OCamlNativeArchs@/$(OCAML_NATIVE_ARCHS)/g' debian/control.in > $@
 
 pre-config-stamp: $(TARBALL_TARGET)
-	chmod +x debian/gen_modules.pl
 # Backup upstream config.{sub,guess}, and use most up-to-date ones
 	set -e; for ext in sub guess; do \
 	  if [ -f /usr/share/misc/config.$$ext ] && \
@@ -183,6 +182,8 @@ install-stamp-arch:
 # Install OCaml
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
+# Remove Debian-specific file
+	rm -f $(INSTDIR)/lib/ocaml/ld.conf
 # Remove uninstalled files
 	rm -f \
 	  $(INSTDIR)/share/man/man1/ocamlopt.opt.1 \
@@ -196,16 +197,9 @@ ifeq ($(OCAML_HAVE_OCAMLOPT),no)
 	  $(INSTDIR)/bin/ocamloptp
 endif
 # Dispatch files with dh_install
-	cd debian && \
-	set -e; for u in ocaml ocaml-nox; do \
-	  DESTDIR=tmp ./gen_modules.pl $$u.install > $$u.install.new; \
-	  mv $$u.install.new $$u.install; \
-	done
-	if ! dh_install --fail-missing; then \
-	  echo "===> dh_install has failed <==="; \
-	  find debian/tmp; \
-	  exit 1; \
-	fi
+	find debian/tmp \( -type f -or -type l \) -printf '%P\n' > debian/installed-files
+	boot/ocamlrun ./ocaml -nostdlib -I debian/tmp/usr/lib/ocaml debian/dispatch.ml
+	dh_install
 # Install additional files not handled by dh_install
 # Beware: dh_install does not handle renamings, please pay attention
 	set -e; for u in dumpobj; do \
@@ -277,3 +271,7 @@ endif
 .PHONY: override_dh_installdocs
 override_dh_installdocs:
 	dh_installdocs --ignore debian/README.Debian
+
+.PHONY: override_dh_missing
+override_dh_missing:
+	dh_missing --fail-missing
