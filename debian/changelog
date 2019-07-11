@@ -1,6 +1,15 @@
 ocaml (4.08.0-1) UNRELEASED; urgency=medium
 
+  [ Stéphane Glondu ]
   * New upstream release
+    - many Debian-specific patches have been dropped
+    - drop ocaml-mode binary package
+    - add ocaml-man binary package
+    - update debian/copyright
+  * Bump debhelper compat to 12
+
+  [ Nicolas Boulenguez ]
+  * Fix broken doc symlinks (Closes: #877267)
 
  -- Stéphane Glondu <glondu@debian.org>  Wed, 10 Jul 2019 14:58:45 +0200
 
