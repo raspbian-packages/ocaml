@@ -118,7 +118,6 @@ endif
 override_dh_auto_configure: config-stamp ocamlinit-stamp
 
 config-stamp: pre-config-stamp
-	./autogen
 	./configure $(CONFIGURE_OPTS)
 	touch $@
 
@@ -275,3 +274,6 @@ override_dh_installdocs:
 .PHONY: override_dh_missing
 override_dh_missing:
 	dh_missing --fail-missing
+
+override_dh_autoreconf:
+	./autogen

@@ -9,7 +9,7 @@ Uploaders:
  Mehdi Dogguy <mehdi@debian.org>,
  Ximin Luo <infinity0@debian.org>
 Build-Depends:
- debhelper (>= 9),
+ debhelper (>= 12),
  pkg-config,
  quilt,
  autotools-dev,
