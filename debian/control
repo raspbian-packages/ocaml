@@ -81,7 +81,7 @@ Provides:
  libnums-ocaml-dev
 Suggests:
  ocaml-doc,
- tuareg-mode | ocaml-mode
+ tuareg-mode
 Recommends:
  file
 Replaces: ocaml-interp (<< 3.11.1-3), ocaml-native-compilers (<< 4.04.0-1)
@@ -193,24 +193,3 @@ Description: OCaml interpreter and standard libraries
  This package contains several modules used internally by the OCaml
  compilers.  They are not needed for normal OCaml development, but may
  be helpful in the development of certain applications.
-
-Package: ocaml-mode
-Architecture: all
-Depends:
- emacs | emacsen, emacsen-common (>= 2.0.8),
- ${misc:Depends}
-Suggests: ocaml
-Description: major mode for editing Objective Caml in Emacs
- Objective (OCaml) is an implementation of the ML language, based on
- the Caml Light dialect extended with a complete class-based object system
- and a powerful module system in the style of Standard ML.
- .
- This package provides support for editing both Objective Caml and
- Caml Light programs with Emacs and XEmacs.
- .
- Caml-mode supports:
-  - indentation
-  - compilation and error retrieving
-  - interaction with the toplevel
-  - font-lock
-  - imenu

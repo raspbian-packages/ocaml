@@ -158,7 +158,6 @@ endif
 override_dh_auto_clean:
 ifneq ($(wildcard $(CURDIR)/Makefile.config),)
 	$(MAKE) clean
-	$(MAKE) -C emacs clean
 endif
 	$(MAKE) -f $(CURDIR)/debian/ocamlinit.mk ocamlinit-clean
 # Restore files altered by the build process
@@ -171,9 +170,6 @@ endif
 	    mv -f debian/config.orig.$$ext config/gnu/config.$$ext; \
 	  fi; \
 	done
-	if head -n 1 emacs/ocamltags.in | grep -q '^#!/bin/sh'; then \
-		sed -i 1d emacs/ocamltags.in; \
-	fi
 # Remaining stuff
 	-rm -Rf debian/$(SRCTARBALL) debian/examples $(TESTDIR)
 
@@ -182,16 +178,6 @@ override_dh_auto_install-arch: install-stamp-arch
 override_dh_auto_install-indep: install-stamp-indep
 
 install-stamp-indep:
-ifneq (,$(findstring ocaml-mode,$(ALL_PACKAGES)))
-# Install Emacs files
-	$(MAKE) -C emacs \
-	  EMACSDIR=$(CURDIR)/debian/ocaml-mode/usr/share/emacs/site-lisp/ocaml-mode \
-	  NOCOMPILE=true simple-install
-	if ! head -n 1 emacs/ocamltags.in | grep -q '^#!/bin/sh'; then \
-	  sed -i -e '1 i #!/bin/sh' emacs/ocamltags.in; \
-	fi
-	$(MAKE) -C emacs SCRIPTDIR=$(CURDIR)/debian/ocaml-mode/usr/bin install-ocamltags
-endif
 	touch $@
 
 install-stamp-arch:
