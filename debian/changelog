@@ -1,4 +1,4 @@
-ocaml (4.08.0-1) UNRELEASED; urgency=medium
+ocaml (4.08.0-1) experimental; urgency=medium
 
   [ Stéphane Glondu ]
   * New upstream release
@@ -11,7 +11,7 @@ ocaml (4.08.0-1) UNRELEASED; urgency=medium
   [ Nicolas Boulenguez ]
   * Fix broken doc symlinks (Closes: #877267)
 
- -- Stéphane Glondu <glondu@debian.org>  Wed, 10 Jul 2019 14:58:45 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 11 Jul 2019 14:19:49 +0200
 
 ocaml (4.05.0-11) unstable; urgency=medium
 
