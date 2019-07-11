@@ -277,3 +277,6 @@ override_dh_missing:
 
 override_dh_autoreconf:
 	./autogen
+
+# FIXME: figure out why dh_dwz fails
+override_dh_dwz:
