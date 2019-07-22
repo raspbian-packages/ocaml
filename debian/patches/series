@@ -1,3 +1,4 @@
 0003-Don-t-use-rpath.patch
 0004-Put-manpages-in-section-3o-instead-of-3.patch
 0003-Fix-in-configure.am.patch
+0013-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
