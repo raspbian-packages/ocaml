@@ -258,6 +258,7 @@ ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
 	rm -rf testsuite/tests/tool-debugger/find-artifacts/
 	rm -rf testsuite/tests/tool-debugger/no_debug_event/
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
+	sed -i /almabench.ml/d testsuite/tests/misc-unsafe/ocamltests
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
