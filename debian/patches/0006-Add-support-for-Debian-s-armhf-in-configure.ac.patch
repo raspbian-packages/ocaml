@@ -1,0 +1,21 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Wed, 24 Jul 2019 09:29:16 +0200
+Subject: Add support for Debian's armhf in configure.ac
+
+---
+ configure.ac | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index 70bd63f..ca972d0 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -871,6 +871,8 @@ AS_CASE([$host],
+     [arch=arm; model=armv5te; system=linux_eabi],
+   [armv5*-*-linux-gnueabi],
+     [arch=arm; model=armv5; system=linux_eabi],
++  [arm*-*-linux-gnueabihf],
++    [arch=arm; system=linux_eabihf],
+   [arm*-*-linux-gnueabi],
+     [arch=arm; system=linux_eabi],
+   [arm*-*-openbsd*],

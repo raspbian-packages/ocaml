@@ -3,3 +3,4 @@
 0003-Fix-in-configure.am.patch
 0013-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
 0005-Check-for-definition-of-AT_SECURE-before-using-it.patch
+0006-Add-support-for-Debian-s-armhf-in-configure.ac.patch
