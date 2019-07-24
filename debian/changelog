@@ -1,4 +1,4 @@
-ocaml (4.08.0-2) UNRELEASED; urgency=medium
+ocaml (4.08.0-2) experimental; urgency=medium
 
   * Build with BUILD_PATH_PREFIX_MAP set, to improve reproducibility
   * Use CCLINKFLAGS for linking all executables and shared libraries, to
@@ -14,7 +14,7 @@ ocaml (4.08.0-2) UNRELEASED; urgency=medium
   * Bump Standards-Version to 4.4.0
   * Remove Samuel from Uploaders
 
- -- Stéphane Glondu <glondu@debian.org>  Mon, 22 Jul 2019 10:16:15 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Wed, 24 Jul 2019 10:53:51 +0200
 
 ocaml (4.08.0-1) experimental; urgency=medium
 
