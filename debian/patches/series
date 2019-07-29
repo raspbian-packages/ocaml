@@ -5,3 +5,4 @@
 0005-Check-for-definition-of-AT_SECURE-before-using-it.patch
 0006-Add-support-for-Debian-s-armhf-in-configure.ac.patch
 0007-Fix-spelling-errors-reported-by-Lintian.patch
+0008-Tune-testpreempt-test-to-make-it-work-on-kfreebsd.patch
