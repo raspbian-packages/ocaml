@@ -3,6 +3,8 @@ Date: Wed, 24 Jul 2019 09:08:39 +0200
 Subject: Check for definition of AT_SECURE before using it
 
 This fixes compilation on kfreebsd-*.
+
+Forwarded: https://github.com/ocaml/ocaml/pull/8842
 ---
  otherlibs/unix/envir.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)

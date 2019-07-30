@@ -2,6 +2,7 @@ From: Stephane Glondu <steph@glondu.net>
 Date: Wed, 24 Jul 2019 09:29:16 +0200
 Subject: Add support for Debian's armhf in configure.ac
 
+Forwarded: https://github.com/ocaml/ocaml/pull/8830
 ---
  configure.ac | 2 ++
  1 file changed, 2 insertions(+)

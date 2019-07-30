@@ -2,6 +2,7 @@ From: Stephane Glondu <steph@glondu.net>
 Date: Wed, 24 Jul 2019 10:05:12 +0200
 Subject: Fix spelling errors reported by Lintian
 
+Forwarded: https://github.com/ocaml/ocaml/pull/8826
 ---
  asmcomp/cmmgen.ml                                         | 2 +-
  manual/manual/library/compilerlibs.etex                   | 2 +-

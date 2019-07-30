@@ -2,6 +2,7 @@ From: Stephane Glondu <steph@glondu.net>
 Date: Wed, 10 Jul 2019 16:41:51 +0200
 Subject: Fix in configure.am
 
+Forwarded: https://github.com/ocaml/ocaml/pull/8830
 ---
  configure.ac | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
