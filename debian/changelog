@@ -1,9 +1,9 @@
-ocaml (4.08.0-3) UNRELEASED; urgency=medium
+ocaml (4.08.0-3) experimental; urgency=medium
 
   * Disable native compiler on powerpc and x32
   * Tune testpreempt test to make it work on kfreebsd
 
- -- Stéphane Glondu <glondu@debian.org>  Thu, 25 Jul 2019 08:30:08 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Tue, 30 Jul 2019 13:27:15 +0200
 
 ocaml (4.08.0-2) experimental; urgency=medium
 
