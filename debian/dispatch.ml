@@ -109,7 +109,7 @@ let () =
       "usr/lib/ocaml/extract_crc", ocaml_nox;
       "usr/lib/ocaml/camlheader_ur", ocaml_nox;
       "usr/lib/ocaml/expunge", ocaml_nox;
-      "usr/lib/ocaml/VERSION", ocaml_nox;
+      "usr/lib/ocaml/VERSION", ocaml_base_nox;
       "usr/lib/ocaml/target_camlheaderd", ocaml_nox;
       "usr/lib/ocaml/objinfo_helper", ocaml_nox;
       "usr/lib/ocaml/target_camlheaderi", ocaml_nox;
