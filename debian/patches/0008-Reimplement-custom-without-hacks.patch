@@ -1,0 +1,228 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Sun, 18 Aug 2019 08:04:51 +0200
+Subject: Reimplement -custom without hacks
+
+Origin: https://github.com/ocaml/ocaml/pull/8872
+---
+ bytecomp/bytelink.ml                         | 32 +++++++++--
+ ocamltest/Makefile                           |  3 +-
+ testsuite/tests/embedded/ocamltests          |  1 -
+ testsuite/tests/lib-dynlink-bytecode/main.ml |  2 +-
+ testsuite/tests/lib-threads/ocamltests       |  1 -
+ tools/cmpbyt.ml                              | 85 +++++++++++++++-------------
+ 6 files changed, 77 insertions(+), 47 deletions(-)
+
+diff --git a/bytecomp/bytelink.ml b/bytecomp/bytelink.ml
+index 0b964e6..40b2850 100644
+--- a/bytecomp/bytelink.ml
++++ b/bytecomp/bytelink.ml
+@@ -438,7 +438,7 @@ let output_cds_file outfile =
+ 
+ (* Output a bytecode executable as a C file *)
+ 
+-let link_bytecode_as_c tolink outfile =
++let link_bytecode_as_c tolink outfile with_main =
+   let outchan = open_out outfile in
+   Misc.try_finally
+     ~always:(fun () -> close_out outchan)
+@@ -481,7 +481,19 @@ let link_bytecode_as_c tolink outfile =
+        (* The table of primitives *)
+        Symtable.output_primitive_table outchan;
+        (* The entry point *)
+-       output_string outchan "\
++       if with_main then begin
++         output_string outchan "\
++\nint main(int argc, char_os **argv)\
++\n{\
++\n  caml_startup_code(caml_code, sizeof(caml_code),\
++\n                    caml_data, sizeof(caml_data),\
++\n                    caml_sections, sizeof(caml_sections),\
++\n                    /* pooling */ 0,\
++\n                    argv);\
++\n  return 0; /* not reached */\
++\n}\n"
++       end else begin
++         output_string outchan "\
+ \nvoid caml_startup(char_os ** argv)\
+ \n{\
+ \n  caml_startup_code(caml_code, sizeof(caml_code),\
+@@ -516,7 +528,9 @@ let link_bytecode_as_c tolink outfile =
+ \n                               caml_sections, sizeof(caml_sections),\
+ \n                               /* pooling */ 1,\
+ \n                               argv);\
+-\n}\
++\n}\n"
++       end;
++       output_string outchan "\
+ \n#ifdef __cplusplus\
+ \n}\
+ \n#endif\n";
+@@ -575,6 +589,16 @@ let link objfiles output_name =
+   Clflags.dllibs := !lib_dllibs @ !Clflags.dllibs; (* put user's DLLs first *)
+   if not !Clflags.custom_runtime then
+     link_bytecode tolink output_name true
++  else if not !Clflags.output_c_object && not !Clflags.make_runtime then
++    let c_file = Filename.temp_file "camlobj" ".c" in
++    Misc.try_finally
++      ~always:(fun () -> remove_file c_file)
++      (fun () ->
++         link_bytecode_as_c tolink c_file true;
++         let exec_name = fix_exec_name output_name in
++         if not (build_custom_runtime c_file exec_name)
++         then raise(Error Custom_runtime)
++      )
+   else if not !Clflags.output_c_object then begin
+     let bytecode_name = Filename.temp_file "camlcode" "" in
+     let prim_name =
+@@ -637,7 +661,7 @@ let link objfiles output_name =
+     Misc.try_finally
+       ~always:(fun () -> List.iter remove_file !temps)
+       (fun () ->
+-         link_bytecode_as_c tolink c_file;
++         link_bytecode_as_c tolink c_file false;
+          if not (Filename.check_suffix output_name ".c") then begin
+            temps := c_file :: !temps;
+            if Ccomp.compile_file ~output:obj_file ?stable_name c_file <> 0 then
+diff --git a/ocamltest/Makefile b/ocamltest/Makefile
+index f226e55..7c7edf4 100644
+--- a/ocamltest/Makefile
++++ b/ocamltest/Makefile
+@@ -198,7 +198,8 @@ allopt: ocamltest.opt$(EXE)
+ opt.opt: allopt
+ 
+ ocamltest$(EXE): $(bytecode_modules)
+-	$(ocamlc_cmd) -custom ocamlcommon.cma ocamlbytecomp.cma -o $@ $^
++	$(ocamlc_cmd) -ccopt "-I $(ROOTDIR)/runtime" -custom \
++	  ocamlcommon.cma ocamlbytecomp.cma -o $@ $^
+ 
+ %.cmo: %.ml
+ 	$(ocamlc) -c $<
+diff --git a/testsuite/tests/embedded/ocamltests b/testsuite/tests/embedded/ocamltests
+index b03fb35..e69de29 100644
+--- a/testsuite/tests/embedded/ocamltests
++++ b/testsuite/tests/embedded/ocamltests
+@@ -1 +0,0 @@
+-cmcaml.ml
+diff --git a/testsuite/tests/lib-dynlink-bytecode/main.ml b/testsuite/tests/lib-dynlink-bytecode/main.ml
+index 558dc69..15892fa 100644
+--- a/testsuite/tests/lib-dynlink-bytecode/main.ml
++++ b/testsuite/tests/lib-dynlink-bytecode/main.ml
+@@ -45,7 +45,7 @@ reference = "${test_source_directory}/static.reference"
+ 
+ ******** ocamlc.byte
+ program = "${test_build_directory}/custom.exe"
+-flags = "-custom -linkall -I ."
++flags = "-ccopt '-I ${ocamlsrcdir}/runtime' -custom -linkall -I ."
+ all_modules = "registry.cmo plug2.cma plug1.cma"
+ use_runtime = "false"
+ ********* run
+diff --git a/testsuite/tests/lib-threads/ocamltests b/testsuite/tests/lib-threads/ocamltests
+index 1df74eb..76ec72d 100644
+--- a/testsuite/tests/lib-threads/ocamltests
++++ b/testsuite/tests/lib-threads/ocamltests
+@@ -10,7 +10,6 @@ pr7638.ml
+ prodcons.ml
+ prodcons2.ml
+ sieve.ml
+-signal.ml
+ sockets.ml
+ swapchan.ml
+ tls.ml
+diff --git a/tools/cmpbyt.ml b/tools/cmpbyt.ml
+index 983234f..71bbe1e 100644
+--- a/tools/cmpbyt.ml
++++ b/tools/cmpbyt.ml
+@@ -35,47 +35,54 @@ let skip_section name =
+ 
+ let cmpbyt file1 file2 =
+   let ic1 = open_in_bin file1 in
+-  let (toc1, pos1) = readtoc ic1 in
+   let ic2 = open_in_bin file2 in
+-  let (toc2, pos2) = readtoc ic2 in
+-  seek_in ic1 pos1;
+-  seek_in ic2 pos2;
+-  let rec cmpsections t1 t2 =
+-    match t1, t2 with
+-    | [], [] ->
+-        true
+-    | (name1, len1) :: t1, t2  when skip_section name1 ->
+-        seek_in ic1 (pos_in ic1 + len1);
+-         cmpsections t1 t2
+-    | t1, (name2, len2) :: t2  when skip_section name2 ->
+-        seek_in ic2 (pos_in ic2 + len2);
+-        cmpsections t1 t2
+-    | [], _  ->
+-        eprintf "%s has more sections than %s\n" file2 file1;
+-        false
+-    | _,  [] ->
+-        eprintf "%s has more sections than %s\n" file1 file2;
+-        false
+-    | (name1, len1) :: t1, (name2, len2) :: t2 ->
+-        if name1 <> name2 then begin
+-          eprintf "Section mismatch: %s (in %s) / %s (in %s)\n"
+-                  name1 file1 name2 file2;
+-          false
+-        end else if len1 <> len2 then begin
+-          eprintf "Length of section %s differ: %d (in %s) / %d (in %s)\n"
+-                  name1 len1 file1 len2 file2;
+-          false
+-        end else begin
+-          match cmpbytes ic1 ic2 len1 0 with
+-          | Differ ofs ->
+-              eprintf "Files %s and %s differ: section %s, offset %d\n"
+-                      file1 file2 name1 ofs;
+-              false
+-          | Same ->
+-              cmpsections t1 t2
+-        end
++  let len1 = in_channel_length ic1 in
++  let len2 = in_channel_length ic2 in
++  let res =
++    if len1 = len2 && cmpbytes ic1 ic2 len1 0 = Same then
++      true
++    else
++      let (toc1, pos1) = readtoc ic1 in
++      let (toc2, pos2) = readtoc ic2 in
++      seek_in ic1 pos1;
++      seek_in ic2 pos2;
++      let rec cmpsections t1 t2 =
++        match t1, t2 with
++        | [], [] ->
++           true
++        | (name1, len1) :: t1, t2  when skip_section name1 ->
++           seek_in ic1 (pos_in ic1 + len1);
++           cmpsections t1 t2
++        | t1, (name2, len2) :: t2  when skip_section name2 ->
++           seek_in ic2 (pos_in ic2 + len2);
++           cmpsections t1 t2
++        | [], _  ->
++           eprintf "%s has more sections than %s\n" file2 file1;
++           false
++        | _,  [] ->
++           eprintf "%s has more sections than %s\n" file1 file2;
++           false
++        | (name1, len1) :: t1, (name2, len2) :: t2 ->
++           if name1 <> name2 then begin
++               eprintf "Section mismatch: %s (in %s) / %s (in %s)\n"
++                 name1 file1 name2 file2;
++               false
++             end else if len1 <> len2 then begin
++               eprintf "Length of section %s differ: %d (in %s) / %d (in %s)\n"
++                 name1 len1 file1 len2 file2;
++               false
++             end else begin
++               match cmpbytes ic1 ic2 len1 0 with
++               | Differ ofs ->
++                  eprintf "Files %s and %s differ: section %s, offset %d\n"
++                    file1 file2 name1 ofs;
++                  false
++               | Same ->
++                  cmpsections t1 t2
++             end
++      in
++      cmpsections toc1 toc2
+   in
+-  let res = cmpsections toc1 toc2 in
+   close_in ic1; close_in ic2;
+   res
+ 
