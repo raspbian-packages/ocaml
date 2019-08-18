@@ -438,7 +438,7 @@ let output_cds_file outfile =
 
 (* Output a bytecode executable as a C file *)
 
-let link_bytecode_as_c tolink outfile =
+let link_bytecode_as_c tolink outfile with_main =
   let outchan = open_out outfile in
   Misc.try_finally
     ~always:(fun () -> close_out outchan)
@@ -481,7 +481,19 @@ let link_bytecode_as_c tolink outfile =
        (* The table of primitives *)
        Symtable.output_primitive_table outchan;
        (* The entry point *)
-       output_string outchan "\
+       if with_main then begin
+         output_string outchan "\
+\nint main(int argc, char_os **argv)\
+\n{\
+\n  caml_startup_code(caml_code, sizeof(caml_code),\
+\n                    caml_data, sizeof(caml_data),\
+\n                    caml_sections, sizeof(caml_sections),\
+\n                    /* pooling */ 0,\
+\n                    argv);\
+\n  return 0; /* not reached */\
+\n}\n"
+       end else begin
+         output_string outchan "\
 \nvoid caml_startup(char_os ** argv)\
 \n{\
 \n  caml_startup_code(caml_code, sizeof(caml_code),\
@@ -516,7 +528,9 @@ let link_bytecode_as_c tolink outfile =
 \n                               caml_sections, sizeof(caml_sections),\
 \n                               /* pooling */ 1,\
 \n                               argv);\
-\n}\
+\n}\n"
+       end;
+       output_string outchan "\
 \n#ifdef __cplusplus\
 \n}\
 \n#endif\n";
@@ -575,6 +589,16 @@ let link objfiles output_name =
   Clflags.dllibs := !lib_dllibs @ !Clflags.dllibs; (* put user's DLLs first *)
   if not !Clflags.custom_runtime then
     link_bytecode tolink output_name true
+  else if not !Clflags.output_c_object && not !Clflags.make_runtime then
+    let c_file = Filename.temp_file "camlobj" ".c" in
+    Misc.try_finally
+      ~always:(fun () -> remove_file c_file)
+      (fun () ->
+         link_bytecode_as_c tolink c_file true;
+         let exec_name = fix_exec_name output_name in
+         if not (build_custom_runtime c_file exec_name)
+         then raise(Error Custom_runtime)
+      )
   else if not !Clflags.output_c_object then begin
     let bytecode_name = Filename.temp_file "camlcode" "" in
     let prim_name =
@@ -637,7 +661,7 @@ let link objfiles output_name =
     Misc.try_finally
       ~always:(fun () -> List.iter remove_file !temps)
       (fun () ->
-         link_bytecode_as_c tolink c_file;
+         link_bytecode_as_c tolink c_file false;
          if not (Filename.check_suffix output_name ".c") then begin
            temps := c_file :: !temps;
            if Ccomp.compile_file ~output:obj_file ?stable_name c_file <> 0 then
