@@ -1,0 +1,12 @@
+0001-Pass-no-relax-to-ld-on-alpha.patch
+0002-Call-ld-with-proper-flags.patch
+0003-Don-t-use-rpath.patch
+0004-Put-manpages-in-section-3o-instead-of-3.patch
+0005-Avoid-multiple-declarations-in-generated-.c-files-in.patch
+0006-Embed-bytecode-in-C-object-when-using-custom.patch
+0008-Native-backtraces-don-t-work-on-powerpc-and-sparc.patch
+0010-XL-001-tests.asmcomp.patch
+0011-arm64-hide-symbols-for-stricter-binutils.patch
+0013-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
+0014-Compute-a-stable-name-for-preprocessed-files.patch
+0012-Integer-overflows-when-unmarshaling-a-bigarray.patch
