@@ -1,0 +1,3 @@
+ocaml-nox: script-not-executable .@OCamlStdlibDir@/camlheader
+ocaml-nox: binary-without-manpage usr/bin/ocaml*.byte
+ocaml-nox: binary-without-manpage usr/bin/ocaml*.opt
