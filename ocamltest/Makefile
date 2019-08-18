@@ -198,7 +198,8 @@ allopt: ocamltest.opt$(EXE)
 opt.opt: allopt
 
 ocamltest$(EXE): $(bytecode_modules)
-	$(ocamlc_cmd) -custom ocamlcommon.cma ocamlbytecomp.cma -o $@ $^
+	$(ocamlc_cmd) -ccopt "-I $(ROOTDIR)/runtime" -custom \
+	  ocamlcommon.cma ocamlbytecomp.cma -o $@ $^
 
 %.cmo: %.ml
 	$(ocamlc) -c $<
