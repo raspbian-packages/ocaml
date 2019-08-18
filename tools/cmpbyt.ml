@@ -35,47 +35,54 @@ let skip_section name =
 
 let cmpbyt file1 file2 =
   let ic1 = open_in_bin file1 in
-  let (toc1, pos1) = readtoc ic1 in
   let ic2 = open_in_bin file2 in
-  let (toc2, pos2) = readtoc ic2 in
-  seek_in ic1 pos1;
-  seek_in ic2 pos2;
-  let rec cmpsections t1 t2 =
-    match t1, t2 with
-    | [], [] ->
-        true
-    | (name1, len1) :: t1, t2  when skip_section name1 ->
-        seek_in ic1 (pos_in ic1 + len1);
-         cmpsections t1 t2
-    | t1, (name2, len2) :: t2  when skip_section name2 ->
-        seek_in ic2 (pos_in ic2 + len2);
-        cmpsections t1 t2
-    | [], _  ->
-        eprintf "%s has more sections than %s\n" file2 file1;
-        false
-    | _,  [] ->
-        eprintf "%s has more sections than %s\n" file1 file2;
-        false
-    | (name1, len1) :: t1, (name2, len2) :: t2 ->
-        if name1 <> name2 then begin
-          eprintf "Section mismatch: %s (in %s) / %s (in %s)\n"
-                  name1 file1 name2 file2;
-          false
-        end else if len1 <> len2 then begin
-          eprintf "Length of section %s differ: %d (in %s) / %d (in %s)\n"
-                  name1 len1 file1 len2 file2;
-          false
-        end else begin
-          match cmpbytes ic1 ic2 len1 0 with
-          | Differ ofs ->
-              eprintf "Files %s and %s differ: section %s, offset %d\n"
-                      file1 file2 name1 ofs;
-              false
-          | Same ->
-              cmpsections t1 t2
-        end
+  let len1 = in_channel_length ic1 in
+  let len2 = in_channel_length ic2 in
+  let res =
+    if len1 = len2 && cmpbytes ic1 ic2 len1 0 = Same then
+      true
+    else
+      let (toc1, pos1) = readtoc ic1 in
+      let (toc2, pos2) = readtoc ic2 in
+      seek_in ic1 pos1;
+      seek_in ic2 pos2;
+      let rec cmpsections t1 t2 =
+        match t1, t2 with
+        | [], [] ->
+           true
+        | (name1, len1) :: t1, t2  when skip_section name1 ->
+           seek_in ic1 (pos_in ic1 + len1);
+           cmpsections t1 t2
+        | t1, (name2, len2) :: t2  when skip_section name2 ->
+           seek_in ic2 (pos_in ic2 + len2);
+           cmpsections t1 t2
+        | [], _  ->
+           eprintf "%s has more sections than %s\n" file2 file1;
+           false
+        | _,  [] ->
+           eprintf "%s has more sections than %s\n" file1 file2;
+           false
+        | (name1, len1) :: t1, (name2, len2) :: t2 ->
+           if name1 <> name2 then begin
+               eprintf "Section mismatch: %s (in %s) / %s (in %s)\n"
+                 name1 file1 name2 file2;
+               false
+             end else if len1 <> len2 then begin
+               eprintf "Length of section %s differ: %d (in %s) / %d (in %s)\n"
+                 name1 len1 file1 len2 file2;
+               false
+             end else begin
+               match cmpbytes ic1 ic2 len1 0 with
+               | Differ ofs ->
+                  eprintf "Files %s and %s differ: section %s, offset %d\n"
+                    file1 file2 name1 ofs;
+                  false
+               | Same ->
+                  cmpsections t1 t2
+             end
+      in
+      cmpsections toc1 toc2
   in
-  let res = cmpsections toc1 toc2 in
   close_in ic1; close_in ic2;
   res
 
