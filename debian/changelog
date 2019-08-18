@@ -4,6 +4,7 @@ ocaml (4.08.0-4) UNRELEASED; urgency=medium
   * Put VERSION in ocaml-base-nox
   * Add Breaks/Replaces: ocaml-base to ocaml-base-nox (Closes: #933792)
   * Disable testpreempt test on kfreebsd for now
+  * Reimplement -custom without hacks
 
  -- Stéphane Glondu <glondu@debian.org>  Sat, 17 Aug 2019 17:11:29 +0200
 
