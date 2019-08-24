@@ -10,7 +10,6 @@ Uploaders:
 Build-Depends:
  debhelper (>= 12),
  pkg-config,
- quilt,
  binutils-dev,
  libiberty-dev,
  libncurses5-dev,
