@@ -1,10 +1,11 @@
-ocaml (4.08.0-4) UNRELEASED; urgency=medium
+ocaml (4.08.1-1) UNRELEASED; urgency=medium
 
+  * New upstream release
   * Statically link -lbfd to avoid a tight dependency with libbinutils
   * Put VERSION in ocaml-base-nox
   * Add Breaks/Replaces: ocaml-base to ocaml-base-nox (Closes: #933792)
   * Disable testpreempt test on kfreebsd for now
-  * Reimplement -custom without hacks
+  * Add back Debian-specific -custom behaviour
 
  -- Stéphane Glondu <glondu@debian.org>  Sat, 17 Aug 2019 17:11:29 +0200
 
