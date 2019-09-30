@@ -8,7 +8,7 @@ Uploaders:
  Mehdi Dogguy <mehdi@debian.org>,
  Ximin Luo <infinity0@debian.org>
 Build-Depends:
- debhelper (>= 12),
+ debhelper-compat (= 12),
  pkg-config,
  binutils-dev,
  libiberty-dev,
