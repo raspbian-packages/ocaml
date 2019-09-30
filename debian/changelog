@@ -1,4 +1,4 @@
-ocaml (4.08.1-1) UNRELEASED; urgency=medium
+ocaml (4.08.1-1) experimental; urgency=medium
 
   * New upstream release
   * Statically link -lbfd to avoid a tight dependency with libbinutils
@@ -7,7 +7,7 @@ ocaml (4.08.1-1) UNRELEASED; urgency=medium
   * Disable testpreempt test on kfreebsd for now
   * Add back Debian-specific -custom behaviour
 
- -- Stéphane Glondu <glondu@debian.org>  Sat, 17 Aug 2019 17:11:29 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 30 Sep 2019 16:40:45 +0200
 
 ocaml (4.08.0-3) experimental; urgency=medium
 
