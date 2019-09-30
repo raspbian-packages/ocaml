@@ -11,6 +11,7 @@ Origin: https://github.com/ocaml/ocaml/pull/8872
  testsuite/tests/lib-threads/ocamltests       |  1 -
  tools/cmpbyt.ml                              | 85 +++++++++++++++-------------
  6 files changed, 77 insertions(+), 47 deletions(-)
+ delete mode 100644 testsuite/tests/embedded/ocamltests
 
 diff --git a/bytecomp/bytelink.ml b/bytecomp/bytelink.ml
 index 0b964e6..40b2850 100644
@@ -98,9 +99,10 @@ index f226e55..7c7edf4 100644
  %.cmo: %.ml
  	$(ocamlc) -c $<
 diff --git a/testsuite/tests/embedded/ocamltests b/testsuite/tests/embedded/ocamltests
-index b03fb35..e69de29 100644
+deleted file mode 100644
+index b03fb35..0000000
 --- a/testsuite/tests/embedded/ocamltests
-+++ b/testsuite/tests/embedded/ocamltests
++++ /dev/null
 @@ -1 +0,0 @@
 -cmcaml.ml
 diff --git a/testsuite/tests/lib-dynlink-bytecode/main.ml b/testsuite/tests/lib-dynlink-bytecode/main.ml
