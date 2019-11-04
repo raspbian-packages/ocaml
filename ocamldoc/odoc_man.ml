@@ -319,7 +319,8 @@ class man =
           self#man_of_text2 b t;
           bs b "\n.sp\n"
       | Odoc_info.Title (_, _, t) ->
-          self#man_of_text2 b [Odoc_info.Code (Odoc_info.string_of_text t)]
+          let txt = Odoc_info.string_of_text t in
+          bp b ".SS %s\n" txt
       | Odoc_info.Latex _ ->
           (* don't care about LaTeX stuff in HTML. *)
           ()
@@ -329,9 +330,9 @@ class man =
           self#man_of_text_element b
             (Odoc_info.Code (Odoc_info.use_hidden_modules name))
       | Odoc_info.Superscript t ->
-          bs b "^{"; self#man_of_text2 b t
+          bs b "^"; self#man_of_text2 b t
       | Odoc_info.Subscript t ->
-          bs b "_{"; self#man_of_text2 b t
+          bs b "_"; self#man_of_text2 b t
       | Odoc_info.Module_list _ ->
           ()
       | Odoc_info.Index_list ->
@@ -810,13 +811,13 @@ class man =
     (** Print groff string for a module comment.*)
     method man_of_module_comment b text =
       bs b "\n.PP\n";
-      self#man_of_text b [Code ("=== "^(Odoc_misc.string_of_text text)^" ===")];
+      self#man_of_text b text;
       bs b "\n.PP\n"
 
     (** Print groff string for a class comment.*)
     method man_of_class_comment b text =
       bs b "\n.PP\n";
-      self#man_of_text b [Code ("=== "^(Odoc_misc.string_of_text text)^" ===")];
+      self#man_of_text b text;
       bs b "\n.PP\n"
 
     method man_of_recfield b modname f =
@@ -874,7 +875,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^cl.cl_name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" "^Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
 
@@ -932,7 +933,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^ct.clt_name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" "^Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
 
@@ -1024,7 +1025,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^mt.mt_name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" "^Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
 
@@ -1106,7 +1107,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^m.m_name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" "^Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
 
@@ -1212,7 +1213,7 @@ class man =
         let b = new_buf () in
         bs b (".TH \""^name^"\" ");
         bs b !man_section ;
-        bs b (" source: "^Odoc_misc.current_date^" ");
+        bs b (" "^Odoc_misc.current_date^" ");
         bs b "OCamldoc ";
         bs b ("\""^(match !Global.title with Some t -> t | None -> "")^"\"\n");
         bs b ".SH NAME\n";
@@ -1283,7 +1284,7 @@ class man =
               self#man_of_module_type_body b mt
 
           | Res_section _ ->
-              (* normaly, we cannot have modules here. *)
+              (* normally, we cannot have modules here. *)
               ()
         in
         List.iter f l;

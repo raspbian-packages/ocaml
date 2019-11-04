@@ -30,6 +30,7 @@ open Module
 let separate_files = ref false
 
 let latex_titles = ref [
+  0, "section" ;
   1, "section" ;
   2, "subsection" ;
   3, "subsubsection" ;
@@ -90,7 +91,7 @@ let print_concat fmt sep f =
 (** Generation of LaTeX code from text structures. *)
 class text =
   object (self)
-    (** Return latex code to make a sectionning according to the given level,
+    (** Return latex code to make a section according to the given level,
        and with the given latex code. *)
     method section_style level s =
       try
@@ -108,19 +109,6 @@ class text =
         "}", "\\\\}";
         "\\$", "\\\\$";
         "\\^", "{\\\\textasciicircum}";
-        "\xE0", "\\\\`a";
-        "\xE2", "\\\\^a";
-        "\xE9", "\\\\'e";
-        "\xE8", "\\\\`e";
-        "\xEA", "\\\\^e";
-        "\xEB", "\\\\\"e";
-        "\xE7", "\\\\c{c}";
-        "\xF4", "\\\\^o";
-        "\xF6", "\\\\\"o";
-        "\xEE", "\\\\^i";
-        "\xEF", "\\\\\"i";
-        "\xF9", "\\\\`u";
-        "\xFB", "\\\\^u";
         "%", "\\\\%";
         "_", "\\\\_";
         "~", "\\\\~{}";
@@ -415,8 +403,12 @@ class text =
            | Some t -> t
            )
       | Some (RK_section _) ->
-          self#latex_of_text_element fmt
-            (Latex ("["^(self#make_ref (self#label ~no_:false (Name.simple name)))^"]"))
+          let text = match text_opt with
+            | None -> []
+            | Some x -> x in
+          let label= self#make_ref (self#label ~no_:false (Name.simple name)) in
+          self#latex_of_text fmt
+            (text @ [Latex ("["^label^"]")] )
       | Some kind ->
           let f_label =
             match kind with
@@ -460,7 +452,7 @@ class virtual info =
     (** The method used to get LaTeX code from a [text]. *)
     method virtual latex_of_text : Format.formatter -> Odoc_info.text -> unit
 
-    (** The method used to get a [text] from an optionel info structure. *)
+    (** The method used to get a [text] from an optional info structure. *)
     method virtual text_of_info : ?block: bool -> Odoc_info.info option -> Odoc_info.text
 
     (** Print LaTeX code for a description, except for the [i_params] field. *)
@@ -653,13 +645,14 @@ class latex =
              | None | Some (Other _) -> []
              end
           | Type_variant l ->
+             if l = [] then (p fmt2 "@[<h 6>  |"; [CodePre (flush2())]) else (
              let constructors =
                List.map (fun {vc_name; vc_args; vc_ret; vc_text} ->
                    p fmt2 "@[<h 6>  | %s" vc_name ;
                    let l = self#latex_of_cstr_args f mod_name (vc_args,vc_ret) in
                    l @ (self#entry_comment f vc_text) ) l
              in
-             List.flatten constructors
+             List.flatten constructors)
           | Type_record l ->
               self#latex_of_record f mod_name l
           | Type_open ->
@@ -757,6 +750,7 @@ class latex =
                 );
               [CodePre (flush2 ())]
         in
+        Latex ( self#make_label (self#exception_label e.ex_name) ) ::
        merge_codepre (l @ s ) @
       [Latex ("\\index{"^(self#label s_name)^"@\\verb`"^(self#label ~no_:false s_name)^"`}\n")]
        @ (self#text_of_info e.ex_info) in
@@ -817,7 +811,7 @@ class latex =
           self#latex_of_module_kind fmt father k2;
           self#latex_of_text fmt [Code ")"]
       | Module_with (k, s) ->
-          (* TODO: modify when Module_with will be more detailled *)
+          (* TODO: modify when Module_with will be more detailed *)
           self#latex_of_module_type_kind fmt father k;
           self#latex_of_text fmt
             [ Code " ";
@@ -1076,7 +1070,7 @@ class latex =
       in
       self#latex_of_text fmt t;
       self#latex_of_class_parameter_list fmt father c;
-      (* avoid a big gap if the kind is a consrt *)
+      (* avoid a big gap if the kind is a constr *)
       (
        match c.cl_kind with
          Class.Class_constr _ ->
@@ -1218,7 +1212,7 @@ class latex =
         let subtitle = match first_t with
           | [] -> []
           | t -> (Raw " : ") :: t in
-        [ Title (1, None, title @ subtitle ) ]
+        [ Title (0, None, title @ subtitle ) ]
       in
       self#latex_of_text fmt text;
       self#latex_for_module_label fmt m;
@@ -1268,7 +1262,7 @@ class latex =
       )
 
 
-    (** Generate the LaTeX style file, if it does not exists. *)
+    (** Generate the LaTeX style file, if it does not exist. *)
     method generate_style_file =
       try
         let dir = Filename.dirname !Global.out_file in
@@ -1325,7 +1319,7 @@ class latex =
               self#generate_for_top_module fmt m
           )
           module_list ;
-        if !Global.with_trailer then ps fmt "\\end{document}";
+        if !Global.with_trailer then ps fmt "\\end{document}\n";
         Format.pp_print_flush fmt ();
         close_out chanout
       with

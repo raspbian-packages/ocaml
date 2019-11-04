@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 type call_kind =
   | Indirect
@@ -110,13 +111,15 @@ and set_of_closures = {
 }
 
 and function_declarations = {
+  is_classic_mode : bool;
   set_of_closures_id : Set_of_closures_id.t;
   set_of_closures_origin : Set_of_closures_origin.t;
   funs : function_declaration Variable.Map.t;
 }
 
 and function_declaration = {
-  params : Variable.t list;
+  closure_origin: Closure_origin.t;
+  params : Parameter.t list;
   body : t;
   free_variables : Variable.Set.t;
   free_symbols : Symbol.Set.t;
@@ -240,7 +243,7 @@ let rec lam ppf (flam : t) =
     let print_kind ppf (kind : Lambda.value_kind) =
       match kind with
       | Pgenval -> ()
-      | _ -> Format.fprintf ppf " %s" (Printlambda.value_kind kind)
+      | _ -> Format.fprintf ppf " %a" Printlambda.value_kind kind
     in
     fprintf ppf "@[<2>(let_mutable%a@ @[<2>%a@ %a@]@ %a)@]"
       print_kind contents_kind
@@ -353,8 +356,11 @@ and print_named ppf (named : named) =
     (* lam ppf expr *)
 
 and print_function_declaration ppf var (f : function_declaration) =
-  let idents ppf =
-    List.iter (fprintf ppf "@ %a" Variable.print) in
+  let param ppf p =
+    Variable.print ppf (Parameter.var p)
+  in
+  let params ppf =
+    List.iter (fprintf ppf "@ %a" param) in
   let stub =
     if f.stub then
       " *stub*"
@@ -382,7 +388,7 @@ and print_function_declaration ppf var (f : function_declaration) =
   in
   fprintf ppf "@[<2>(%a%s%s%s%s@ =@ fun@[<2>%a@] ->@ @[<2>%a@])@]@ "
     Variable.print var stub is_a_functor inline specialise
-    idents f.params lam f.body
+    params f.params lam f.body
 
 and print_set_of_closures ppf (set_of_closures : set_of_closures) =
   match set_of_closures with
@@ -407,13 +413,15 @@ and print_set_of_closures ppf (set_of_closures : set_of_closures) =
     in
     fprintf ppf "@[<2>(set_of_closures id=%a@ %a@ @[<2>free_vars={%a@ }@]@ \
         @[<2>specialised_args={%a})@]@ \
-        @[<2>direct_call_surrogates=%a@]@]"
+        @[<2>direct_call_surrogates=%a@]@ \
+        @[<2>set_of_closures_origin=%a@]@]]"
       Set_of_closures_id.print function_decls.set_of_closures_id
       funs function_decls.funs
       vars free_vars
       spec specialised_args
       (Variable.Map.print Variable.print)
       set_of_closures.direct_call_surrogates
+      Set_of_closures_origin.print function_decls.set_of_closures_origin
 
 and print_const ppf (c : const) =
   match c with
@@ -425,7 +433,8 @@ let print_function_declarations ppf (fd : function_declarations) =
   let funs ppf =
     Variable.Map.iter (print_function_declaration ppf)
   in
-  fprintf ppf "@[<2>(%a)@]" funs fd.funs
+  fprintf ppf "@[<2>(%a)(origin = %a)@]" funs fd.funs
+    Set_of_closures_origin.print fd.set_of_closures_origin
 
 let print ppf flam =
   fprintf ppf "%a@." lam flam
@@ -457,44 +466,38 @@ let print_constant_defining_value ppf (const : constant_defining_value) =
       Closure_id.print closure_id
 
 let rec print_program_body ppf (program : program_body) =
+  let symbol_binding ppf (symbol, constant_defining_value) =
+    fprintf ppf "@[<2>(%a@ %a)@]"
+      Symbol.print symbol
+      print_constant_defining_value constant_defining_value
+  in
   match program with
   | Let_symbol (symbol, constant_defining_value, body) ->
-    let rec letbody (ul : program_body) =
+    let rec extract acc (ul : program_body) =
       match ul with
       | Let_symbol (symbol, constant_defining_value, body) ->
-        fprintf ppf "@ @[<2>(%a@ %a)@]" Symbol.print symbol
-          print_constant_defining_value constant_defining_value;
-        letbody body
-      | _ -> ul
+        extract ((symbol, constant_defining_value) :: acc) body
+      | _ ->
+        List.rev acc,  ul
     in
-    fprintf ppf "@[<2>let_symbol@ @[<hv 1>(@[<2>%a@ %a@])@]@ "
-      Symbol.print symbol
-      print_constant_defining_value constant_defining_value;
-    let program = letbody body in
-    fprintf ppf "@]@.";
+    let defs, program = extract [symbol, constant_defining_value] body in
+    fprintf ppf
+      "@[<2>let_symbol@ @[%a@]@]@."
+      (Format.pp_print_list symbol_binding) defs;
     print_program_body ppf program
   | Let_rec_symbol (defs, program) ->
-    let bindings ppf id_arg_list =
-      let spc = ref false in
-      List.iter
-        (fun (symbol, constant_defining_value) ->
-           if !spc then fprintf ppf "@ " else spc := true;
-           fprintf ppf "@[<2>%a@ %a@]"
-             Symbol.print symbol
-             print_constant_defining_value constant_defining_value)
-        id_arg_list in
     fprintf ppf
-      "@[<2>let_rec_symbol@ (@[<hv 1>%a@])@]@."
-      bindings defs;
+      "@[<2>let_rec_symbol@ @[%a@]@]@."
+      (Format.pp_print_list symbol_binding) defs;
     print_program_body ppf program
   | Initialize_symbol (symbol, tag, fields, program) ->
-    fprintf ppf "@[<2>initialize_symbol@ @[<hv 1>(@[<2>%a@ %a@ %a@])@]@]@."
+    fprintf ppf "@[<2>initialize_symbol@ (@[<2>%a@ %a@ %a@])@]@."
       Symbol.print symbol
       Tag.print tag
       (Format.pp_print_list lam) fields;
     print_program_body ppf program
   | Effect (expr, program) ->
-    fprintf ppf "@[effect @[<hv 1>%a@]@]@."
+    fprintf ppf "@[<2>effect@ %a@]@."
       lam expr;
     print_program_body ppf program;
   | End root -> fprintf ppf "End %a" Symbol.print root
@@ -532,9 +535,9 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
               defining_expr; body; _ } ->
         bound_variable var;
         if all_used_variables
-           || ignore_uses_as_callee <> None
-           || ignore_uses_as_argument <> None
-           || ignore_uses_in_project_var <> None
+           || Misc.Stdlib.Option.is_some ignore_uses_as_callee
+           || Misc.Stdlib.Option.is_some ignore_uses_as_argument
+           || Misc.Stdlib.Option.is_some ignore_uses_in_project_var
         then begin
           (* In these cases we can't benefit from the pre-computed free
              variable sets. *)
@@ -985,9 +988,39 @@ let free_symbols_program (program : program) =
   loop program.program_body;
   !symbols
 
+let update_body_of_function_declaration (func_decl: function_declaration)
+      ~body : function_declaration =
+  { closure_origin = func_decl.closure_origin;
+    params = func_decl.params;
+    body;
+    free_variables = free_variables body;
+    free_symbols = free_symbols body;
+    stub = func_decl.stub;
+    dbg = func_decl.dbg;
+    inline = func_decl.inline;
+    specialise = func_decl.specialise;
+    is_a_functor = func_decl.is_a_functor;
+  }
+
+let update_function_decl's_params_and_body
+      (func_decl : function_declaration) ~params ~body =
+  { closure_origin = func_decl.closure_origin;
+    params;
+    body;
+    free_variables = free_variables body;
+    free_symbols = free_symbols body;
+    stub = func_decl.stub;
+    dbg = func_decl.dbg;
+    inline = func_decl.inline;
+    specialise = func_decl.specialise;
+    is_a_functor = func_decl.is_a_functor;
+  }
+
+
 let create_function_declaration ~params ~body ~stub ~dbg
       ~(inline : Lambda.inline_attribute)
       ~(specialise : Lambda.specialise_attribute) ~is_a_functor
+      ~closure_origin
       : function_declaration =
   begin match stub, inline with
   | true, (Never_inline | Default_inline)
@@ -1005,7 +1038,8 @@ let create_function_declaration ~params ~body ~stub ~dbg
       "Stubs may not be annotated as [Always_specialise]: %a"
       print body
   end;
-  { params;
+  { closure_origin;
+    params;
     body;
     free_variables = free_variables body;
     free_symbols = free_symbols body;
@@ -1016,33 +1050,68 @@ let create_function_declaration ~params ~body ~stub ~dbg
     is_a_functor;
   }
 
-let create_function_declarations ~funs =
+let update_function_declaration fun_decl ~params ~body =
+  let free_variables = free_variables body in
+  let free_symbols = free_symbols body in
+  { fun_decl with params; body; free_variables; free_symbols }
+
+let create_function_declarations ~is_classic_mode ~funs =
   let compilation_unit = Compilation_unit.get_current_exn () in
   let set_of_closures_id = Set_of_closures_id.create compilation_unit in
   let set_of_closures_origin =
     Set_of_closures_origin.create set_of_closures_id
   in
-  { set_of_closures_id;
+  { is_classic_mode;
+    set_of_closures_id;
+    set_of_closures_origin;
+    funs;
+  }
+
+let create_function_declarations_with_origin
+      ~is_classic_mode ~funs ~set_of_closures_origin =
+  let compilation_unit = Compilation_unit.get_current_exn () in
+  let set_of_closures_id = Set_of_closures_id.create compilation_unit in
+  { is_classic_mode;
+    set_of_closures_id;
     set_of_closures_origin;
     funs;
   }
 
 let update_function_declarations function_decls ~funs =
+  let is_classic_mode = function_decls.is_classic_mode in
   let compilation_unit = Compilation_unit.get_current_exn () in
   let set_of_closures_id = Set_of_closures_id.create compilation_unit in
   let set_of_closures_origin = function_decls.set_of_closures_origin in
-  { set_of_closures_id;
+  { is_classic_mode;
+    set_of_closures_id;
     set_of_closures_origin;
     funs;
   }
 
+let create_function_declarations_with_closures_origin
+      ~is_classic_mode ~funs ~set_of_closures_origin =
+  let compilation_unit = Compilation_unit.get_current_exn () in
+  let set_of_closures_id = Set_of_closures_id.create compilation_unit in
+  { is_classic_mode;
+    set_of_closures_id;
+    set_of_closures_origin;
+    funs
+  }
+
 let import_function_declarations_for_pack function_decls
-    import_set_of_closures_id import_set_of_closures_origin =
-  { set_of_closures_id =
-      import_set_of_closures_id function_decls.set_of_closures_id;
-    set_of_closures_origin =
-      import_set_of_closures_origin function_decls.set_of_closures_origin;
-    funs = function_decls.funs;
+      import_set_of_closures_id import_set_of_closures_origin =
+  let is_classic_mode = function_decls.is_classic_mode in
+  let set_of_closures_id =
+    import_set_of_closures_id function_decls.set_of_closures_id
+  in
+  let set_of_closures_origin =
+    import_set_of_closures_origin function_decls.set_of_closures_origin
+  in
+  let funs = function_decls.funs in
+  { is_classic_mode;
+    set_of_closures_id;
+    set_of_closures_origin;
+    funs;
   }
 
 let create_set_of_closures ~function_decls ~free_vars ~specialised_args
@@ -1053,7 +1122,7 @@ let create_set_of_closures ~function_decls ~free_vars ~specialised_args
       Variable.Map.fold (fun _fun_var function_decl expected_free_vars ->
           let free_vars =
             Variable.Set.diff function_decl.free_variables
-              (Variable.Set.union (Variable.Set.of_list function_decl.params)
+              (Variable.Set.union (Parameter.Set.vars function_decl.params)
                 all_fun_vars)
           in
           Variable.Set.union free_vars expected_free_vars)
@@ -1086,7 +1155,7 @@ let create_set_of_closures ~function_decls ~free_vars ~specialised_args
     end;
     let all_params =
       Variable.Map.fold (fun _fun_var function_decl all_params ->
-          Variable.Set.union (Variable.Set.of_list function_decl.params)
+          Variable.Set.union (Parameter.Set.vars function_decl.params)
             all_params)
         function_decls.funs
         Variable.Set.empty
@@ -1111,12 +1180,12 @@ let create_set_of_closures ~function_decls ~free_vars ~specialised_args
 let used_params function_decl =
   Variable.Set.filter
     (fun param -> Variable.Set.mem param function_decl.free_variables)
-    (Variable.Set.of_list function_decl.params)
+    (Parameter.Set.vars function_decl.params)
 
 let compare_const (c1:const) (c2:const) =
   match c1, c2 with
   | Int i1, Int i2 -> compare i1 i2
-  | Char i1, Char i2 -> compare i1 i2
+  | Char i1, Char i2 -> Char.compare i1 i2
   | Const_pointer i1, Const_pointer i2 -> compare i1 i2
   | Int _, (Char _ | Const_pointer _) -> -1
   | (Char _ | Const_pointer _), Int _ -> 1
@@ -1180,6 +1249,12 @@ module Constant_defining_value = struct
       output_string o (Format.asprintf "%a" print v)
   end)
 end
+
+let equal_call_kind (call_kind1 : call_kind) (call_kind2 : call_kind) =
+  match call_kind1, call_kind2 with
+  | Indirect, Indirect -> true
+  | Direct cid1, Direct cid2 -> Closure_id.equal cid1 cid2
+  | (Indirect | Direct _), _ -> false
 
 let equal_specialised_to (spec_to1 : specialised_to)
       (spec_to2 : specialised_to) =

@@ -62,8 +62,7 @@ let match_expect_extension (ext : Parsetree.extension) =
   match ext with
   | ({Asttypes.txt="expect"|"ocaml.expect"; loc = extid_loc}, payload) ->
     let invalid_payload () =
-      Location.raise_errorf ~loc:extid_loc
-        "invalid [%%%%expect payload]"
+      Location.raise_errorf ~loc:extid_loc "invalid [%%%%expect payload]"
     in
     let string_constant (e : Parsetree.expression) =
       match e.pexp_desc with
@@ -130,36 +129,16 @@ let split_chunks phrases =
   loop phrases [] []
 
 module Compiler_messages = struct
-  let print_loc ppf (loc : Location.t) =
-    let startchar = loc.loc_start.pos_cnum - loc.loc_start.pos_bol in
-    let endchar = loc.loc_end.pos_cnum - loc.loc_start.pos_cnum + startchar in
-    Format.fprintf ppf "Line _";
-    if startchar >= 0 then
-      Format.fprintf ppf ", characters %d-%d" startchar endchar;
-    Format.fprintf ppf ":@."
-
-  let rec error_reporter ppf ({loc; msg; sub; if_highlight=_} : Location.error)=
-    print_loc ppf loc;
-    Format.fprintf ppf "%a %s" Location.print_error_prefix () msg;
-    List.iter sub ~f:(fun err ->
-      Format.fprintf ppf "@\n@[<2>%a@]" error_reporter err)
-
-  let warning_printer loc ppf w =
-    if Warnings.is_active w then begin
-      print_loc ppf loc;
-      Format.fprintf ppf "Warning %a@." Warnings.print w
-    end
-
   let capture ppf ~f =
     Misc.protect_refs
-      [ R (Location.formatter_for_warnings , ppf            )
-      ; R (Location.warning_printer        , warning_printer)
-      ; R (Location.error_reporter         , error_reporter )
-      ]
+      [ R (Location.formatter_for_warnings, ppf) ]
       f
 end
 
 let collect_formatters buf pps ~f =
+  let ppb = Format.formatter_of_buffer buf in
+  let out_functions = Format.pp_get_formatter_out_functions ppb () in
+
   List.iter (fun pp -> Format.pp_print_flush pp ()) pps;
   let save =
     List.map (fun pp -> Format.pp_get_formatter_out_functions pp ()) pps
@@ -170,13 +149,6 @@ let collect_formatters buf pps ~f =
          Format.pp_print_flush pp ();
          Format.pp_set_formatter_out_functions pp out_functions)
       pps save
-  in
-  let out_string str ofs len = Buffer.add_substring buf str ofs len
-  and out_flush = ignore
-  and out_newline () = Buffer.add_char buf '\n'
-  and out_spaces n = for i = 1 to n do Buffer.add_char buf ' ' done in
-  let out_functions =
-    { Format.out_string; out_flush; out_newline; out_spaces }
   in
   List.iter
     (fun pp -> Format.pp_set_formatter_out_functions pp out_functions)
@@ -199,6 +171,7 @@ let parse_contents ~fname contents =
   let lexbuf = Lexing.from_string contents in
   Location.init lexbuf fname;
   Location.input_name := fname;
+  Location.input_lexbuf := Some lexbuf;
   Parse.use_file lexbuf
 
 let eval_expectation expectation ~output =
@@ -259,11 +232,20 @@ let eval_expect_file _fname ~file_contents =
     let _ : bool =
       List.fold_left phrases ~init:true ~f:(fun acc phrase ->
         acc &&
+        let snap = Btype.snapshot () in
         try
           exec_phrase ppf phrase
         with exn ->
-          Location.report_exception ppf exn;
-          false)
+          let bt = Printexc.get_raw_backtrace () in
+          begin try Location.report_exception ppf exn
+          with _ ->
+            Format.fprintf ppf "Uncaught exception: %s\n%s\n"
+              (Printexc.to_string exn)
+              (Printexc.raw_backtrace_to_string bt)
+          end;
+          Btype.backtrack snap;
+          false
+      )
     in
     Format.pp_print_flush ppf ();
     let len = Buffer.length buf in
@@ -330,33 +312,113 @@ let process_expect_file fname =
   let correction = eval_expect_file fname ~file_contents in
   write_corrected ~file:corrected_fname ~file_contents correction
 
-let repo_root = ref ""
+let repo_root = ref None
+let keep_original_error_size = ref false
 
 let main fname =
+  if not !keep_original_error_size then
+    Clflags.error_size := 0;
   Toploop.override_sys_argv
     (Array.sub Sys.argv ~pos:!Arg.current
        ~len:(Array.length Sys.argv - !Arg.current));
   (* Ignore OCAMLRUNPARAM=b to be reproducible *)
   Printexc.record_backtrace false;
-  List.iter [ "stdlib" ] ~f:(fun s ->
-    Topdirs.dir_directory (Filename.concat !repo_root s));
+  if not !Clflags.no_std_include then begin
+    match !repo_root with
+    | None -> ()
+    | Some dir ->
+        (* If we pass [-repo-root], use the stdlib from inside the
+           compiler, not the installed one. We use
+           [Compenv.last_include_dirs] to make sure that the stdlib
+           directory is the last one. *)
+        Clflags.no_std_include := true;
+        Compenv.last_include_dirs := [Filename.concat dir "stdlib"]
+  end;
+  Compmisc.init_path false;
   Toploop.initialize_toplevel_env ();
   Sys.interactive := false;
   process_expect_file fname;
   exit 0
 
+module Options = Main_args.Make_bytetop_options (struct
+  let set r () = r := true
+  let clear r () = r := false
+  open Clflags
+  let _absname = set absname
+  let _alert = Warnings.parse_alert_option
+  let _I dir = include_dirs := dir :: !include_dirs
+  let _init s = init_file := Some s
+  let _noinit = set noinit
+  let _labels = clear classic
+  let _alias_deps = clear transparent_modules
+  let _no_alias_deps = set transparent_modules
+  let _app_funct = set applicative_functors
+  let _no_app_funct = clear applicative_functors
+  let _noassert = set noassert
+  let _nolabels = set classic
+  let _noprompt = set noprompt
+  let _nopromptcont = set nopromptcont
+  let _nostdlib = set no_std_include
+  let _nopervasives = set nopervasives
+  let _open s = open_modules := s :: !open_modules
+  let _ppx _s = (* disabled *) ()
+  let _principal = set principal
+  let _no_principal = clear principal
+  let _rectypes = set recursive_types
+  let _no_rectypes = clear recursive_types
+  let _safe_string = clear unsafe_string
+  let _short_paths = clear real_paths
+  let _stdin () = (* disabled *) ()
+  let _strict_sequence = set strict_sequence
+  let _no_strict_sequence = clear strict_sequence
+  let _strict_formats = set strict_formats
+  let _no_strict_formats = clear strict_formats
+  let _unboxed_types = set unboxed_types
+  let _no_unboxed_types = clear unboxed_types
+  let _unsafe = set unsafe
+  let _unsafe_string = set unsafe_string
+  let _version () = (* disabled *) ()
+  let _vnum () = (* disabled *) ()
+  let _no_version = set noversion
+  let _w s = Warnings.parse_options false s
+  let _warn_error s = Warnings.parse_options true s
+  let _warn_help = Warnings.help_warnings
+  let _dparsetree = set dump_parsetree
+  let _dtypedtree = set dump_typedtree
+  let _dno_unique_ids = clear unique_ids
+  let _dunique_ids = set unique_ids
+  let _dsource = set dump_source
+  let _drawlambda = set dump_rawlambda
+  let _dlambda = set dump_lambda
+  let _dflambda = set dump_flambda
+  let _dtimings () = profile_columns := [ `Time ]
+  let _dprofile () = profile_columns := Profile.all_columns
+  let _dinstr = set dump_instr
+  let _dcamlprimc = set keep_camlprimc_file
+  let _color = Misc.set_or_ignore color_reader.parse color
+  let _error_style = Misc.set_or_ignore error_style_reader.parse error_style
+
+  let _args = Arg.read_arg
+  let _args0 = Arg.read_arg0
+
+  let anonymous s = main s
+end);;
+
 let args =
   Arg.align
-    [ "-repo-root", Set_string repo_root,
-      "<dir> root of the OCaml repository"
-    ; "-principal", Set Clflags.principal,
-      " Evaluate the file with -principal set"
-    ]
+    ( [ "-repo-root", Arg.String (fun s -> repo_root := Some s),
+        "<dir> root of the OCaml repository. This causes the tool to use \
+         the stdlib from the current source tree rather than the installed one."
+      ; "-keep-original-error-size", Arg.Set keep_original_error_size,
+        " truncate long error messages as the compiler would"
+      ] @ Options.list
+    )
 
 let usage = "Usage: expect_test <options> [script-file [arguments]]\n\
              options are:"
 
 let () =
+  Clflags.color := Some Misc.Color.Never;
   try
     Arg.parse args main usage;
     Printf.eprintf "expect_test: no input file\n";

@@ -54,11 +54,17 @@ let boxed_integer_name = function
   | Pint32 -> "int32"
   | Pint64 -> "int64"
 
-let value_kind = function
-  | Pgenval -> ""
-  | Pintval -> "[int]"
-  | Pfloatval -> "[float]"
-  | Pboxedintval bi -> Printf.sprintf "[%s]" (boxed_integer_name bi)
+let value_kind ppf = function
+  | Pgenval -> ()
+  | Pintval -> fprintf ppf "[int]"
+  | Pfloatval -> fprintf ppf "[float]"
+  | Pboxedintval bi -> fprintf ppf "[%s]" (boxed_integer_name bi)
+
+let return_kind ppf = function
+  | Pgenval -> ()
+  | Pintval -> fprintf ppf ": int@ "
+  | Pfloatval -> fprintf ppf ": float@ "
+  | Pboxedintval bi -> fprintf ppf ": %s@ " (boxed_integer_name bi)
 
 let field_kind = function
   | Pgenval -> "*"
@@ -106,15 +112,8 @@ let record_rep ppf r =
   | Record_unboxed false -> fprintf ppf "unboxed"
   | Record_unboxed true -> fprintf ppf "inlined(unboxed)"
   | Record_float -> fprintf ppf "float"
-  | Record_extension -> fprintf ppf "ext"
+  | Record_extension path -> fprintf ppf "ext(%a)" Printtyp.path path
 ;;
-
-let string_of_loc_kind = function
-  | Loc_FILE -> "loc_FILE"
-  | Loc_LINE -> "loc_LINE"
-  | Loc_MODULE -> "loc_MODULE"
-  | Loc_POS -> "loc_POS"
-  | Loc_LOC -> "loc_LOC"
 
 let block_shape ppf shape = match shape with
   | None | Some [] -> ()
@@ -128,6 +127,26 @@ let block_shape ppf shape = match shape with
         t;
       Format.fprintf ppf ")"
 
+let integer_comparison ppf = function
+  | Ceq -> fprintf ppf "=="
+  | Cne -> fprintf ppf "!="
+  | Clt -> fprintf ppf "<"
+  | Cle -> fprintf ppf "<="
+  | Cgt -> fprintf ppf ">"
+  | Cge -> fprintf ppf ">="
+
+let float_comparison ppf = function
+  | CFeq -> fprintf ppf "==."
+  | CFneq -> fprintf ppf "!=."
+  | CFlt -> fprintf ppf "<."
+  | CFnlt -> fprintf ppf "!<."
+  | CFle -> fprintf ppf "<=."
+  | CFnle -> fprintf ppf "!<=."
+  | CFgt -> fprintf ppf ">."
+  | CFngt -> fprintf ppf "!>."
+  | CFge -> fprintf ppf ">=."
+  | CFnge -> fprintf ppf "!>=."
+
 let primitive ppf = function
   | Pidentity -> fprintf ppf "id"
   | Pbytes_to_string -> fprintf ppf "bytes_to_string"
@@ -135,7 +154,6 @@ let primitive ppf = function
   | Pignore -> fprintf ppf "ignore"
   | Prevapply -> fprintf ppf "revapply"
   | Pdirapply -> fprintf ppf "dirapply"
-  | Ploc kind -> fprintf ppf "%s" (string_of_loc_kind kind)
   | Pgetglobal id -> fprintf ppf "global %a" Ident.print id
   | Psetglobal id -> fprintf ppf "setglobal %a" Ident.print id
   | Pmakeblock(tag, Immutable, shape) ->
@@ -180,7 +198,6 @@ let primitive ppf = function
       in
       fprintf ppf "setfloatfield%s %i" init n
   | Pduprecord (rep, size) -> fprintf ppf "duprecord %a %i" record_rep rep size
-  | Plazyforce -> fprintf ppf "force"
   | Pccall p -> fprintf ppf "%s" p.prim_name
   | Praise k -> fprintf ppf "%s" (Lambda.raise_kind k)
   | Psequand -> fprintf ppf "&&"
@@ -200,12 +217,7 @@ let primitive ppf = function
   | Plslint -> fprintf ppf "lsl"
   | Plsrint -> fprintf ppf "lsr"
   | Pasrint -> fprintf ppf "asr"
-  | Pintcomp(Ceq) -> fprintf ppf "=="
-  | Pintcomp(Cneq) -> fprintf ppf "!="
-  | Pintcomp(Clt) -> fprintf ppf "<"
-  | Pintcomp(Cle) -> fprintf ppf "<="
-  | Pintcomp(Cgt) -> fprintf ppf ">"
-  | Pintcomp(Cge) -> fprintf ppf ">="
+  | Pintcomp(cmp) -> integer_comparison ppf cmp
   | Poffsetint n -> fprintf ppf "%i+" n
   | Poffsetref n -> fprintf ppf "+:=%i"n
   | Pintoffloat -> fprintf ppf "int_of_float"
@@ -216,12 +228,7 @@ let primitive ppf = function
   | Psubfloat -> fprintf ppf "-."
   | Pmulfloat -> fprintf ppf "*."
   | Pdivfloat -> fprintf ppf "/."
-  | Pfloatcomp(Ceq) -> fprintf ppf "==."
-  | Pfloatcomp(Cneq) -> fprintf ppf "!=."
-  | Pfloatcomp(Clt) -> fprintf ppf "<."
-  | Pfloatcomp(Cle) -> fprintf ppf "<=."
-  | Pfloatcomp(Cgt) -> fprintf ppf ">."
-  | Pfloatcomp(Cge) -> fprintf ppf ">=."
+  | Pfloatcomp(cmp) -> float_comparison ppf cmp
   | Pstringlength -> fprintf ppf "string.length"
   | Pstringrefu -> fprintf ppf "string.unsafe_get"
   | Pstringrefs -> fprintf ppf "string.get"
@@ -253,7 +260,6 @@ let primitive ppf = function
      fprintf ppf "sys.constant_%s" const_name
   | Pisint -> fprintf ppf "isint"
   | Pisout -> fprintf ppf "isout"
-  | Pbittest -> fprintf ppf "testbit"
   | Pbintofint bi -> print_boxed_integer "of_int" ppf bi
   | Pintofbint bi -> print_boxed_integer "to_int" ppf bi
   | Pcvtbint (bi1, bi2) -> print_boxed_integer_conversion ppf bi1 bi2
@@ -276,7 +282,7 @@ let primitive ppf = function
   | Plsrbint bi -> print_boxed_integer "lsr" ppf bi
   | Pasrbint bi -> print_boxed_integer "asr" ppf bi
   | Pbintcomp(bi, Ceq) -> print_boxed_integer "==" ppf bi
-  | Pbintcomp(bi, Cneq) -> print_boxed_integer "!=" ppf bi
+  | Pbintcomp(bi, Cne) -> print_boxed_integer "!=" ppf bi
   | Pbintcomp(bi, Clt) -> print_boxed_integer "<" ppf bi
   | Pbintcomp(bi, Cgt) -> print_boxed_integer ">" ppf bi
   | Pbintcomp(bi, Cle) -> print_boxed_integer "<=" ppf bi
@@ -295,15 +301,24 @@ let primitive ppf = function
   | Pstring_load_64(unsafe) ->
      if unsafe then fprintf ppf "string.unsafe_get64"
      else fprintf ppf "string.get64"
-  | Pstring_set_16(unsafe) ->
-     if unsafe then fprintf ppf "string.unsafe_set16"
-     else fprintf ppf "string.set16"
-  | Pstring_set_32(unsafe) ->
-     if unsafe then fprintf ppf "string.unsafe_set32"
-     else fprintf ppf "string.set32"
-  | Pstring_set_64(unsafe) ->
-     if unsafe then fprintf ppf "string.unsafe_set64"
-     else fprintf ppf "string.set64"
+  | Pbytes_load_16(unsafe) ->
+     if unsafe then fprintf ppf "bytes.unsafe_get16"
+     else fprintf ppf "bytes.get16"
+  | Pbytes_load_32(unsafe) ->
+     if unsafe then fprintf ppf "bytes.unsafe_get32"
+     else fprintf ppf "bytes.get32"
+  | Pbytes_load_64(unsafe) ->
+     if unsafe then fprintf ppf "bytes.unsafe_get64"
+     else fprintf ppf "bytes.get64"
+  | Pbytes_set_16(unsafe) ->
+     if unsafe then fprintf ppf "bytes.unsafe_set16"
+     else fprintf ppf "bytes.set16"
+  | Pbytes_set_32(unsafe) ->
+     if unsafe then fprintf ppf "bytes.unsafe_set32"
+     else fprintf ppf "bytes.set32"
+  | Pbytes_set_64(unsafe) ->
+     if unsafe then fprintf ppf "bytes.unsafe_set64"
+     else fprintf ppf "bytes.set64"
   | Pbigstring_load_16(unsafe) ->
      if unsafe then fprintf ppf "bigarray.array1.unsafe_get16"
      else fprintf ppf "bigarray.array1.get16"
@@ -334,7 +349,6 @@ let name_of_primitive = function
   | Pignore -> "Pignore"
   | Prevapply -> "Prevapply"
   | Pdirapply -> "Pdirapply"
-  | Ploc _ -> "Ploc"
   | Pgetglobal _ -> "Pgetglobal"
   | Psetglobal _ -> "Psetglobal"
   | Pmakeblock _ -> "Pmakeblock"
@@ -345,7 +359,6 @@ let name_of_primitive = function
   | Pfloatfield _ -> "Pfloatfield"
   | Psetfloatfield _ -> "Psetfloatfield"
   | Pduprecord _ -> "Pduprecord"
-  | Plazyforce -> "Plazyforce"
   | Pccall _ -> "Pccall"
   | Praise _ -> "Praise"
   | Psequand -> "Psequand"
@@ -393,7 +406,6 @@ let name_of_primitive = function
   | Pctconst _ -> "Pctconst"
   | Pisint -> "Pisint"
   | Pisout -> "Pisout"
-  | Pbittest -> "Pbittest"
   | Pbintofint _ -> "Pbintofint"
   | Pintofbint _ -> "Pintofbint"
   | Pcvtbint _ -> "Pcvtbint"
@@ -416,9 +428,12 @@ let name_of_primitive = function
   | Pstring_load_16 _ -> "Pstring_load_16"
   | Pstring_load_32 _ -> "Pstring_load_32"
   | Pstring_load_64 _ -> "Pstring_load_64"
-  | Pstring_set_16 _ -> "Pstring_set_16"
-  | Pstring_set_32 _ -> "Pstring_set_32"
-  | Pstring_set_64 _ -> "Pstring_set_64"
+  | Pbytes_load_16 _ -> "Pbytes_load_16"
+  | Pbytes_load_32 _ -> "Pbytes_load_32"
+  | Pbytes_load_64 _ -> "Pbytes_load_64"
+  | Pbytes_set_16 _ -> "Pbytes_set_16"
+  | Pbytes_set_32 _ -> "Pbytes_set_32"
+  | Pbytes_set_64 _ -> "Pbytes_set_64"
   | Pbigstring_load_16 _ -> "Pbigstring_load_16"
   | Pbigstring_load_32 _ -> "Pbigstring_load_32"
   | Pbigstring_load_64 _ -> "Pbigstring_load_64"
@@ -430,7 +445,7 @@ let name_of_primitive = function
   | Pint_as_pointer -> "Pint_as_pointer"
   | Popaque -> "Popaque"
 
-let function_attribute ppf { inline; specialise; is_a_functor; stub } =
+let function_attribute ppf { inline; specialise; local; is_a_functor; stub } =
   if is_a_functor then
     fprintf ppf "is_a_functor@ ";
   if stub then
@@ -445,6 +460,11 @@ let function_attribute ppf { inline; specialise; is_a_functor; stub } =
   | Default_specialise -> ()
   | Always_specialise -> fprintf ppf "always_specialise@ "
   | Never_specialise -> fprintf ppf "never_specialise@ "
+  end;
+  begin match local with
+  | Default_local -> ()
+  | Always_local -> fprintf ppf "always_local@ "
+  | Never_local -> fprintf ppf "never_local@ "
   end
 
 let apply_tailcall_attribute ppf tailcall =
@@ -474,34 +494,36 @@ let rec lam ppf = function
         apply_tailcall_attribute ap.ap_should_be_tailcall
         apply_inlined_attribute ap.ap_inlined
         apply_specialised_attribute ap.ap_specialised
-  | Lfunction{kind; params; body; attr} ->
+  | Lfunction{kind; params; return; body; attr} ->
       let pr_params ppf params =
         match kind with
         | Curried ->
-            List.iter (fun param -> fprintf ppf "@ %a" Ident.print param) params
+            List.iter (fun (param, k) ->
+                fprintf ppf "@ %a%a" Ident.print param value_kind k) params
         | Tupled ->
             fprintf ppf " (";
             let first = ref true in
             List.iter
-              (fun param ->
+              (fun (param, k) ->
                 if !first then first := false else fprintf ppf ",@ ";
-                Ident.print ppf param)
+                Ident.print ppf param;
+                value_kind ppf k)
               params;
             fprintf ppf ")" in
-      fprintf ppf "@[<2>(function%a@ %a%a)@]" pr_params params
-        function_attribute attr lam body
+      fprintf ppf "@[<2>(function%a@ %a%a%a)@]" pr_params params
+        function_attribute attr return_kind return lam body
   | Llet(str, k, id, arg, body) ->
       let kind = function
           Alias -> "a" | Strict -> "" | StrictOpt -> "o" | Variable -> "v"
       in
       let rec letbody = function
         | Llet(str, k, id, arg, body) ->
-            fprintf ppf "@ @[<2>%a =%s%s@ %a@]"
-              Ident.print id (kind str) (value_kind k) lam arg;
+            fprintf ppf "@ @[<2>%a =%s%a@ %a@]"
+              Ident.print id (kind str) value_kind k lam arg;
             letbody body
         | expr -> expr in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a =%s%s@ %a@]"
-        Ident.print id (kind str) (value_kind k) lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a =%s%a@ %a@]"
+        Ident.print id (kind str) value_kind k lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Lletrec(id_arg_list, body) ->
@@ -518,7 +540,7 @@ let rec lam ppf = function
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
       fprintf ppf "@[<2>(%a%a)@]" primitive prim lams largs
-  | Lswitch(larg, sw) ->
+  | Lswitch(larg, sw, _loc) ->
       let switch ppf sw =
         let spc = ref false in
         List.iter
@@ -564,12 +586,11 @@ let rec lam ppf = function
   | Lstaticcatch(lbody, (i, vars), lhandler) ->
       fprintf ppf "@[<2>(catch@ %a@;<1 -1>with (%d%a)@ %a)@]"
         lam lbody i
-        (fun ppf vars -> match vars with
-          | [] -> ()
-          | _ ->
-              List.iter
-                (fun x -> fprintf ppf " %a" Ident.print x)
-                vars)
+        (fun ppf vars ->
+           List.iter
+             (fun (x, k) -> fprintf ppf " %a%a" Ident.print x value_kind k)
+             vars
+        )
         vars
         lam lhandler
   | Ltrywith(lbody, param, lhandler) ->
@@ -601,6 +622,8 @@ let rec lam ppf = function
        | Lev_after _  -> "after"
        | Lev_function -> "funct-body"
        | Lev_pseudo -> "pseudo"
+       | Lev_module_definition ident ->
+         Format.asprintf "module-defn(%a)" Ident.print ident
       in
       fprintf ppf "@[<2>(%s %s(%i)%s:%i-%i@ %a)@]" kind
               ev.lev_loc.Location.loc_start.Lexing.pos_fname

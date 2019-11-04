@@ -10,35 +10,36 @@ benefit from using hardening link flags, such as -Wl,-z,relro.
 Origin: other
 Bug-Debian: https://bugs.debian.org/702349
 Forwarded: no
-Last-Update: <2015-07-15>
+Last-Update: <2019-07-22>
 ---
- configure      | 2 ++
+ configure.ac   | 3 +++
  tools/Makefile | 2 +-
- 2 files changed, 3 insertions(+), 1 deletion(-)
+ 2 files changed, 4 insertions(+), 1 deletion(-)
 
-diff --git a/configure b/configure
-index c0024a9..b8e0bcf 100755
---- a/configure
-+++ b/configure
-@@ -815,6 +815,8 @@ if test $with_sharedlibs = "yes"; then
-       shared_libraries_supported=true;;
-   esac
- fi
+diff --git a/configure.ac b/configure.ac
+index f5d8a26..82172d7 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -767,6 +767,9 @@ AS_IF([test x"$enable_shared" != "xno"],
+       natdynlinkopts="-Wl,-E"
+       shared_libraries_supported=true])])
+ 
 +mksharedlib="$mksharedlib $CCLINKFLAGS"
 +mkexe="$mkexe $CCLINKFLAGS"
++
+ AS_IF([test -z "$mkmaindll"], [mkmaindll=$mksharedlib])
  
- if test -z "$mkmaindll"; then
-   mkmaindll=$mksharedlib
+ # Configure native dynlink
 diff --git a/tools/Makefile b/tools/Makefile
-index 9a8cf65..2d19c65 100644
+index ee0e0be..b6d74d5 100644
 --- a/tools/Makefile
 +++ b/tools/Makefile
-@@ -316,7 +316,7 @@ endif
+@@ -323,7 +323,7 @@ endif
  
- objinfo_helper$(EXE): objinfo_helper.c ../config/s.h
- 	$(BYTECC) $(CCOUT)objinfo_helper$(EXE) $(BYTECCCOMPOPTS) \
--          $(DEF_SYMBOL_PREFIX) $(LIBBFD_INCLUDE) objinfo_helper.c $(LIBBFD_LINK)
-+          $(DEF_SYMBOL_PREFIX) $(LIBBFD_INCLUDE) objinfo_helper.c $(LIBBFD_LINK) $(CCLINKFLAGS)
+ objinfo_helper$(EXE): objinfo_helper.c $(ROOTDIR)/runtime/caml/s.h
+ 	$(CC) $(OC_CFLAGS) $(OC_CPPFLAGS) -I$(ROOTDIR)/runtime $(OUTPUTEXE)$@ \
+-          $(DEF_SYMBOL_PREFIX) $(LIBBFD_INCLUDE) $< $(LIBBFD_LINK)
++          $(DEF_SYMBOL_PREFIX) $(LIBBFD_INCLUDE) $< $(LIBBFD_LINK) $(CCLINKFLAGS)
  
- OBJINFO=../compilerlibs/ocamlcommon.cma \
-         ../compilerlibs/ocamlbytecomp.cma \
+ OBJINFO=$(ROOTDIR)/compilerlibs/ocamlcommon.cma \
+         $(ROOTDIR)/compilerlibs/ocamlbytecomp.cma \

@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 type tbl = {
   sb_var : Variable.t Variable.Map.t;
@@ -66,6 +67,10 @@ let print ppf = function
       tbl.back_mutable_var
 
 let empty = Inactive
+
+let is_empty = function
+  | Inactive -> true
+  | Active _ -> false
 
 let empty_preserving_activation_state = function
   | Inactive -> Inactive
@@ -130,6 +135,11 @@ let active_add_variable t id =
   let t = add_sb_var t id id' in
   id', t
 
+let active_add_parameter t param =
+  let param' = Parameter.rename param in
+  let t = add_sb_var t (Parameter.var param) (Parameter.var param') in
+  param', t
+
 let add_variable t id =
   match t with
   | Inactive -> id, t
@@ -137,10 +147,11 @@ let add_variable t id =
      let id', t = active_add_variable t id in
      id', Active t
 
-let active_add_variables' t ids =
-  List.fold_right (fun id (ids, t) ->
-      let id', t = active_add_variable t id in
-      id' :: ids, t) ids ([], t)
+let active_add_parameters' t (params:Parameter.t list) =
+  List.fold_right (fun param (params, t) ->
+      let param', t = active_add_parameter t param in
+      param' :: params, t)
+    params ([], t)
 
 let add_variables t defs =
   List.fold_right (fun (id, data) (defs, t) ->
@@ -153,7 +164,7 @@ let add_variables' t ids =
       id' :: ids, t) ids ([], t)
 
 let active_add_mutable_variable t id =
-  let id' = Mutable_variable.freshen id in
+  let id' = Mutable_variable.rename id in
   let t = add_sb_mutable_var t id id' in
   id', t
 
@@ -191,7 +202,11 @@ let rewrite_recursive_calls_with_symbols t
   | Inactive -> function_declarations
   | Active _ ->
     let all_free_symbols =
-      Flambda_utils.all_free_symbols function_declarations
+      Variable.Map.fold
+        (fun _ (function_decl : Flambda.function_declaration)
+            syms ->
+          Symbol.Set.union syms function_decl.free_symbols)
+        function_declarations.funs Symbol.Set.empty
     in
     let closure_symbols_used = ref false in
     let closure_symbols =
@@ -224,9 +239,7 @@ let rewrite_recursive_calls_with_symbols t
                 | e -> e)
               ffun.body
           in
-          Flambda.create_function_declaration ~params:ffun.params
-            ~body ~stub:ffun.stub ~dbg:ffun.dbg ~inline:ffun.inline
-            ~specialise:ffun.specialise ~is_a_functor:ffun.is_a_functor)
+          Flambda.update_body_of_function_declaration ffun ~body)
           function_declarations.funs
       in
       Flambda.update_function_declarations function_declarations ~funs
@@ -300,18 +313,19 @@ module Project_var = struct
     | Inactive -> func_decls, subst, t
     | Active subst ->
       let subst_func_decl _fun_id (func_decl : Flambda.function_declaration)
-            subst =
-        let params, subst = active_add_variables' subst func_decl.params in
+          subst =
+        let params, subst = active_add_parameters' subst func_decl.params in
         (* Since all parameters are distinct, even between functions, we can
            just use a single substitution. *)
         let body =
           Flambda_utils.toplevel_substitution subst.sb_var func_decl.body
         in
         let function_decl =
-          Flambda.create_function_declaration ~params
-            ~body ~stub:func_decl.stub ~dbg:func_decl.dbg
+          Flambda.create_function_declaration ~params ~body
+            ~stub:func_decl.stub ~dbg:func_decl.dbg
             ~inline:func_decl.inline ~specialise:func_decl.specialise
             ~is_a_functor:func_decl.is_a_functor
+            ~closure_origin:func_decl.closure_origin
         in
         function_decl, subst
       in

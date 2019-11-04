@@ -1,3 +1,54 @@
+ocaml (4.08.1-1) experimental; urgency=medium
+
+  * New upstream release
+  * Statically link -lbfd to avoid a tight dependency with libbinutils
+  * Put VERSION in ocaml-base-nox
+  * Add Breaks/Replaces: ocaml-base to ocaml-base-nox (Closes: #933792)
+  * Disable testpreempt test on kfreebsd for now
+  * Add back Debian-specific -custom behaviour
+
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 30 Sep 2019 16:40:45 +0200
+
+ocaml (4.08.0-3) experimental; urgency=medium
+
+  * Disable native compiler on powerpc and x32
+  * Tune testpreempt test to make it work on kfreebsd
+
+ -- Stéphane Glondu <glondu@debian.org>  Tue, 30 Jul 2019 13:27:15 +0200
+
+ocaml (4.08.0-2) experimental; urgency=medium
+
+  * Build with BUILD_PATH_PREFIX_MAP set, to improve reproducibility
+  * Use CCLINKFLAGS for linking all executables and shared libraries, to
+    pass hardening flags
+  * Properly disable almabench test on slow architectures (should fix
+    FTBFS on them)
+  * Check for definition of AT_SECURE before using it (should fix FTBFS on
+    kfreebsd-*)
+  * Add x32 to native architecture (should fix FTBFS)
+  * Add support for Debian's armhf in configure.ac (should fix FTBFS)
+  * Add more Lintian overrides
+  * Fix spelling errors reported by Lintian
+  * Bump Standards-Version to 4.4.0
+  * Remove Samuel from Uploaders
+
+ -- Stéphane Glondu <glondu@debian.org>  Wed, 24 Jul 2019 10:53:51 +0200
+
+ocaml (4.08.0-1) experimental; urgency=medium
+
+  [ Stéphane Glondu ]
+  * New upstream release
+    - many Debian-specific patches have been dropped
+    - drop ocaml-mode binary package
+    - add ocaml-man binary package
+    - update debian/copyright
+  * Bump debhelper compat to 12
+
+  [ Nicolas Boulenguez ]
+  * Fix broken doc symlinks (Closes: #877267)
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 11 Jul 2019 14:19:49 +0200
+
 ocaml (4.05.0-12) unstable; urgency=medium
 
   * Provide libnum-ocaml{,-dev}

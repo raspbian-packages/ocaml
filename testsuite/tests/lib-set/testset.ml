@@ -1,3 +1,6 @@
+(* TEST
+*)
+
 module S = Set.Make(struct type t = int let compare (x:t) y = compare x y end)
 
 let testvals = [0;1;2;3;4;5;6;7;8;9]
@@ -37,6 +40,9 @@ let test x s1 s2 =
   check "inter"
     (let s = S.inter s1 s2 in
      fun i -> S.mem i s = (S.mem i s1 && S.mem i s2));
+
+  checkbool "disjoint"
+    (S.is_empty (S.inter s1 s2) = S.disjoint s1 s2);
 
   check "diff"
     (let s = S.diff s1 s2 in
@@ -129,16 +135,15 @@ let test x s1 s2 =
 
   checkbool "find_first_opt"
     (let (l, p, r) = S.split x s1 in
+    let find_first_opt_result = S.find_first_opt (fun k -> k >= x) s1 in
     if not p && S.is_empty r then
-      match S.find_first_opt (fun k -> k >= x) s1 with
+      match find_first_opt_result with
         None -> true
       | _ -> false
     else
-      let Some e = S.find_first_opt (fun k -> k >= x) s1 in
-      if p then
-        e = x
-      else
-        e = S.min_elt r);
+      (match find_first_opt_result with
+      | None -> false
+      | Some e -> if p then e = x else e = S.min_elt r));
 
   checkbool "find_last"
     (let (l, p, r) = S.split x s1 in
@@ -157,23 +162,37 @@ let test x s1 s2 =
 
   checkbool "find_last_opt"
     (let (l, p, r) = S.split x s1 in
+    let find_last_opt_result = S.find_last_opt (fun k -> k <= x) s1 in
     if not p && S.is_empty l then
-      match S.find_last_opt (fun k -> k <= x) s1 with
+      match find_last_opt_result with
         None -> true
       | _ -> false
     else
-      let Some e = S.find_last_opt (fun k -> k <= x) s1 in
-      if p then
-        e = x
-      else
-        e = S.max_elt l);
+      (match find_last_opt_result with
+      | None -> false
+      | Some e -> if p then e = x else e = S.max_elt l));
 
   check "split"
     (let (l, p, r) = S.split x s1 in
      fun i ->
        if i < x then S.mem i l = S.mem i s1
        else if i > x then S.mem i r = S.mem i s1
-       else p = S.mem i s1)
+       else p = S.mem i s1);
+
+  checkbool "to_seq_of_seq"
+    (S.equal s1 (S.of_seq @@ S.to_seq s1));
+
+  checkbool "to_seq_from"
+    (let seq = S.to_seq_from x s1 in
+     let ok1 = List.of_seq seq |> List.for_all (fun y -> y >= x) in
+     let ok2 =
+       (S.elements s1 |> List.filter (fun y -> y >= x))
+       =
+       (List.of_seq seq)
+     in
+     ok1 && ok2);
+
+  ()
 
 let relt() = Random.int 10
 

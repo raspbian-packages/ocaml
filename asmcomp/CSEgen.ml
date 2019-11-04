@@ -37,7 +37,7 @@ type rhs = operation * valnum array
 
 module Equations = struct
   module Rhs_map =
-    Map.Make(struct type t = rhs let compare = Pervasives.compare end)
+    Map.Make(struct type t = rhs let compare = Stdlib.compare end)
 
   type 'a t =
     { load_equations : 'a Rhs_map.t;
@@ -215,7 +215,7 @@ let insert_move srcs dsts i =
 
 class cse_generic = object (self)
 
-(* Default classification of operations.  Can be overriden in
+(* Default classification of operations.  Can be overridden in
    processor-specific files to classify specific operations better. *)
 
 method class_of_operation op =
@@ -235,6 +235,7 @@ method class_of_operation op =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat -> Op_pure
   | Ispecific _ -> Op_other
+  | Iname_for_debugger _ -> Op_pure
 
 (* Operations that are so cheap that it isn't worth factoring them. *)
 
@@ -361,6 +362,10 @@ method private cse n i =
               next = self#cse empty_numbering i.next}
 
 method fundecl f =
-  {f with fun_body = self#cse empty_numbering f.fun_body}
+  (* CSE can trigger bad register allocation behaviors, see MPR#7630 *)
+  if List.mem Cmm.No_CSE f.fun_codegen_options then
+    f
+  else
+    {f with fun_body = self#cse empty_numbering f.fun_body }
 
 end

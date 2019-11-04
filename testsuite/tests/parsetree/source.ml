@@ -152,6 +152,18 @@ module type S =
     (module type of[@foo] M) ->
     (sig[@foo] end)
 
+module type S = S -> S -> S
+module type S = (S -> S) -> S
+module type S = functor (M : S) -> S -> S
+module type S = (functor (M : S) -> S) -> S
+module type S = (S -> S)[@foo] -> S
+module type S = (functor[@foo] (M : S) -> S) -> S
+
+module type S = sig
+  module rec A : (S with type t = t)
+  and B : (S with type t = t)
+end
+
 (* Structure items *)
 let%foo[@foo] x = 4
 and[@foo] y = x
@@ -292,7 +304,7 @@ let pop_castable () =
     | [] -> raise Not_found
 ;;
 
-(* We can add foos and bars to this list, and retrive them *)
+(* We can add foos and bars to this list, and retrieve them *)
 
 push_castable (new foo);;
 push_castable (new bar);;
@@ -708,7 +720,7 @@ end = struct
   let ik =
     { tag = Int;
       label = "int";
-      write = string_of_int;
+      write = Int.to_string;
       read = int_of_string }
 
   let () = Hashtbl.add readTbl "int" (K ik)
@@ -826,7 +838,7 @@ let apply x =
   (module N : S)
 
 let () =
-  let int = forget (create string_of_int succ 0) in
+  let int = forget (create Int.to_string succ 0) in
   let str = forget (create (fun s -> s) (fun s -> s ^ s) "X") in
   List.iter print (List.map apply [int; apply int; apply (apply str)])
 
@@ -899,7 +911,7 @@ module rec Print : sig
 end = struct
   let to_string (type s) t x =
     match t with
-    | Int eq -> string_of_int (TypEq.apply eq x)
+    | Int eq -> Int.to_string (TypEq.apply eq x)
     | String eq -> Printf.sprintf "%S" (TypEq.apply eq x)
     | Pair p ->
         let module P = (val p : PAIR with type t = s) in
@@ -934,7 +946,7 @@ let f = function
   | Some _ [@foooo]-> 2
   | None -> 3
 ;;
-print_endline (string_of_int (f (Some (module struct let x = false end))));;
+print_endline (Int.to_string (f (Some (module struct let x = false end))));;
 type 'a ty =
   | Int : int ty
   | Bool : bool ty
@@ -3060,7 +3072,7 @@ Error: Types marked with the immediate attribute must be
        non-pointer types like int or bool
 |}];;
 (*
-   Implicit unpack allows to omit the signature in (val ...) expressions.
+   Implicit unpack allows the signature in (val ...) expressions to be omitted.
 
    It also adds (module M : S) and (module M) patterns, relying on
    implicit (val ...) for the implementation. Such patterns can only
@@ -3170,7 +3182,7 @@ open Typ
 let rec to_string: 'a. 'a Typ.typ -> 'a -> string =
   fun (type s) t x ->
     match (t : s typ) with
-    | Int eq -> string_of_int (TypEq.apply eq x)
+    | Int eq -> Int.to_string (TypEq.apply eq x)
     | String eq -> Printf.sprintf "%S" (TypEq.apply eq x)
     | Pair (module P) ->
         let (x1, x2) = TypEq.apply P.eq x in
@@ -3276,7 +3288,7 @@ let subst_lambda ~subst_rec ~free ~subst : _ lambda -> _ = function
           ~f:(fun ~key ~data acc ->
                 if Names.mem s used then data::acc else acc) in
       if List.exists used_expr ~f:(fun t -> Names.mem s (free t)) then
-        let name = s ^ string_of_int (next_id ()) in
+        let name = s ^ Int.to_string (next_id ()) in
         `Abs(name,
              subst_rec ~subst:(Subst.add ~key:s ~data:(`Var name) subst) t)
       else
@@ -3457,7 +3469,7 @@ class ['a] lambda_ops (ops : ('a,'a) #ops Lazy.t) =
               ~f:(fun ~key ~data acc ->
                 if Names.mem s used then data::acc else acc) in
           if List.exists used_expr ~f:(fun t -> Names.mem s (!!free t)) then
-            let name = s ^ string_of_int (next_id ()) in
+            let name = s ^ Int.to_string (next_id ()) in
             `Abs(name,
                  !!subst ~sub:(Subst.add ~key:s ~data:(`Var name) sub) t)
           else
@@ -3644,7 +3656,7 @@ let lambda_ops (ops : ('a,'a) #ops Lazy.t) =
               ~f:(fun ~key ~data acc ->
                 if Names.mem s used then data::acc else acc) in
           if List.exists used_expr ~f:(fun t -> Names.mem s (!!free t)) then
-            let name = s ^ string_of_int (next_id ()) in
+            let name = s ^ Int.to_string (next_id ()) in
             `Abs(name,
                  !!subst ~sub:(Subst.add ~key:s ~data:(`Var name) sub) t)
           else
@@ -4149,7 +4161,7 @@ module Make(O : Set.OrderedType) : S with type elt = O.t =
 
 module rec A : Set.OrderedType = struct
  type t = int
-  let compare = Pervasives.compare
+  let compare = Stdlib.compare
 end
 and B : S = struct
  module C = Make(A)
@@ -4734,7 +4746,7 @@ module C : sig module L : module type of List end = A
 include D'
 (*
 let () =
-  print_endline (string_of_int D'.M.y)
+  print_endline (Int.to_string D'.M.y)
 *)
 open A
 let f =
@@ -4808,6 +4820,7 @@ module Z = functor (_: sig end) (_:sig end) (_: sig end) -> struct end;;
 module GZ : functor (X: sig end) () (Z: sig end) -> sig end
           = functor (X: sig end) () (Z: sig end) -> struct end;;
 module F (X : sig end) = struct type t = int end;;
+module F (_ : sig end) = struct type t = int end;;
 type t = F(Does_not_exist).t;;
 type expr =
   [ `Abs of string * expr
@@ -5750,7 +5763,7 @@ module rec A
      type t = Leaf of int | Node of ASet.t
      let compare x y =
        match (x,y) with
-         (Leaf i, Leaf j) -> Pervasives.compare i j
+         (Leaf i, Leaf j) -> Stdlib.compare i j
        | (Leaf i, Node t) -> -1
        | (Node s, Leaf j) -> 1
        | (Node s, Node t) -> ASet.compare s t
@@ -6585,10 +6598,10 @@ let () =
   let i = int_inj 3 in
   let s = string_inj "abc" in
 
-  Printf.printf "%b\n%!" (int_proj i = None);
-  Printf.printf "%b\n%!" (int_proj s = None);
-  Printf.printf "%b\n%!" (string_proj i = None);
-  Printf.printf "%b\n%!" (string_proj s = None)
+  Printf.printf "%B\n%!" (int_proj i = None);
+  Printf.printf "%B\n%!" (int_proj s = None);
+  Printf.printf "%B\n%!" (string_proj i = None);
+  Printf.printf "%B\n%!" (string_proj s = None)
 ;;
 
 let sort_uniq (type s) cmp l =
@@ -6749,7 +6762,7 @@ module PR7135 = struct
     f (x :> int) (y :> int)
 end;;
 
-(* exemple of non-ground coercion *)
+(* example of non-ground coercion *)
 
 module Test1 = struct
   type t = private int
@@ -7274,3 +7287,80 @@ let g x =
 let ( ~$ ) x y = (x, y)
 let g x y =
   ~$ (x.contents) (y.contents)
+
+
+
+(* PR#7506: attributes on list tail *)
+
+let tail1 = ([1; 2])[@hello]
+let tail2 = 0::(([1; 2])[@hello])
+let tail3 = 0::(([])[@hello])
+
+let f ~l:(l[@foo]) = l;;
+let test x y = ((+)[@foo]) x y;;
+let test x = ((~-)[@foo]) x;;
+let test contents = { contents = contents[@foo] };;
+class type t = object(_[@foo]) end;;
+let test f x = f ~x:(x[@foo]);;
+let f = function ((`A|`B)[@bar]) | `C -> ();;
+let f = function _::(_::_ [@foo]) -> () | _ -> ();;
+function {contents=contents[@foo]} -> ();;
+fun contents -> {contents=contents[@foo]};;
+((); (((); ())[@foo]));;
+
+(* https://github.com/LexiFi/gen_js_api/issues/61 *)
+
+let () = foo##.bar := ();;
+
+(* "let open" in classes and class types *)
+
+class c =
+  let open M in
+  object
+    method f : t = x
+  end
+;;
+class type ct =
+  let open M in
+  object
+    method f : t
+  end
+;;
+
+(* M.(::) notation *)
+module Exotic_list = struct
+  module Inner = struct
+    type ('a,'b) t = [] | (::) of 'a * 'b *  ('a,'b) t
+  end
+
+  let Inner.(::)(x,y, Inner.[]) = Inner.(::)(1,"one",Inner.[])
+end
+
+(** Extended index operators *)
+module Indexop = struct
+  module Def = struct
+    let ( .%[] ) = Hashtbl.find
+    let ( .%[] <- ) = Hashtbl.add
+    let ( .%() ) = Hashtbl.find
+    let ( .%() <- ) = Hashtbl.add
+    let ( .%{} ) = Hashtbl.find
+    let ( .%{} <- ) = Hashtbl.add
+  end
+  ;;
+  let h = Hashtbl.create 17 in
+  h.Def.%["one"] <- 1;
+  h.Def.%("two") <- 2;
+  h.Def.%{"three"} <- 3
+  let x,y,z = Def.(h.%["one"], h.%("two"), h.%{"three"})
+end
+
+type t = |
+
+
+(* GPR#2034 *)
+
+let x = `  Foo
+let x = ` (* wait for it *) Bar
+type (+' a, -' a', ' a'b', 'ab', ' abcd', ' (* ! *) x) t =
+  ' a * ' a' * ' a'b' * 'ab' * ' abcd' * ' (* !! *) x
+  as ' a'

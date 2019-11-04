@@ -3,23 +3,20 @@ Section: ocaml
 Priority: optional
 Maintainer: Debian OCaml Maintainers <debian-ocaml-maint@lists.debian.org>
 Uploaders:
- Samuel Mimram <smimram@debian.org>,
  Ralf Treinen <treinen@debian.org>,
  Stéphane Glondu <glondu@debian.org>,
  Mehdi Dogguy <mehdi@debian.org>,
  Ximin Luo <infinity0@debian.org>
 Build-Depends:
- debhelper (>= 9),
+ debhelper-compat (= 12),
  pkg-config,
- quilt,
- autotools-dev,
  binutils-dev,
  libiberty-dev,
  libncurses5-dev,
  libx11-dev,
  zlib1g-dev,
  dh-ocaml (>= 1.0.0~)
-Standards-Version: 4.0.0
+Standards-Version: 4.4.0
 Vcs-Git: https://salsa.debian.org/ocaml-team/ocaml.git
 Vcs-Browser: https://salsa.debian.org/ocaml-team/ocaml
 Homepage: https://ocaml.org/
@@ -34,8 +31,8 @@ Depends:
 Provides:
  libnum-ocaml,
  ${ocaml:Provides}
-Replaces: ocaml-interp (<< 3.11.1-3)
-Breaks: ocaml-interp (<< 3.11.1-3)
+Replaces: ocaml-interp (<< 3.11.1-3), ocaml-base (<< 4.08)
+Breaks: ocaml-interp (<< 3.11.1-3), ocaml-base (<< 4.08)
 Description: Runtime system for OCaml bytecode executables (no X)
  Objective Caml (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
@@ -82,8 +79,9 @@ Provides:
  ${F:NativeProvides}
 Suggests:
  ocaml-doc,
- tuareg-mode | ocaml-mode
+ tuareg-mode
 Recommends:
+ ocaml-man,
  file
 Replaces: ocaml-interp (<< 3.11.1-3), ocaml-native-compilers (<< 4.04.0-1)
 Breaks:
@@ -184,6 +182,8 @@ Depends:
  ocaml-nox-${F:OCamlABI}
 Provides:
  ocaml-compiler-libs-${F:OCamlABI}
+Recommends:
+ ocaml-man
 Replaces: ocaml-base-nox (<< 4)
 Breaks: ocaml-base-nox (<< 4)
 Description: OCaml interpreter and standard libraries
@@ -195,23 +195,22 @@ Description: OCaml interpreter and standard libraries
  compilers.  They are not needed for normal OCaml development, but may
  be helpful in the development of certain applications.
 
-Package: ocaml-mode
+Package: ocaml-man
 Architecture: all
 Depends:
- emacs | emacsen, emacsen-common (>= 2.0.8),
  ${misc:Depends}
-Suggests: ocaml
-Description: major mode for editing Objective Caml in Emacs
+Breaks:
+ ocaml (<< 4.08),
+ ocaml-nox (<< 4.08),
+ ocaml-compiler-libs (<< 4.08)
+Replaces:
+ ocaml (<< 4.08),
+ ocaml-nox (<< 4.08),
+ ocaml-compiler-libs (<< 4.08)
+Description: OCaml interpreter and standard libraries (lib manpages)
  Objective (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
  and a powerful module system in the style of Standard ML.
  .
- This package provides support for editing both Objective Caml and
- Caml Light programs with Emacs and XEmacs.
- .
- Caml-mode supports:
-  - indentation
-  - compilation and error retrieving
-  - interaction with the toplevel
-  - font-lock
-  - imenu
+ This package contains ocamldoc-generated documentation about libraries
+ provided by OCaml.

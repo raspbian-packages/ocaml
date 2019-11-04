@@ -1,3 +1,12 @@
+(* TEST
+
+* hassysthreads
+include systhreads
+** bytecode
+** native
+
+*)
+
 let main () =
   let (rd, wr) = Unix.pipe() in
   let t = Thread.create
@@ -7,7 +16,7 @@ let main () =
       Unix.close wr;
     )
     () in
-  let buf = String.create 10 in
+  let buf = Bytes.create 10 in
   print_endline "reading...";
   begin try ignore (Unix.read rd buf 0 10) with Unix.Unix_error _ -> () end;
   print_endline "read returned";

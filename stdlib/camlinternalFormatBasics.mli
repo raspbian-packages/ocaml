@@ -20,6 +20,7 @@ type padty = Left | Right | Zeros
 type int_conv =
   | Int_d | Int_pd | Int_sd | Int_i | Int_pi | Int_si
   | Int_x | Int_Cx | Int_X | Int_CX | Int_o | Int_Co | Int_u
+  | Int_Cd | Int_Ci | Int_Cu
 
 type float_conv =
   | Float_f | Float_pf | Float_sf | Float_e | Float_pe | Float_se
@@ -201,8 +202,8 @@ and ('a, 'b, 'c, 'd, 'e, 'f) fmt =
     ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
       ('x, 'b, 'c, 'd, 'e, 'f) fmt
 | Bool :                                                   (* %[bB] *)
-    ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
-      (bool -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+    ('x, bool -> 'a) padding * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+      ('x, 'b, 'c, 'd, 'e, 'f) fmt
 | Flush :                                                  (* %! *)
     ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
       ('a, 'b, 'c, 'd, 'e, 'f) fmt
@@ -288,7 +289,7 @@ and ('a, 'b, 'c, 'd, 'e, 'f) ignored =
   | Ignored_float :
       pad_option * prec_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
   | Ignored_bool :
-      ('a, 'b, 'c, 'd, 'd, 'a) ignored
+      pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
   | Ignored_format_arg :
       pad_option * ('g, 'h, 'i, 'j, 'k, 'l) fmtty ->
         ('a, 'b, 'c, 'd, 'd, 'a) ignored

@@ -1,54 +1,20 @@
-aProf.cmi :
-camlinternalAProf.cmi :
-aProf.cmo : aProf.cmi
-aProf.cmx : aProf.cmi
-camlinternalAProf.cmo : camlinternalAProf.cmi
-camlinternalAProf.cmx : camlinternalAProf.cmi
-aProf.cmi :
-camlinternalAProf.cmi :
-aProf.cmo : camlinternalAProf.cmi aProf.cmi
-aProf.cmx : camlinternalAProf.cmx aProf.cmi
-camlinternalAProf.cmo : camlinternalAProf.cmi
-camlinternalAProf.cmx : camlinternalAProf.cmi
-aProf.cmi :
-rawAProf.cmi :
-aProf.cmo : aProf.cmi
-aProf.cmx : aProf.cmi
-rawAProf.cmo : rawAProf.cmi
-rawAProf.cmx : rawAProf.cmi
-aProf.cmo : rawAProf.cmi aProf.cmi
-aProf.cmx : rawAProf.cmx aProf.cmi
-aProf.cmi :
-rawAProf.cmo : rawAProf.cmi
-rawAProf.cmx : rawAProf.cmi
-rawAProf.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmi :
-spacetime_lib.cmo : raw_spacetime_lib.cmi spacetime_lib.cmi
-spacetime_lib.cmx : raw_spacetime_lib.cmx spacetime_lib.cmi
-spacetime_lib.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmi :
-raw_spacetime_lib.cmo : raw_spacetime_lib.cmi
-raw_spacetime_lib.cmx : raw_spacetime_lib.cmi
+spacetime_offline.$(O): spacetime_offline.c ../../runtime/caml/alloc.h \
+ ../../runtime/caml/misc.h ../../runtime/caml/config.h \
+ ../../runtime/caml/m.h ../../runtime/caml/s.h \
+ ../../runtime/caml/mlvalues.h ../../runtime/caml/config.h \
+ ../../runtime/caml/fail.h ../../runtime/caml/gc.h \
+ ../../runtime/caml/intext.h ../../runtime/caml/io.h \
+ ../../runtime/caml/major_gc.h ../../runtime/caml/freelist.h \
+ ../../runtime/caml/memory.h ../../runtime/caml/gc.h \
+ ../../runtime/caml/major_gc.h ../../runtime/caml/minor_gc.h \
+ ../../runtime/caml/address_class.h ../../runtime/caml/minor_gc.h \
+ ../../runtime/caml/misc.h ../../runtime/caml/mlvalues.h \
+ ../../runtime/caml/roots.h ../../runtime/caml/memory.h \
+ ../../runtime/caml/signals.h ../../runtime/caml/stack.h \
+ ../../runtime/caml/sys.h ../../runtime/caml/spacetime.h \
+ ../../runtime/caml/stack.h ../../runtime/caml/s.h
+raw_spacetime_lib.cmo : \
+    raw_spacetime_lib.cmi
+raw_spacetime_lib.cmx : \
+    raw_spacetime_lib.cmi
 raw_spacetime_lib.cmi :

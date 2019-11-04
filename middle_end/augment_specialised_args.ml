@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-9-30-40-41-42-66"]
+open! Int_replace_polymorphic_compare
 
 module E = Inline_and_simplify_aux.Env
 module B = Inlining_cost.Benefit
@@ -99,7 +100,6 @@ module W = What_to_specialise
 
 module type S = sig
   val pass_name : string
-  val variable_suffix : string
 
   val what_to_specialise
      : env:Inline_and_simplify_aux.Env.t
@@ -120,7 +120,6 @@ module Processed_what_to_specialise = struct
   }
 
   type t = {
-    variable_suffix : string;
     set_of_closures : Flambda.set_of_closures;
     existing_definitions_via_spec_args_indexed_by_fun_var
       : Definition.Set.t Variable.Map.t;
@@ -192,9 +191,7 @@ module Processed_what_to_specialise = struct
           | existing_outer_var -> existing_outer_var.var, t
           end
         | Projection_from_existing_specialised_arg projection ->
-          let new_outer_var =
-            Variable.rename group ~append:t.variable_suffix
-          in
+          let new_outer_var = Variable.rename group in
           let projection = lift_projection t ~projection in
           let new_outer_vars_indexed_by_new_lifted_defns =
             Projection.Map.add
@@ -214,9 +211,7 @@ module Processed_what_to_specialise = struct
           in
           new_outer_var, t
     in
-    let new_inner_var =
-      Variable.rename group ~append:t.variable_suffix
-    in
+    let new_inner_var = Variable.rename group in
     let new_inner_to_new_outer_vars =
       Variable.Map.add new_inner_var new_outer_var
         for_one_function.new_inner_to_new_outer_vars
@@ -246,7 +241,7 @@ module Processed_what_to_specialise = struct
         with
         | exception Not_found -> assert false
         | (function_decl : Flambda.function_declaration) ->
-          let params = Variable.Set.of_list function_decl.params in
+          let params = Parameter.Set.vars function_decl.params in
           let existing_specialised_args =
             Variable.Map.filter (fun inner_var _spec_to ->
                 Variable.Set.mem inner_var params)
@@ -285,13 +280,13 @@ module Processed_what_to_specialise = struct
     if exists_already then t
     else really_add_new_specialised_arg t ~group ~definition ~for_one_function
 
-  let create ~env ~(what_to_specialise : W.t) ~variable_suffix =
+  let create ~env ~(what_to_specialise : W.t) =
     let existing_definitions_via_spec_args_indexed_by_fun_var =
       Variable.Map.map (fun (function_decl : Flambda.function_declaration) ->
           if function_decl.stub then
             Definition.Set.empty
           else
-            let params = Variable.Set.of_list function_decl.params in
+            let params = Parameter.Set.vars function_decl.params in
             Variable.Map.fold (fun inner_var
                       (spec_to : Flambda.specialised_to) definitions ->
                 if not (Variable.Set.mem inner_var params) then
@@ -309,8 +304,7 @@ module Processed_what_to_specialise = struct
           what_to_specialise.set_of_closures.function_decls.funs
     in
     let t : t =
-      { variable_suffix;
-        set_of_closures = what_to_specialise.set_of_closures;
+      { set_of_closures = what_to_specialise.set_of_closures;
         existing_definitions_via_spec_args_indexed_by_fun_var;
         new_lifted_defns_indexed_by_new_outer_vars = Variable.Map.empty;
         new_outer_vars_indexed_by_new_lifted_defns = Projection.Map.empty;
@@ -373,7 +367,7 @@ let check_invariants ~pass_name ~(set_of_closures : Flambda.set_of_closures)
   if !Clflags.flambda_invariant_checks then begin
     Variable.Map.iter (fun fun_var
               (function_decl : Flambda.function_declaration) ->
-        let params = Variable.Set.of_list function_decl.params in
+        let params = Parameter.Set.vars function_decl.params in
         Variable.Map.iter (fun inner_var
                     (outer_var : Flambda.specialised_to) ->
               if Variable.Set.mem inner_var params then begin
@@ -407,17 +401,19 @@ module Make (T : S) = struct
 
   let rename_function_and_parameters ~fun_var
         ~(function_decl : Flambda.function_declaration) =
-    let new_fun_var = Variable.rename fun_var ~append:T.variable_suffix in
+    let new_fun_var = Variable.rename fun_var in
+    let params_renaming_list =
+      List.map (fun param ->
+          let new_param = Parameter.rename param in
+          param, new_param)
+        function_decl.params
+    in
+    let renamed_params = List.map snd params_renaming_list in
     let params_renaming =
       Variable.Map.of_list
-        (List.map (fun param ->
-            let new_param = Variable.rename param ~append:T.variable_suffix in
-            param, new_param)
-          function_decl.params)
-    in
-    let renamed_params =
-      List.map (fun param -> Variable.Map.find param params_renaming)
-        function_decl.params
+        (List.map (fun (param, new_param) ->
+             Parameter.var param, Parameter.var new_param)
+           params_renaming_list)
     in
     new_fun_var, params_renaming, renamed_params
 
@@ -431,7 +427,7 @@ module Make (T : S) = struct
        definitions are called the "specialised args bound in the wrapper".
        Note that the domain of [params_renaming] is a (non-strict) superset
        of the "inner vars" of the original specialised args. *)
-    let params = Variable.Set.of_list function_decl.params in
+    let params = Parameter.Set.vars function_decl.params in
     let new_fun_var, params_renaming, wrapper_params =
       rename_function_and_parameters ~fun_var ~function_decl
     in
@@ -467,7 +463,9 @@ module Make (T : S) = struct
       let apply : Flambda.expr =
         Apply {
           func = new_fun_var;
-          args = wrapper_params @ spec_args_bound_in_the_wrapper;
+          args =
+            (Parameter.List.vars wrapper_params) @
+            spec_args_bound_in_the_wrapper;
           kind = Direct (Closure_id.wrap new_fun_var);
           dbg = Debuginfo.none;
           inline = Default_inline;
@@ -538,6 +536,7 @@ module Make (T : S) = struct
         ~inline:Default_inline
         ~specialise:Default_specialise
         ~is_a_functor:false
+        ~closure_origin:function_decl.closure_origin
     in
     new_fun_var, new_function_decl, rewritten_existing_specialised_args,
       benefit
@@ -581,7 +580,7 @@ module Make (T : S) = struct
                 assert (Variable.Map.mem projecting_from
                   set_of_closures.specialised_args);
                 assert (Variable.Set.mem projecting_from
-                  (Variable.Set.of_list function_decl.params));
+                  (Parameter.Set.vars function_decl.params));
                 { var = new_outer_var;
                   projection = Some projection;
                 })
@@ -596,7 +595,7 @@ module Make (T : S) = struct
           specialised_args, None
         else
           let function_decl, new_specialised_args =
-            duplicate_function ~env ~set_of_closures ~fun_var
+            duplicate_function ~env ~set_of_closures ~fun_var ~new_fun_var
           in
           let specialised_args =
             Variable.Map.disjoint_union specialised_args new_specialised_args
@@ -608,7 +607,13 @@ module Make (T : S) = struct
           Variable.Set.elements (Variable.Map.keys
             for_one_function.new_inner_to_new_outer_vars)
         in
+        let new_params =
+          List.map Parameter.wrap new_params
+        in
         function_decl.params @ new_params
+      in
+      let closure_origin =
+        Closure_origin.create (Closure_id.wrap new_fun_var)
       in
       let rewritten_function_decl =
         Flambda.create_function_declaration
@@ -619,10 +624,11 @@ module Make (T : S) = struct
           ~inline:function_decl.inline
           ~specialise:function_decl.specialise
           ~is_a_functor:function_decl.is_a_functor
+          ~closure_origin
       in
       let funs, direct_call_surrogates =
         if for_one_function.make_direct_call_surrogates then
-          let surrogate = Variable.rename fun_var ~append:"_surrogate" in
+          let surrogate = Variable.rename fun_var in
           let funs =
             (* In this case, the original function declaration remains
                untouched up to alpha-equivalence.  Direct calls to it
@@ -657,8 +663,9 @@ module Make (T : S) = struct
         ~(set_of_closures : Flambda.set_of_closures) ~benefit
         ~new_lifted_defns_indexed_by_new_outer_vars =
     let body =
-      Flambda_utils.name_expr (Set_of_closures set_of_closures)
-        ~name:("set_of_closures" ^ T.variable_suffix)
+      Flambda_utils.name_expr
+        ~name:Internal_variable_names.set_of_closures
+        (Set_of_closures set_of_closures)
     in
     Variable.Map.fold (fun new_outer_var (projection : Projection.t)
           (expr, benefit) ->
@@ -672,7 +679,7 @@ module Make (T : S) = struct
   let rewrite_set_of_closures_core ~env ~duplicate_function ~benefit
         ~(set_of_closures : Flambda.set_of_closures) =
     let what_to_specialise =
-      P.create ~env ~variable_suffix:T.variable_suffix
+      P.create ~env
         ~what_to_specialise:(T.what_to_specialise ~env ~set_of_closures)
     in
     let original_set_of_closures = set_of_closures in
@@ -745,7 +752,8 @@ module Make (T : S) = struct
       Some (expr, benefit)
 
   let rewrite_set_of_closures ~env ~duplicate_function ~set_of_closures =
-    Pass_wrapper.with_dump ~pass_name:T.pass_name ~input:set_of_closures
+    Pass_wrapper.with_dump ~ppf_dump:(Inline_and_simplify_aux.Env.ppf_dump env)
+      ~pass_name:T.pass_name ~input:set_of_closures
       ~print_input:Flambda.print_set_of_closures
       ~print_output:(fun ppf (expr, _) -> Flambda.print ppf expr)
       ~f:(fun () ->

@@ -1,5 +1,9 @@
+(* TEST
+   * toplevel
+*)
+
 (*
-   Implicit unpack allows to omit the signature in (val ...) expressions.
+   Implicit unpack allows the signature in (val ...) expressions to be omitted.
 
    It also adds (module M : S) and (module M) patterns, relying on
    implicit (val ...) for the implementation. Such patterns can only
@@ -109,7 +113,7 @@ open Typ
 let rec to_string: 'a. 'a Typ.typ -> 'a -> string =
   fun (type s) t x ->
     match (t : s typ) with
-    | Int eq -> string_of_int (TypEq.apply eq x)
+    | Int eq -> Int.to_string (TypEq.apply eq x)
     | String eq -> Printf.sprintf "%S" (TypEq.apply eq x)
     | Pair (module P) ->
         let (x1, x2) = TypEq.apply P.eq x in

@@ -70,7 +70,8 @@ static value alloc_host_entry(struct hostent *entry)
       aliases = Atom(0);
     entry_h_length = entry->h_length;
 #ifdef h_addr
-    addr_list = caml_alloc_array(alloc_one_addr, (const char**)entry->h_addr_list);
+    addr_list =
+      caml_alloc_array(alloc_one_addr, (const char**)entry->h_addr_list);
 #else
     adr = alloc_one_addr(entry->h_addr);
     addr_list = caml_alloc_small(1, 0);
@@ -135,11 +136,7 @@ CAMLprim value unix_gethostbyname(value name)
 
   if (! caml_string_is_c_safe(name)) caml_raise_not_found();
 
-#if HAS_GETHOSTBYNAME_R || GETHOSTBYNAME_IS_REENTRANT
-  hostname = caml_strdup(String_val(name));
-#else
-  hostname = String_val(name);
-#endif
+  hostname = caml_stat_strdup(String_val(name));
 
 #if HAS_GETHOSTBYNAME_R == 5
   {
@@ -165,9 +162,7 @@ CAMLprim value unix_gethostbyname(value name)
 #endif
 #endif
 
-#if HAS_GETHOSTBYNAME_R || GETHOSTBYNAME_IS_REENTRANT
   caml_stat_free(hostname);
-#endif
 
   if (hp == (struct hostent *) NULL) caml_raise_not_found();
   return alloc_host_entry(hp);

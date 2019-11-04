@@ -13,6 +13,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module String = Misc.Stdlib.String
+
 (** Representation and manipulation of modules and module types. *)
 
 let print_DEBUG s = print_string s ; print_newline ()
@@ -40,7 +42,7 @@ and mmt =
 and included_module = {
     im_name : Name.t ; (** the name of the included module *)
     mutable im_module : mmt option ; (** the included module or module type *)
-    mutable im_info : Odoc_types.info option ; (** comment associated to the includ directive *)
+    mutable im_info : Odoc_types.info option ; (** comment associated to the include directive *)
   }
 
 and module_alias = {
@@ -107,7 +109,7 @@ and t_module_type = {
   }
 
 
-(** {2 Functions} *)
+(** {1 Functions} *)
 
 (** Returns the list of values from a list of module_element. *)
 let values l =
@@ -219,9 +221,6 @@ let included_modules l =
     []
     l
 
-module S = Misc.StringSet
-
-
 (** Returns the list of elements of a module type.
    @param trans indicates if, for aliased modules, we must perform a transitive search.*)
 let rec module_type_elements ?(trans=true) mt =
@@ -263,10 +262,10 @@ let module_elements ?(trans=true) m =
             match ma.ma_module with
               None -> []
             | Some (Mod m') ->
-                if S.mem m'.m_name visited then
+                if String.Set.mem m'.m_name visited then
                   []
                 else
-                  module_elements (S.add m'.m_name visited) m'
+                  module_elements (String.Set.add m'.m_name visited) m'
             | Some (Modtype mt) -> module_type_elements mt
           else
             []
@@ -305,7 +304,7 @@ let module_elements ?(trans=true) m =
 *)
     in
     iter_kind m.m_kind in
-  module_elements S.empty ~trans m
+  module_elements String.Set.empty ~trans m
 
 (** Returns the list of values of a module.
   @param trans indicates if, for aliased modules, we must perform a transitive search.*)
@@ -442,7 +441,7 @@ and module_parameters ?(trans=true) m =
   in
   iter m.m_kind
 
-(** access to all submodules and sudmobules of submodules ... of the given module.
+(** access to all submodules and submodules of submodules ... of the given module.
   @param trans indicates if, for aliased modules, we must perform a transitive search.*)
 let rec module_all_submodules ?(trans=true) m =
   let l = module_modules ~trans m in
@@ -451,7 +450,7 @@ let rec module_all_submodules ?(trans=true) m =
     l
     l
 
-(** The module type is a functor if is defined as a functor or if it is an alias for a functor. *)
+(** The module type is a functor if it is defined as a functor or if it is an alias for a functor. *)
 let rec module_type_is_functor mt =
   let rec iter k =
     match k with
@@ -470,24 +469,24 @@ let rec module_type_is_functor mt =
   in
   iter mt.mt_kind
 
-(** The module is a functor if is defined as a functor or if it is an alias for a functor. *)
+(** The module is a functor if it is defined as a functor or if it is an alias for a functor. *)
 let module_is_functor m =
   let rec iter visited = function
       Module_functor _ -> true
     | Module_alias ma ->
         (
-          not (S.mem ma.ma_name visited)
+          not (String.Set.mem ma.ma_name visited)
           &&
           match ma.ma_module with
             None -> false
-          | Some (Mod mo) -> iter (S.add ma.ma_name visited) mo.m_kind
+          | Some (Mod mo) -> iter (String.Set.add ma.ma_name visited) mo.m_kind
           | Some (Modtype mt) -> module_type_is_functor mt
         )
     | Module_constraint (k, _) ->
         iter visited k
     | _ -> false
   in
-  iter S.empty m.m_kind
+  iter String.Set.empty m.m_kind
 
 (** Returns the list of values of a module type.
   @param trans indicates if, for aliased modules, we must perform a transitive search.*)
@@ -543,7 +542,7 @@ let module_type_simple_values ?(trans=true) mt =
     (fun v -> not (Odoc_value.is_function v))
     (values (module_type_elements ~trans mt))
 
-(** {2 Functions for modules and module types} *)
+(** {1 Functions for modules and module types} *)
 
 (** The list of classes defined in this module and all its modules, functors, ....
   @param trans indicates if, for aliased modules, we must perform a transitive search.*)

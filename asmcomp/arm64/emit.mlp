@@ -114,6 +114,7 @@ let emit_addressing addr r =
   | Iindexed ofs ->
       `[{emit_reg r}, #{emit_int ofs}]`
   | Ibased(s, ofs) ->
+      assert (not !Clflags.dlcode);  (* see selection.ml *)
       `[{emit_reg r}, #:lo12:{emit_symbol_offset s ofs}]`
 
 (* Record live pointers at call points *)
@@ -323,7 +324,7 @@ let emit_literals() =
 (* Emit code to load the address of a symbol *)
 
 let emit_load_symbol_addr dst s =
-  if (not !Clflags.dlcode) || Compilenv.symbol_in_current_unit s then begin
+  if not !Clflags.dlcode then begin
     `	adrp	{emit_reg dst}, {emit_symbol s}\n`;
     `	add	{emit_reg dst}, {emit_reg dst}, #:lo12:{emit_symbol s}\n`
   end else begin
@@ -418,11 +419,16 @@ module BR = Branch_relaxation.Make (struct
 
   let offset_pc_at_branch = 0
 
+  let prologue_size () =
+    (if frame_size () > 0 then 2 else 0)
+      + (if !contains_calls then 1 else 0)
+
   let epilogue_size () =
     if !contains_calls then 3 else 2
 
   let instr_size = function
     | Lend -> 0
+    | Lprologue -> prologue_size ()
     | Lop (Imove | Ispill | Ireload) -> 1
     | Lop (Iconst_int n) ->
       num_instructions_for_intconst n
@@ -439,13 +445,15 @@ module BR = Branch_relaxation.Make (struct
     | Lop (Iload (size, addr)) | Lop (Istore (size, addr, _)) ->
       let based = match addr with Iindexed _ -> 0 | Ibased _ -> 1 in
       based + begin match size with Single -> 2 | _ -> 1 end
-    | Lop (Ialloc _) when !fastcode_flag -> 4
-    | Lop (Ispecific (Ifar_alloc _)) when !fastcode_flag -> 5
-    | Lop (Ialloc { words = num_words; _ })
-    | Lop (Ispecific (Ifar_alloc { words = num_words; _ })) ->
-      begin match num_words with
+    | Lop (Ialloc {bytes = num_bytes}) when !fastcode_flag ->
+      if num_bytes <= 0xFFF then 4 else 5
+    | Lop (Ispecific (Ifar_alloc {bytes = num_bytes})) when !fastcode_flag ->
+      if num_bytes <= 0xFFF then 5 else 6
+    | Lop (Ialloc { bytes = num_bytes; _ })
+    | Lop (Ispecific (Ifar_alloc { bytes = num_bytes; _ })) ->
+      begin match num_bytes with
       | 16 | 24 | 32 -> 1
-      | _ -> 1 + num_instructions_for_intconst (Nativeint.of_int num_words)
+      | _ -> 1 + num_instructions_for_intconst (Nativeint.of_int num_bytes)
       end
     | Lop (Iintop (Icomp _)) -> 2
     | Lop (Iintop_imm (Icomp _, _)) -> 2
@@ -466,6 +474,7 @@ module BR = Branch_relaxation.Make (struct
     | Lop (Ispecific (Imuladd | Imulsub)) -> 1
     | Lop (Ispecific (Ibswap 16)) -> 2
     | Lop (Ispecific (Ibswap _)) -> 1
+    | Lop (Iname_for_debugger _) -> 0
     | Lreloadretaddr -> 0
     | Lreturn -> epilogue_size ()
     | Llabel _ -> 0
@@ -494,8 +503,8 @@ module BR = Branch_relaxation.Make (struct
       | Cmm.Raise_notrace -> 4
       end
 
-  let relax_allocation ~num_words ~label_after_call_gc =
-    Lop (Ispecific (Ifar_alloc { words = num_words; label_after_call_gc; }))
+  let relax_allocation ~num_bytes ~label_after_call_gc =
+    Lop (Ispecific (Ifar_alloc { bytes = num_bytes; label_after_call_gc; }))
 
   let relax_intop_checkbound ~label_after_error =
     Lop (Ispecific (Ifar_intop_checkbound { label_after_error; }))
@@ -518,8 +527,13 @@ let assembly_code_for_allocation ?label_after_call_gc i ~n ~far =
   if !fastcode_flag then begin
     let lbl_redo = new_label() in
     let lbl_call_gc = new_label() in
+    assert (n < 0x1_000_000);
+    let nl = n land 0xFFF and nh = n land 0xFFF_000 in
     `{emit_label lbl_redo}:`;
-    `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int n}\n`;
+    if nh <> 0 then
+      `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int nh}\n`;
+    if nl <> 0 then
+      `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int nl}\n`;
     `	cmp	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_limit}\n`;
     `	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`;
     if not far then begin
@@ -545,12 +559,33 @@ let assembly_code_for_allocation ?label_after_call_gc i ~n ~far =
     `{emit_label lbl_frame}:	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`
   end
 
+(* Emission of the profiling prelude *)
+
+let emit_profile() = ()   (* TODO *)
+(*
+  match Config.system with
+    "linux_eabi" | "linux_eabihf" | "netbsd" ->
+      `	push	\{lr}\n`;
+      `	{emit_call "__gnu_mcount_nc"}\n`
+  | _ -> ()
+*)
+
 (* Output the assembly code for an instruction *)
 
 let emit_instr i =
     emit_debug_info i.dbg;
     match i.desc with
     | Lend -> ()
+    | Lprologue ->
+      if !Clflags.gprofile then emit_profile();
+      let n = frame_size() in
+      if n > 0 then
+        emit_stack_adjustment (-n);
+      if !contains_calls then begin
+        cfi_offset ~reg:30 (* return address *) ~offset:(-8);
+        `	str	x30, [sp, #{emit_int (n-8)}]\n`
+      end;
+      `{emit_label !tailrec_entry_point}:\n`;
     | Lop(Imove | Ispill | Ireload) ->
         let src = i.arg.(0) and dst = i.res.(0) in
         if src.loc <> dst.loc then begin
@@ -609,6 +644,7 @@ let emit_instr i =
           match addr with
           | Iindexed _ -> i.arg.(0)
           | Ibased(s, ofs) ->
+              assert (not !Clflags.dlcode);  (* see selection.ml *)
               `	adrp	{emit_reg reg_tmp1}, {emit_symbol_offset s ofs}\n`;
               reg_tmp1 in
         begin match size with
@@ -636,6 +672,7 @@ let emit_instr i =
           match addr with
           | Iindexed _ -> i.arg.(1)
           | Ibased(s, ofs) ->
+              assert (not !Clflags.dlcode);
               `	adrp	{emit_reg reg_tmp1}, {emit_symbol_offset s ofs}\n`;
               reg_tmp1 in
         begin match size with
@@ -651,9 +688,9 @@ let emit_instr i =
         | Word_int | Word_val | Double | Double_u ->
             `	str	{emit_reg src}, {emit_addressing addr base}\n`
         end
-    | Lop(Ialloc { words = n; label_after_call_gc; }) ->
+    | Lop(Ialloc { bytes = n; label_after_call_gc; }) ->
         assembly_code_for_allocation i ~n ~far:false ?label_after_call_gc
-    | Lop(Ispecific (Ifar_alloc { words = n; label_after_call_gc; })) ->
+    | Lop(Ispecific (Ifar_alloc { bytes = n; label_after_call_gc; })) ->
         assembly_code_for_allocation i ~n ~far:true ?label_after_call_gc
     | Lop(Iintop(Icomp cmp)) ->
         `	cmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
@@ -758,6 +795,7 @@ let emit_instr i =
         | _ ->
             assert false
         end
+    | Lop (Iname_for_debugger _) -> ()
     | Lreloadretaddr ->
         ()
     | Lreturn ->
@@ -780,18 +818,20 @@ let emit_instr i =
             `	cmp	{emit_reg i.arg.(0)}, #{emit_int n}\n`;
             let comp = name_for_comparison cmp in
             `	b.{emit_string comp}	{emit_label lbl}\n`
-        | Ifloattest(cmp, neg) ->
-            let comp = (match (cmp, neg) with
-                        | (Ceq, false) | (Cne, true) -> "eq"
-                        | (Cne, false) | (Ceq, true) -> "ne"
-                        | (Clt, false) -> "cc"
-                        | (Clt, true)  -> "cs"
-                        | (Cle, false) -> "ls"
-                        | (Cle, true)  -> "hi"
-                        | (Cgt, false) -> "gt"
-                        | (Cgt, true)  -> "le"
-                        | (Cge, false) -> "ge"
-                        | (Cge, true)  -> "lt") in
+        | Ifloattest cmp ->
+            let comp =
+              match cmp with
+              | CFeq -> "eq"
+              | CFneq -> "ne"
+              | CFlt -> "cc"
+              | CFnlt -> "cs"
+              | CFle -> "ls"
+              | CFnle -> "hi"
+              | CFgt -> "gt"
+              | CFngt -> "le"
+              | CFge -> "ge"
+              | CFnge -> "lt"
+            in
             `	fcmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
             `	b.{emit_string comp}	{emit_label lbl}\n`
         | Ioddtest ->
@@ -865,17 +905,6 @@ let emit_instr i =
 let rec emit_all i =
   if i.desc = Lend then () else (emit_instr i; emit_all i.next)
 
-(* Emission of the profiling prelude *)
-
-let emit_profile() = ()   (* TODO *)
-(*
-  match Config.system with
-    "linux_eabi" | "linux_eabihf" | "netbsd" ->
-      `	push	\{lr}\n`;
-      `	{emit_call "__gnu_mcount_nc"}\n`
-  | _ -> ()
-*)
-
 (* Emission of a function declaration *)
 
 let fundecl fundecl =
@@ -893,15 +922,6 @@ let fundecl fundecl =
   `{emit_symbol fundecl.fun_name}:\n`;
   emit_debug_info fundecl.fun_dbg;
   cfi_startproc();
-  if !Clflags.gprofile then emit_profile();
-  let n = frame_size() in
-  if n > 0 then
-    emit_stack_adjustment (-n);
-  if !contains_calls then begin
-    cfi_offset ~reg:30 (* return address *) ~offset:(-8);
-    `	str	x30, [sp, #{emit_int (n-8)}]\n`
-  end;
-  `{emit_label !tailrec_entry_point}:\n`;
   let num_call_gc, num_check_bound =
     num_call_gc_and_check_bound_points fundecl.fun_body
   in
@@ -924,7 +944,15 @@ let fundecl fundecl =
 
 let emit_item = function
   | Cglobal_symbol s -> `	.globl	{emit_symbol s}\n`;
-  | Cdefine_symbol s -> `{emit_symbol s}:\n`
+  | Cdefine_symbol s ->
+    if !Clflags.dlcode then begin
+      (* GOT relocations against non-global symbols don't seem to work
+         properly: GOT entries are not created for the symbols and the
+         relocations evaluate to random other GOT entries.  For the moment
+         force all symbols to be global. *)
+      `	.globl	{emit_symbol s}\n`;
+    end;
+    `{emit_symbol s}:\n`
   | Cint8 n -> `	.byte	{emit_int n}\n`
   | Cint16 n -> `	.short	{emit_int n}\n`
   | Cint32 n -> `	.long	{emit_nativeint n}\n`
@@ -962,9 +990,11 @@ let end_assembly () =
   `{emit_symbol lbl_end}:\n`;
   let lbl_end = Compilenv.make_symbol (Some "data_end") in
   `	.data\n`;
+  `	.quad	0\n`;  (* PR#6329 *)
   `	.globl	{emit_symbol lbl_end}\n`;
   `{emit_symbol lbl_end}:\n`;
-  `	.long	0\n`;
+  `	.quad	0\n`;
+  `	.align	3\n`;  (* #7887 *)
   let lbl = Compilenv.make_symbol (Some "frametable") in
   `	.globl	{emit_symbol lbl}\n`;
   `{emit_symbol lbl}:\n`;

@@ -79,58 +79,59 @@ let check_units members =
 
 (* Make the .o file for the package *)
 
-let make_package_object ppf members targetobj targetname coercion
+let make_package_object ~ppf_dump members targetobj targetname coercion
       ~backend =
-  let objtemp =
-    if !Clflags.keep_asm_file
-    then Filename.remove_extension targetobj ^ ".pack" ^ Config.ext_obj
-    else
-      (* Put the full name of the module in the temporary file name
-         to avoid collisions with MSVC's link /lib in case of successive
-         packs *)
-      Filename.temp_file (Compilenv.make_symbol (Some "")) Config.ext_obj in
-  let components =
-    List.map
-      (fun m ->
-        match m.pm_kind with
-        | PM_intf -> None
-        | PM_impl _ -> Some(Ident.create_persistent m.pm_name))
-      members in
-  let module_ident = Ident.create_persistent targetname in
-  let source_provenance = Timings.Pack targetname in
-  let prefixname = Filename.remove_extension objtemp in
-  if Config.flambda then begin
-    let size, lam = Translmod.transl_package_flambda components coercion in
-    let flam =
-      Middle_end.middle_end ppf
-        ~source_provenance
-        ~prefixname
-        ~backend
-        ~size
-        ~filename:targetname
-        ~module_ident
-        ~module_initializer:lam
+  Profile.record_call (Printf.sprintf "pack(%s)" targetname) (fun () ->
+    let objtemp =
+      if !Clflags.keep_asm_file
+      then Filename.remove_extension targetobj ^ ".pack" ^ Config.ext_obj
+      else
+        (* Put the full name of the module in the temporary file name
+           to avoid collisions with MSVC's link /lib in case of successive
+           packs *)
+        Filename.temp_file (Compilenv.make_symbol (Some "")) Config.ext_obj in
+    let components =
+      List.map
+        (fun m ->
+          match m.pm_kind with
+          | PM_intf -> None
+          | PM_impl _ -> Some(Ident.create_persistent m.pm_name))
+        members in
+    let module_ident = Ident.create_persistent targetname in
+    let prefixname = Filename.remove_extension objtemp in
+    if Config.flambda then begin
+      let size, lam = Translmod.transl_package_flambda components coercion in
+      let lam = Simplif.simplify_lambda targetname lam in
+      let flam =
+        Middle_end.middle_end ~ppf_dump
+          ~prefixname
+          ~backend
+          ~size
+          ~filename:targetname
+          ~module_ident
+          ~module_initializer:lam
+      in
+      Asmgen.compile_implementation_flambda
+        prefixname ~backend ~required_globals:Ident.Set.empty ~ppf_dump flam;
+    end else begin
+      let main_module_block_size, code =
+        Translmod.transl_store_package
+          components (Ident.create_persistent targetname) coercion in
+      let code = Simplif.simplify_lambda targetname code in
+      Asmgen.compile_implementation_clambda
+        prefixname ~ppf_dump { Lambda.code; main_module_block_size;
+                         module_ident; required_globals = Ident.Set.empty }
+    end;
+    let objfiles =
+      List.map
+        (fun m -> Filename.remove_extension m.pm_file ^ Config.ext_obj)
+        (List.filter (fun m -> m.pm_kind <> PM_intf) members) in
+    let ok =
+      Ccomp.call_linker Ccomp.Partial targetobj (objtemp :: objfiles) ""
     in
-    Asmgen.compile_implementation_flambda ~source_provenance
-      prefixname ~backend ~required_globals:Ident.Set.empty ppf flam;
-  end else begin
-    let main_module_block_size, code =
-      Translmod.transl_store_package
-        components (Ident.create_persistent targetname) coercion in
-    Asmgen.compile_implementation_clambda ~source_provenance
-      prefixname ppf { Lambda.code; main_module_block_size;
-                       module_ident; required_globals = Ident.Set.empty }
-  end;
-  let objfiles =
-    List.map
-      (fun m -> Filename.remove_extension m.pm_file ^ Config.ext_obj)
-      (List.filter (fun m -> m.pm_kind <> PM_intf) members) in
-  let ok =
-    Ccomp.call_linker Ccomp.Partial targetobj (objtemp :: objfiles) ""
-  in
-  remove_file objtemp;
-  if not ok then raise(Error Linking_error)
-
+    remove_file objtemp;
+    if not ok then raise(Error Linking_error)
+  )
 (* Make the .cmx file for the package *)
 
 let get_export_info ui =
@@ -221,7 +222,7 @@ let build_package_cmx members cmxfile =
 
 (* Make the .cmx and the .o for the package *)
 
-let package_object_files ppf files targetcmx
+let package_object_files ~ppf_dump files targetcmx
                          targetobj targetname coercion ~backend =
   let pack_path =
     match !Clflags.for_package with
@@ -229,16 +230,16 @@ let package_object_files ppf files targetcmx
     | Some p -> p ^ "." ^ targetname in
   let members = map_left_right (read_member_info pack_path) files in
   check_units members;
-  make_package_object ppf members targetobj targetname coercion ~backend;
+  make_package_object ~ppf_dump members targetobj targetname coercion ~backend;
   build_package_cmx members targetcmx
 
 (* The entry point *)
 
-let package_files ppf initial_env files targetcmx ~backend =
+let package_files ~ppf_dump initial_env files targetcmx ~backend =
   let files =
     List.map
       (fun f ->
-        try find_in_path !Config.load_path f
+        try Load_path.find f
         with Not_found -> raise(Error(File_not_found f)))
       files in
   let prefix = chop_extensions targetcmx in
@@ -248,16 +249,14 @@ let package_files ppf initial_env files targetcmx ~backend =
   (* Set the name of the current "input" *)
   Location.input_name := targetcmx;
   (* Set the name of the current compunit *)
-  Compilenv.reset ~source_provenance:(Timings.Pack targetname)
-    ?packname:!Clflags.for_package targetname;
-  try
-    let coercion =
-      Typemod.package_units initial_env files targetcmi targetname in
-    package_object_files ppf files targetcmx targetobj targetname coercion
-      ~backend
-  with x ->
-    remove_file targetcmx; remove_file targetobj;
-    raise x
+  Compilenv.reset ?packname:!Clflags.for_package targetname;
+  Misc.try_finally (fun () ->
+      let coercion =
+        Typemod.package_units initial_env files targetcmi targetname in
+      package_object_files ~ppf_dump files targetcmx targetobj targetname
+        coercion ~backend
+    )
+    ~exceptionally:(fun () -> remove_file targetcmx; remove_file targetobj)
 
 (* Error report *)
 

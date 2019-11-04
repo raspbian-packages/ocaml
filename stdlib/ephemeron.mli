@@ -15,14 +15,12 @@
 
 (** Ephemerons and weak hash table *)
 
-(** Ephemerons and weak hash table
-
-    Ephemerons and weak hash table are useful when one wants to cache
+(** Ephemerons and weak hash table are useful when one wants to cache
     or memorize the computation of a function, as long as the
     arguments and the function are used, without creating memory leaks
     by continuously keeping old computation results that are not
     useful anymore because one argument or the function is freed. An
-    implementation using {Hashtbl.t} is not suitable because all
+    implementation using {!Hashtbl.t} is not suitable because all
     associations would keep in memory the arguments and the result.
 
     Ephemerons can also be used for "adding" a field to an arbitrary
@@ -58,7 +56,7 @@
 
     Notes:
     - All the types defined in this module cannot be marshaled
-    using {!Pervasives.output_value} or the functions of the
+    using {!Stdlib.output_value} or the functions of the
     {!Marshal} module.
 
     Ephemerons are defined in a language agnostic way in this paper:

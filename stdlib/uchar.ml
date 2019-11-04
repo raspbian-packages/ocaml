@@ -27,6 +27,9 @@ let max = 0x10FFFF
 let lo_bound = 0xD7FF
 let hi_bound = 0xE000
 
+let bom = 0xFEFF
+let rep = 0xFFFD
+
 let succ u =
   if u = lo_bound then hi_bound else
   if u = max then invalid_arg err_no_succ else
@@ -51,5 +54,5 @@ let to_char u =
 let unsafe_to_char = Char.unsafe_chr
 
 let equal : int -> int -> bool = ( = )
-let compare : int -> int -> int = Pervasives.compare
+let compare : int -> int -> int = Stdlib.compare
 let hash = to_int

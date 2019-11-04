@@ -25,6 +25,10 @@ open Clambda
 open Cmm
 open Cmx_format
 
+module String = Misc.Stdlib.String
+module V = Backend_var
+module VP = Backend_var.With_provenance
+
 (* Environments used for translation to Cmm. *)
 
 type boxed_number =
@@ -32,28 +36,28 @@ type boxed_number =
   | Boxed_integer of boxed_integer * Debuginfo.t
 
 type env = {
-  unboxed_ids : (Ident.t * boxed_number) Ident.tbl;
-  environment_param : Ident.t option;
+  unboxed_ids : (V.t * boxed_number) V.tbl;
+  environment_param : V.t option;
 }
 
 let empty_env =
   {
-    unboxed_ids =Ident.empty;
+    unboxed_ids =V.empty;
     environment_param = None;
   }
 
 let create_env ~environment_param =
-  { unboxed_ids = Ident.empty;
+  { unboxed_ids = V.empty;
     environment_param;
   }
 
 let is_unboxed_id id env =
-  try Some (Ident.find_same id env.unboxed_ids)
+  try Some (V.find_same id env.unboxed_ids)
   with Not_found -> None
 
 let add_unboxed_id id unboxed_id bn env =
   { env with
-    unboxed_ids = Ident.add id (unboxed_id, bn) env.unboxed_ids;
+    unboxed_ids = V.add id (unboxed_id, bn) env.unboxed_ids;
   }
 
 (* Local binding of complex expressions *)
@@ -63,7 +67,7 @@ let bind name arg fn =
     Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
   | Cblockheader _ -> fn arg
-  | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
+  | _ -> let id = V.create_local name in Clet(VP.create id, arg, fn (Cvar id))
 
 let bind_load name arg fn =
   match arg with
@@ -75,10 +79,10 @@ let bind_nonvar name arg fn =
     Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
   | Cblockheader _ -> fn arg
-  | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
+  | _ -> let id = V.create_local name in Clet(VP.create id, arg, fn (Cvar id))
 
 let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
-    (* cf. byterun/gc.h *)
+    (* cf. runtime/caml/gc.h *)
 
 (* Block headers. Meaning of the tag field: see stdlib/obj.ml *)
 
@@ -128,6 +132,10 @@ let int_const n =
 
 let cint_const n =
   Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
+
+let targetint_const n =
+  Targetint.add (Targetint.shift_left (Targetint.of_int n) 1)
+    Targetint.one
 
 let add_no_overflow n x c dbg =
   let d = n + x in
@@ -244,8 +252,8 @@ let force_tag_int i dbg =
   match i with
     Cconst_int n ->
       int_const n
-  | Cop(Casr, [c; Cconst_int n], dbg) when n > 0 ->
-      Cop(Cor, [asr_int c (Cconst_int (n - 1)) dbg; Cconst_int 1], dbg)
+  | Cop(Casr, [c; Cconst_int n], dbg') when n > 0 ->
+      Cop(Cor, [asr_int c (Cconst_int (n - 1)) dbg'; Cconst_int 1], dbg)
   | c ->
       Cop(Cor, [lsl_int c (Cconst_int 1) dbg; Cconst_int 1], dbg)
 
@@ -262,12 +270,51 @@ let untag_int i dbg =
   | Cop(Cor, [c; Cconst_int 1], _) -> Cop(Casr, [c; Cconst_int 1], dbg)
   | c -> Cop(Casr, [c; Cconst_int 1], dbg)
 
-let if_then_else (cond, ifso, ifnot) =
+(* Description of the "then" and "else" continuations in [transl_if]. If
+   the "then" continuation is true and the "else" continuation is false then
+   we can use the condition directly as the result. Similarly, if the "then"
+   continuation is false and the "else" continuation is true then we can use
+   the negation of the condition directly as the result. *)
+type then_else =
+  | Then_true_else_false
+  | Then_false_else_true
+  | Unknown
+
+let invert_then_else = function
+  | Then_true_else_false -> Then_false_else_true
+  | Then_false_else_true -> Then_true_else_false
+  | Unknown -> Unknown
+
+let mk_if_then_else cond ifso ifnot =
   match cond with
   | Cconst_int 0 -> ifnot
   | Cconst_int 1 -> ifso
   | _ ->
     Cifthenelse(cond, ifso, ifnot)
+
+let mk_not dbg cmm =
+  match cmm with
+  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1], _); Cconst_int 1], dbg') -> begin
+      match c with
+      | Cop(Ccmpi cmp, [c1; c2], dbg'') ->
+          tag_int
+            (Cop(Ccmpi (negate_integer_comparison cmp), [c1; c2], dbg'')) dbg'
+      | Cop(Ccmpa cmp, [c1; c2], dbg'') ->
+          tag_int
+            (Cop(Ccmpa (negate_integer_comparison cmp), [c1; c2], dbg'')) dbg'
+      | Cop(Ccmpf cmp, [c1; c2], dbg'') ->
+          tag_int
+            (Cop(Ccmpf (negate_float_comparison cmp), [c1; c2], dbg'')) dbg'
+      | _ ->
+        (* 0 -> 3, 1 -> 1 *)
+        Cop(Csubi, [Cconst_int 3; Cop(Clsl, [c; Cconst_int 1], dbg)], dbg)
+    end
+  | Cconst_int 3 -> Cconst_int 1
+  | Cconst_int 1 -> Cconst_int 3
+  | c ->
+      (* 1 -> 3, 3 -> 1 *)
+      Cop(Csubi, [Cconst_int 4; c], dbg)
+
 
 (* Turning integer divisions into multiply-high then shift.
    The [division_parameters] function is used in module Emit for
@@ -405,7 +452,7 @@ let rec div_int c1 c2 is_safe dbg =
           let t = if p > 0 then Cop(Casr, [t; Cconst_int p], dbg) else t in
           add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1)) dbg) dbg)
       end
-  | (c1, c2) when !Clflags.fast || is_safe = Lambda.Unsafe ->
+  | (c1, c2) when !Clflags.unsafe || is_safe = Lambda.Unsafe ->
       Cop(Cdivi, [c1; c2], dbg)
   | (c1, c2) ->
       bind "divisor" c2 (fun c2 ->
@@ -441,7 +488,7 @@ let mod_int c1 c2 is_safe dbg =
       else
         bind "dividend" c1 (fun c1 ->
           sub_int c1 (mul_int (div_int c1 c2 is_safe dbg) c2 dbg) dbg)
-  | (c1, c2) when !Clflags.fast || is_safe = Lambda.Unsafe ->
+  | (c1, c2) when !Clflags.unsafe || is_safe = Lambda.Unsafe ->
       (* Flambda already generates that test *)
       Cop(Cmodi, [c1; c2], dbg)
   | (c1, c2) ->
@@ -500,13 +547,14 @@ let map_ccatch f rec_flag handlers body =
 
 let rec unbox_float dbg cmm =
   match cmm with
-  | Cop(Calloc, [_header; c], _) -> c
+  | Cop(Calloc, [Cblockheader (header, _); c], _) when header = float_header ->
+      c
   | Clet(id, exp, body) -> Clet(id, exp, unbox_float dbg body)
   | Cifthenelse(cond, e1, e2) ->
       Cifthenelse(cond, unbox_float dbg e1, unbox_float dbg e2)
   | Csequence(e1, e2) -> Csequence(e1, unbox_float dbg e2)
-  | Cswitch(e, tbl, el, dbg) ->
-    Cswitch(e, tbl, Array.map (unbox_float dbg) el, dbg)
+  | Cswitch(e, tbl, el, dbg') ->
+    Cswitch(e, tbl, Array.map (unbox_float dbg) el, dbg')
   | Ccatch(rec_flag, handlers, body) ->
     map_ccatch (unbox_float dbg) rec_flag handlers body
   | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float dbg e1, id, unbox_float dbg e2)
@@ -563,7 +611,7 @@ let get_field env ptr n dbg =
       match ptr with
       | Cvar ptr ->
         (* Loads from the current function's closure are immutable. *)
-        if Ident.same environment_param ptr then Immutable
+        if V.same environment_param ptr then Immutable
         else Mutable
       | _ -> Mutable
   in
@@ -572,7 +620,10 @@ let get_field env ptr n dbg =
 let set_field ptr n newval init dbg =
   Cop(Cstore (Word_val, init), [field_address ptr n dbg; newval], dbg)
 
-let non_profinfo_mask = (1 lsl (64 - Config.profinfo_width)) - 1
+let non_profinfo_mask =
+  if Config.profinfo
+  then (1 lsl (64 - Config.profinfo_width)) - 1
+  else 0 (* [non_profinfo_mask] is unused in this case *)
 
 let get_header ptr dbg =
   (* We cannot deem this as [Immutable] due to the presence of [Obj.truncate]
@@ -640,11 +691,11 @@ let array_indexing ?typ log2size ptr ofs dbg =
   | Cconst_int n ->
       let i = n asr 1 in
       if i = 0 then ptr else Cop(add, [ptr; Cconst_int(i lsl log2size)], dbg)
-  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1], _); Cconst_int 1], _) ->
-      Cop(add, [ptr; lsl_const c log2size dbg], dbg)
-  | Cop(Caddi, [c; Cconst_int n], _) when log2size = 0 ->
+  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1], _); Cconst_int 1], dbg') ->
+      Cop(add, [ptr; lsl_const c log2size dbg], dbg')
+  | Cop(Caddi, [c; Cconst_int n], dbg') when log2size = 0 ->
       Cop(add, [Cop(add, [ptr; untag_int c dbg], dbg); Cconst_int (n asr 1)],
-        dbg)
+        dbg')
   | Cop(Caddi, [c; Cconst_int n], _) ->
       Cop(add, [Cop(add, [ptr; lsl_const c (log2size - 1) dbg], dbg);
                     Cconst_int((n-1) lsl (log2size - 1))], dbg)
@@ -685,8 +736,8 @@ let float_array_set arr ofs newval dbg =
 
 let string_length exp dbg =
   bind "str" exp (fun str ->
-    let tmp_var = Ident.create "tmp" in
-    Clet(tmp_var,
+    let tmp_var = V.create_local "tmp" in
+    Clet(VP.create tmp_var,
          Cop(Csubi,
              [Cop(Clsl,
                    [get_size str dbg;
@@ -717,7 +768,7 @@ let call_cached_method obj tag cache pos args dbg =
   let cache = array_indexing log2_size_addr cache pos dbg in
   Compilenv.need_send_fun arity;
   Cop(Capply typ_val,
-      Cconst_symbol("caml_send" ^ string_of_int arity) ::
+      Cconst_symbol("caml_send" ^ Int.to_string arity) ::
         obj :: tag :: cache :: args,
       dbg)
 
@@ -727,12 +778,12 @@ let make_alloc_generic set_fn dbg tag wordsize args =
   if wordsize <= Config.max_young_wosize then
     Cop(Calloc, Cblockheader(block_header tag wordsize, dbg) :: args, dbg)
   else begin
-    let id = Ident.create "alloc" in
+    let id = V.create_local "alloc" in
     let rec fill_fields idx = function
       [] -> Cvar id
     | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int idx) e1 dbg,
                           fill_fields (idx + 2) el) in
-    Clet(id,
+    Clet(VP.create id,
          Cop(Cextcall("caml_alloc", typ_val, true, None),
                  [Cconst_int wordsize; Cconst_int tag], dbg),
          fill_fields 1 args)
@@ -784,12 +835,17 @@ type rhs_kind =
 ;;
 let rec expr_size env = function
   | Uvar id ->
-      begin try Ident.find_same id env with Not_found -> RHS_nonrec end
+      begin try V.find_same id env with Not_found -> RHS_nonrec end
   | Uclosure(fundecls, clos_vars) ->
       RHS_block (fundecls_size fundecls + List.length clos_vars)
   | Ulet(_str, _kind, id, exp, body) ->
-      expr_size (Ident.add id (expr_size env exp) env) body
-  | Uletrec(_bindings, body) ->
+      expr_size (V.add (VP.var id) (expr_size env exp) env) body
+  | Uletrec(bindings, body) ->
+      let env =
+        List.fold_right
+          (fun (id, exp) env -> V.add (VP.var id) (expr_size env exp) env)
+          bindings env
+      in
       expr_size env body
   | Uprim(Pmakeblock _, args, _) ->
       RHS_block (List.length args)
@@ -797,11 +853,15 @@ let rec expr_size env = function
       RHS_block (List.length args)
   | Uprim(Pmakearray(Pfloatarray, _), args, _) ->
       RHS_floatblock (List.length args)
+  | Uprim(Pmakearray(Pgenarray, _), _, _) ->
+     (* Pgenarray is excluded from recursive bindings by the
+        check in Translcore.check_recursive_lambda *)
+     RHS_nonrec
   | Uprim (Pduprecord ((Record_regular | Record_inlined _), sz), _, _) ->
       RHS_block sz
   | Uprim (Pduprecord (Record_unboxed _, _), _, _) ->
       assert false
-  | Uprim (Pduprecord (Record_extension, sz), _, _) ->
+  | Uprim (Pduprecord (Record_extension _, sz), _, _) ->
       RHS_block (sz + 1)
   | Uprim (Pduprecord (Record_float, sz), _, _) ->
       RHS_floatblock sz
@@ -816,22 +876,18 @@ let rec expr_size env = function
 (* Record application and currying functions *)
 
 let apply_function n =
-  Compilenv.need_apply_fun n; "caml_apply" ^ string_of_int n
+  Compilenv.need_apply_fun n; "caml_apply" ^ Int.to_string n
 let curry_function n =
   Compilenv.need_curry_fun n;
   if n >= 0
-  then "caml_curry" ^ string_of_int n
-  else "caml_tuplify" ^ string_of_int (-n)
+  then "caml_curry" ^ Int.to_string n
+  else "caml_tuplify" ^ Int.to_string (-n)
 
 (* Comparisons *)
 
-let transl_comparison = function
-    Lambda.Ceq -> Ceq
-  | Lambda.Cneq -> Cne
-  | Lambda.Cge -> Cge
-  | Lambda.Cgt -> Cgt
-  | Lambda.Cle -> Cle
-  | Lambda.Clt -> Clt
+let transl_int_comparison cmp = cmp
+
+let transl_float_comparison cmp = cmp
 
 (* Translate structured constants *)
 
@@ -874,11 +930,15 @@ let box_int_constant bi n =
   | Pint32 -> Uconst_int32 (Nativeint.to_int32 n)
   | Pint64 -> Uconst_int64 (Int64.of_nativeint n)
 
+let caml_nativeint_ops = "caml_nativeint_ops"
+let caml_int32_ops = "caml_int32_ops"
+let caml_int64_ops = "caml_int64_ops"
+
 let operations_boxed_int bi =
   match bi with
-    Pnativeint -> "caml_nativeint_ops"
-  | Pint32 -> "caml_int32_ops"
-  | Pint64 -> "caml_int64_ops"
+    Pnativeint -> caml_nativeint_ops
+  | Pint32 -> caml_int32_ops
+  | Pint64 -> caml_int64_ops
 
 let alloc_header_boxed_int bi =
   match bi with
@@ -908,25 +968,41 @@ let split_int64_for_32bit_target arg dbg =
     Ctuple [Cop (Cload (Thirtytwo_unsigned, Mutable), [first], dbg);
             Cop (Cload (Thirtytwo_unsigned, Mutable), [second], dbg)])
 
+let alloc_matches_boxed_int bi ~hdr ~ops =
+  match bi, hdr, ops with
+  | Pnativeint, Cblockheader (hdr, _dbg), Cconst_symbol sym ->
+      Nativeint.equal hdr boxedintnat_header
+        && String.equal sym caml_nativeint_ops
+  | Pint32, Cblockheader (hdr, _dbg), Cconst_symbol sym ->
+      Nativeint.equal hdr boxedint32_header
+        && String.equal sym caml_int32_ops
+  | Pint64, Cblockheader (hdr, _dbg), Cconst_symbol sym ->
+      Nativeint.equal hdr boxedint64_header
+        && String.equal sym caml_int64_ops
+  | (Pnativeint | Pint32 | Pint64), _, _ -> false
+
 let rec unbox_int bi arg dbg =
   match arg with
-    Cop(Calloc, [_hdr; _ops; Cop(Clsl, [contents; Cconst_int 32], dbg')], dbg)
-    when bi = Pint32 && size_int = 8 && big_endian ->
+    Cop(Calloc, [hdr; ops; Cop(Clsl, [contents; Cconst_int 32], dbg')], _dbg)
+    when bi = Pint32 && size_int = 8 && big_endian
+      && alloc_matches_boxed_int bi ~hdr ~ops ->
       (* Force sign-extension of low 32 bits *)
       Cop(Casr, [Cop(Clsl, [contents; Cconst_int 32], dbg'); Cconst_int 32],
         dbg)
-  | Cop(Calloc, [_hdr; _ops; contents], dbg)
-    when bi = Pint32 && size_int = 8 && not big_endian ->
+  | Cop(Calloc, [hdr; ops; contents], _dbg)
+    when bi = Pint32 && size_int = 8 && not big_endian
+      && alloc_matches_boxed_int bi ~hdr ~ops ->
       (* Force sign-extension of low 32 bits *)
       Cop(Casr, [Cop(Clsl, [contents; Cconst_int 32], dbg); Cconst_int 32], dbg)
-  | Cop(Calloc, [_hdr; _ops; contents], _dbg) ->
+  | Cop(Calloc, [hdr; ops; contents], _dbg)
+    when alloc_matches_boxed_int bi ~hdr ~ops ->
       contents
   | Clet(id, exp, body) -> Clet(id, exp, unbox_int bi body dbg)
   | Cifthenelse(cond, e1, e2) ->
       Cifthenelse(cond, unbox_int bi e1 dbg, unbox_int bi e2 dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2 dbg)
-  | Cswitch(e, tbl, el, dbg) ->
-      Cswitch(e, tbl, Array.map (fun e -> unbox_int bi e dbg) el, dbg)
+  | Cswitch(e, tbl, el, dbg') ->
+      Cswitch(e, tbl, Array.map (fun e -> unbox_int bi e dbg) el, dbg')
   | Ccatch(rec_flag, handlers, body) ->
       map_ccatch (fun e -> unbox_int bi e dbg) rec_flag handlers body
   | Ctrywith(e1, id, e2) ->
@@ -1034,7 +1110,7 @@ let bigarray_indexing unsafe elt_kind layout b args dbg =
   and elt_size =
     bigarray_elt_size elt_kind in
   (* [array_indexing] can simplify the given expressions *)
-  array_indexing ~typ:Int (log2 elt_size)
+  array_indexing ~typ:Addr (log2 elt_size)
                  (Cop(Cload (Word_int, Mutable),
                     [field_address b 1 dbg], dbg)) offset dbg
 
@@ -1059,12 +1135,14 @@ let bigarray_get unsafe elt_kind layout b args dbg =
       Pbigarray_complex32 | Pbigarray_complex64 ->
         let kind = bigarray_word_kind elt_kind in
         let sz = bigarray_elt_size elt_kind / 2 in
-        bind "addr" (bigarray_indexing unsafe elt_kind layout b args dbg)
-          (fun addr ->
-          box_complex dbg
-            (Cop(Cload (kind, Mutable), [addr], dbg))
-            (Cop(Cload (kind, Mutable),
-              [Cop(Cadda, [addr; Cconst_int sz], dbg)], dbg)))
+        bind "addr"
+          (bigarray_indexing unsafe elt_kind layout b args dbg) (fun addr ->
+            bind "reval"
+              (Cop(Cload (kind, Mutable), [addr], dbg)) (fun reval ->
+                bind "imval"
+                  (Cop(Cload (kind, Mutable),
+                       [Cop(Cadda, [addr; Cconst_int sz], dbg)], dbg))
+                  (fun imval -> box_complex dbg reval imval)))
     | _ ->
         Cop(Cload (bigarray_word_kind elt_kind, Mutable),
             [bigarray_indexing unsafe elt_kind layout b args dbg],
@@ -1298,6 +1376,14 @@ let check_bound unsafe dbg a1 a2 k =
 let default_prim name =
   Primitive.simple ~name ~arity:0(*ignored*) ~alloc:true
 
+let int64_native_prim name arity ~alloc =
+  let u64 = Unboxed_integer Pint64 in
+  let rec make_args = function 0 -> [] | n -> u64 :: make_args (n - 1) in
+  Primitive.make ~name ~native_name:(name ^ "_native")
+    ~alloc
+    ~native_repr_args:(make_args arity)
+    ~native_repr_res:u64
+
 let simplif_primitive_32bits = function
     Pbintofint Pint64 -> Pccall (default_prim "caml_int64_of_int")
   | Pintofbint Pint64 -> Pccall (default_prim "caml_int64_to_int")
@@ -1307,30 +1393,40 @@ let simplif_primitive_32bits = function
       Pccall (default_prim "caml_int64_of_nativeint")
   | Pcvtbint(Pint64, Pnativeint) ->
       Pccall (default_prim "caml_int64_to_nativeint")
-  | Pnegbint Pint64 -> Pccall (default_prim "caml_int64_neg")
-  | Paddbint Pint64 -> Pccall (default_prim "caml_int64_add")
-  | Psubbint Pint64 -> Pccall (default_prim "caml_int64_sub")
-  | Pmulbint Pint64 -> Pccall (default_prim "caml_int64_mul")
-  | Pdivbint {size=Pint64} -> Pccall (default_prim "caml_int64_div")
-  | Pmodbint {size=Pint64} -> Pccall (default_prim "caml_int64_mod")
-  | Pandbint Pint64 -> Pccall (default_prim "caml_int64_and")
-  | Porbint Pint64 ->  Pccall (default_prim "caml_int64_or")
-  | Pxorbint Pint64 -> Pccall (default_prim "caml_int64_xor")
+  | Pnegbint Pint64 -> Pccall (int64_native_prim "caml_int64_neg" 1
+                                 ~alloc:false)
+  | Paddbint Pint64 -> Pccall (int64_native_prim "caml_int64_add" 2
+                                 ~alloc:false)
+  | Psubbint Pint64 -> Pccall (int64_native_prim "caml_int64_sub" 2
+                                 ~alloc:false)
+  | Pmulbint Pint64 -> Pccall (int64_native_prim "caml_int64_mul" 2
+                                 ~alloc:false)
+  | Pdivbint {size=Pint64} -> Pccall (int64_native_prim "caml_int64_div" 2
+                                        ~alloc:true)
+  | Pmodbint {size=Pint64} -> Pccall (int64_native_prim "caml_int64_mod" 2
+                                        ~alloc:true)
+  | Pandbint Pint64 -> Pccall (int64_native_prim "caml_int64_and" 2
+                                 ~alloc:false)
+  | Porbint Pint64 ->  Pccall (int64_native_prim "caml_int64_or" 2
+                                 ~alloc:false)
+  | Pxorbint Pint64 -> Pccall (int64_native_prim "caml_int64_xor" 2
+                                 ~alloc:false)
   | Plslbint Pint64 -> Pccall (default_prim "caml_int64_shift_left")
   | Plsrbint Pint64 -> Pccall (default_prim "caml_int64_shift_right_unsigned")
   | Pasrbint Pint64 -> Pccall (default_prim "caml_int64_shift_right")
   | Pbintcomp(Pint64, Lambda.Ceq) -> Pccall (default_prim "caml_equal")
-  | Pbintcomp(Pint64, Lambda.Cneq) -> Pccall (default_prim "caml_notequal")
+  | Pbintcomp(Pint64, Lambda.Cne) -> Pccall (default_prim "caml_notequal")
   | Pbintcomp(Pint64, Lambda.Clt) -> Pccall (default_prim "caml_lessthan")
   | Pbintcomp(Pint64, Lambda.Cgt) -> Pccall (default_prim "caml_greaterthan")
   | Pbintcomp(Pint64, Lambda.Cle) -> Pccall (default_prim "caml_lessequal")
   | Pbintcomp(Pint64, Lambda.Cge) -> Pccall (default_prim "caml_greaterequal")
   | Pbigarrayref(_unsafe, n, Pbigarray_int64, _layout) ->
-      Pccall (default_prim ("caml_ba_get_" ^ string_of_int n))
+      Pccall (default_prim ("caml_ba_get_" ^ Int.to_string n))
   | Pbigarrayset(_unsafe, n, Pbigarray_int64, _layout) ->
-      Pccall (default_prim ("caml_ba_set_" ^ string_of_int n))
+      Pccall (default_prim ("caml_ba_set_" ^ Int.to_string n))
   | Pstring_load_64(_) -> Pccall (default_prim "caml_string_get64")
-  | Pstring_set_64(_) -> Pccall (default_prim "caml_string_set64")
+  | Pbytes_load_64(_) -> Pccall (default_prim "caml_bytes_get64")
+  | Pbytes_set_64(_) -> Pccall (default_prim "caml_bytes_set64")
   | Pbigstring_load_64(_) -> Pccall (default_prim "caml_ba_uint8_get64")
   | Pbigstring_set_64(_) -> Pccall (default_prim "caml_ba_uint8_set64")
   | Pbbswap Pint64 -> Pccall (default_prim "caml_int64_bswap")
@@ -1341,13 +1437,13 @@ let simplif_primitive p =
   | Pduprecord _ ->
       Pccall (default_prim "caml_obj_dup")
   | Pbigarrayref(_unsafe, n, Pbigarray_unknown, _layout) ->
-      Pccall (default_prim ("caml_ba_get_" ^ string_of_int n))
+      Pccall (default_prim ("caml_ba_get_" ^ Int.to_string n))
   | Pbigarrayset(_unsafe, n, Pbigarray_unknown, _layout) ->
-      Pccall (default_prim ("caml_ba_set_" ^ string_of_int n))
+      Pccall (default_prim ("caml_ba_set_" ^ Int.to_string n))
   | Pbigarrayref(_unsafe, n, _kind, Pbigarray_unknown_layout) ->
-      Pccall (default_prim ("caml_ba_get_" ^ string_of_int n))
+      Pccall (default_prim ("caml_ba_get_" ^ Int.to_string n))
   | Pbigarrayset(_unsafe, n, _kind, Pbigarray_unknown_layout) ->
-      Pccall (default_prim ("caml_ba_set_" ^ string_of_int n))
+      Pccall (default_prim ("caml_ba_set_" ^ Int.to_string n))
   | p ->
       if size_int = 8 then p else simplif_primitive_32bits p
 
@@ -1404,8 +1500,8 @@ struct
   let make_isout h arg = Cop (Ccmpa Clt, [h ; arg], Debuginfo.none)
   let make_isin h arg = Cop (Ccmpa Cge, [h ; arg], Debuginfo.none)
   let make_if cond ifso ifnot = Cifthenelse (cond, ifso, ifnot)
-  let make_switch arg cases actions =
-    make_switch arg cases actions Debuginfo.none
+  let make_switch loc arg cases actions =
+    make_switch arg cases actions (Debuginfo.from_location loc)
   let bind arg body = bind "switcher" arg body
 
   let make_catch handler = match handler with
@@ -1430,6 +1526,30 @@ end
 
 (* cmm store, as sharing as normally been detected in previous
    phases, we only share exits *)
+(* Some specific patterns can lead to switches where several cases
+   point to the same action, but this action is not an exit (see GPR#1370).
+   The addition of the index in the action array as context allows
+   sharing them correctly without duplication. *)
+module StoreExpForSwitch =
+  Switch.CtxStore
+    (struct
+      type t = expression
+      type key = int option * int
+      type context = int
+      let make_key index expr =
+        let continuation =
+          match expr with
+          | Cexit (i,[]) -> Some i
+          | _ -> None
+        in
+        Some (continuation, index)
+      let compare_key (cont, index) (cont', index') =
+        match cont, cont' with
+        | Some i, Some i' when i = i' -> 0
+        | _, _ -> Stdlib.compare index index'
+    end)
+
+(* For string switches, we can use a generic store *)
 module StoreExp =
   Switch.Store
     (struct
@@ -1438,6 +1558,7 @@ module StoreExp =
       let make_key = function
         | Cexit (i,[]) -> Some i
         | _ -> None
+      let compare_key = Stdlib.compare
     end)
 
 module SwitcherBlocks = Switch.Make(SArgBlocks)
@@ -1445,14 +1566,14 @@ module SwitcherBlocks = Switch.Make(SArgBlocks)
 (* Int switcher, arg in [low..high],
    cases is list of individual cases, and is sorted by first component *)
 
-let transl_int_switch arg low high cases default = match cases with
+let transl_int_switch loc arg low high cases default = match cases with
 | [] -> assert false
 | _::_ ->
     let store = StoreExp.mk_store () in
-    assert (store.Switch.act_store default = 0) ;
+    assert (store.Switch.act_store () default = 0) ;
     let cases =
       List.map
-        (fun (i,act) -> i,store.Switch.act_store act)
+        (fun (i,act) -> i,store.Switch.act_store () act)
         cases in
     let rec inters plow phigh pact = function
       | [] ->
@@ -1485,6 +1606,7 @@ let transl_int_switch arg low high cases default = match cases with
     bind "switcher" arg
       (fun a ->
         SwitcherBlocks.zyva
+          loc
           (low,high)
           a
           (Array.of_list inters) store)
@@ -1577,8 +1699,10 @@ let rec is_unboxed_number ~strict env e =
             Boxed (Boxed_integer (Pint64, dbg), false)
         | Pbigarrayref(_, _, Pbigarray_native_int,_) ->
             Boxed (Boxed_integer (Pnativeint, dbg), false)
-        | Pstring_load_32(_) -> Boxed (Boxed_integer (Pint32, dbg), false)
-        | Pstring_load_64(_) -> Boxed (Boxed_integer (Pint64, dbg), false)
+        | Pstring_load_32(_) | Pbytes_load_32(_) ->
+            Boxed (Boxed_integer (Pint32, dbg), false)
+        | Pstring_load_64(_) | Pbytes_load_64(_) ->
+            Boxed (Boxed_integer (Pint64, dbg), false)
         | Pbigstring_load_32(_) -> Boxed (Boxed_integer (Pint32, dbg), false)
         | Pbigstring_load_64(_) -> Boxed (Boxed_integer (Pint64, dbg), false)
         | Praise _ -> No_result
@@ -1586,7 +1710,7 @@ let rec is_unboxed_number ~strict env e =
       end
   | Ulet (_, _, _, _, e) | Uletrec (_, e) | Usequence (_, e) ->
       is_unboxed_number ~strict env e
-  | Uswitch (_, switch) ->
+  | Uswitch (_, switch, _dbg) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
       Array.fold_left join k switch.us_actions_blocks
   | Ustringswitch (_, actions, default_opt) ->
@@ -1641,29 +1765,31 @@ let rec transl env e =
       List.iter (fun f -> Queue.add f functions) fundecls;
       Cconst_symbol lbl
   | Uclosure(fundecls, clos_vars) ->
-      let block_size =
-        fundecls_size fundecls + List.length clos_vars in
       let rec transl_fundecls pos = function
           [] ->
             List.map (transl env) clos_vars
         | f :: rem ->
             Queue.add f functions;
-            let header =
-              if pos = 0
-              then alloc_closure_header block_size f.dbg
-              else alloc_infix_header pos f.dbg in
-            if f.arity = 1 || f.arity = 0 then
-              header ::
-              Cconst_symbol f.label ::
-              int_const f.arity ::
-              transl_fundecls (pos + 3) rem
-            else
-              header ::
-              Cconst_symbol(curry_function f.arity) ::
-              int_const f.arity ::
-              Cconst_symbol f.label ::
-              transl_fundecls (pos + 4) rem in
-      Cop(Calloc, transl_fundecls 0 fundecls, Debuginfo.none)
+            let without_header =
+              if f.arity = 1 || f.arity = 0 then
+                Cconst_symbol f.label ::
+                int_const f.arity ::
+                transl_fundecls (pos + 3) rem
+              else
+                Cconst_symbol(curry_function f.arity) ::
+                int_const f.arity ::
+                Cconst_symbol f.label ::
+                transl_fundecls (pos + 4) rem
+            in
+            if pos = 0 then without_header
+            else (alloc_infix_header pos f.dbg) :: without_header
+      in
+      let dbg =
+        match fundecls with
+        | [] -> Debuginfo.none
+        | fundecl::_ -> fundecl.dbg
+      in
+      make_alloc dbg Obj.closure_tag (transl_fundecls 0 fundecls)
   | Uoffset(arg, offset) ->
       (* produces a valid Caml value, pointing just after an infix header *)
       let ptr = transl env arg in
@@ -1705,6 +1831,30 @@ let rec transl env e =
               (call_met obj args))
   | Ulet(str, kind, id, exp, body) ->
       transl_let env str kind id exp body
+  | Uphantom_let (var, defining_expr, body) ->
+      let defining_expr =
+        match defining_expr with
+        | None -> None
+        | Some defining_expr ->
+          let defining_expr =
+            match defining_expr with
+            | Uphantom_const (Uconst_ref (sym, _defining_expr)) ->
+              Cphantom_const_symbol sym
+            | Uphantom_read_symbol_field { sym; field; } ->
+              Cphantom_read_symbol_field { sym; field; }
+            | Uphantom_const (Uconst_int i) | Uphantom_const (Uconst_ptr i) ->
+              Cphantom_const_int (targetint_const i)
+            | Uphantom_var var -> Cphantom_var var
+            | Uphantom_read_field { var; field; } ->
+              Cphantom_read_field { var; field; }
+            | Uphantom_offset_var { var; offset_in_words; } ->
+              Cphantom_offset_var { var; offset_in_words; }
+            | Uphantom_block { tag; fields; } ->
+              Cphantom_block { tag; fields; }
+          in
+          Some defining_expr
+      in
+      Cphantom_let (var, defining_expr, transl env body)
   | Uletrec(bindings, body) ->
       transl_letrec env bindings (transl env body)
 
@@ -1712,7 +1862,7 @@ let rec transl env e =
   | Uprim(prim, args, dbg) ->
       begin match (simplif_primitive prim, args) with
         (Pgetglobal id, []) ->
-          Cconst_symbol (Ident.name id)
+          Cconst_symbol (V.name id)
       | (Pmakeblock _, []) ->
           assert false
       | (Pmakeblock(tag, _mut, _kind), args) ->
@@ -1784,8 +1934,8 @@ let rec transl env e =
       end
 
   (* Control structures *)
-  | Uswitch(arg, s) ->
-      let dbg = Debuginfo.none in
+  | Uswitch(arg, s, dbg) ->
+      let loc = Debuginfo.to_location dbg in
       (* As in the bytecode interpreter, only matching against constants
          can be checked *)
       if Array.length s.us_index_blocks = 0 then
@@ -1795,15 +1945,16 @@ let rec transl env e =
           (Array.map (transl env) s.us_actions_consts)
           dbg
       else if Array.length s.us_index_consts = 0 then
-        transl_switch dbg env (get_tag (transl env arg) dbg)
-          s.us_index_blocks s.us_actions_blocks
+        bind "switch" (transl env arg) (fun arg ->
+          transl_switch loc env (get_tag arg dbg)
+            s.us_index_blocks s.us_actions_blocks)
       else
         bind "switch" (transl env arg) (fun arg ->
           Cifthenelse(
           Cop(Cand, [arg; Cconst_int 1], dbg),
-          transl_switch dbg env
+          transl_switch loc env
             (untag_int arg dbg) s.us_index_consts s.us_actions_consts,
-          transl_switch dbg env
+          transl_switch loc env
             (get_tag arg dbg) s.us_index_blocks s.us_actions_blocks))
   | Ustringswitch(arg,sw,d) ->
       let dbg = Debuginfo.none in
@@ -1816,46 +1967,17 @@ let rec transl env e =
   | Ucatch(nfail, [], body, handler) ->
       make_catch nfail (transl env body) (transl env handler)
   | Ucatch(nfail, ids, body, handler) ->
-      ccatch(nfail, ids, transl env body, transl env handler)
+      (* CR-someday mshinwell: consider how we can do better than
+         [typ_val] when appropriate. *)
+      let ids_with_types =
+        List.map (fun (i, _) -> (i, Cmm.typ_val)) ids in
+      ccatch(nfail, ids_with_types, transl env body, transl env handler)
   | Utrywith(body, exn, handler) ->
       Ctrywith(transl env body, exn, transl env handler)
-  | Uifthenelse(Uprim(Pnot, [arg], _), ifso, ifnot) ->
-      transl env (Uifthenelse(arg, ifnot, ifso))
-  | Uifthenelse(cond, ifso, Ustaticfail (nfail, [])) ->
-      let dbg = Debuginfo.none in
-      exit_if_false dbg env cond (transl env ifso) nfail
-  | Uifthenelse(cond, Ustaticfail (nfail, []), ifnot) ->
-      let dbg = Debuginfo.none in
-      exit_if_true dbg env cond nfail (transl env ifnot)
-  | Uifthenelse(Uprim(Psequand, _, dbg) as cond, ifso, ifnot) ->
-      let raise_num = next_raise_count () in
-      make_catch
-        raise_num
-        (exit_if_false dbg env cond (transl env ifso) raise_num)
-        (transl env ifnot)
-  | Uifthenelse(Uprim(Psequor, _, dbg) as cond, ifso, ifnot) ->
-      let raise_num = next_raise_count () in
-      make_catch
-        raise_num
-        (exit_if_true dbg env cond raise_num (transl env ifnot))
-        (transl env ifso)
-  | Uifthenelse (Uifthenelse (cond, condso, condnot), ifso, ifnot) ->
-      let dbg = Debuginfo.none in
-      let num_true = next_raise_count () in
-      make_catch
-        num_true
-        (make_catch2
-           (fun shared_false ->
-             if_then_else
-               (test_bool dbg (transl env cond),
-                exit_if_true dbg env condso num_true shared_false,
-                exit_if_true dbg env condnot num_true shared_false))
-           (transl env ifnot))
-        (transl env ifso)
   | Uifthenelse(cond, ifso, ifnot) ->
       let dbg = Debuginfo.none in
-      if_then_else(test_bool dbg (transl env cond), transl env ifso,
-        transl env ifnot)
+      transl_if env cond dbg Unknown
+        (transl env ifso) (transl env ifnot)
   | Usequence(exp1, exp2) ->
       Csequence(remove_unit(transl env exp1), transl env exp2)
   | Uwhile(cond, body) ->
@@ -1864,15 +1986,16 @@ let rec transl env e =
       return_unit
         (ccatch
            (raise_num, [],
-            Cloop(exit_if_false dbg env cond
-                    (remove_unit(transl env body)) raise_num),
+            Cloop(transl_if env cond dbg Unknown
+                    (remove_unit(transl env body))
+                    (Cexit (raise_num,[]))),
             Ctuple []))
   | Ufor(id, low, high, dir, body) ->
       let dbg = Debuginfo.none in
       let tst = match dir with Upto -> Cgt   | Downto -> Clt in
       let inc = match dir with Upto -> Caddi | Downto -> Csubi in
       let raise_num = next_raise_count () in
-      let id_prev = Ident.rename id in
+      let id_prev = VP.rename id in
       return_unit
         (Clet
            (id, transl env low,
@@ -1880,18 +2003,18 @@ let rec transl env e =
               ccatch
                 (raise_num, [],
                  Cifthenelse
-                   (Cop(Ccmpi tst, [Cvar id; high], dbg),
+                   (Cop(Ccmpi tst, [Cvar (VP.var id); high], dbg),
                     Cexit (raise_num, []),
                     Cloop
                       (Csequence
                          (remove_unit(transl env body),
-                         Clet(id_prev, Cvar id,
+                         Clet(id_prev, Cvar (VP.var id),
                           Csequence
-                            (Cassign(id,
-                               Cop(inc, [Cvar id; Cconst_int 2],
+                            (Cassign(VP.var id,
+                               Cop(inc, [Cvar (VP.var id); Cconst_int 2],
                                  dbg)),
                              Cifthenelse
-                               (Cop(Ccmpi Ceq, [Cvar id_prev; high],
+                               (Cop(Ccmpi Ceq, [Cvar (VP.var id_prev); high],
                                   dbg),
                                 Cexit (raise_num,[]), Ctuple [])))))),
                  Ctuple []))))
@@ -1984,19 +2107,17 @@ and transl_prim_1 env p arg dbg =
   | Pnegint ->
       Cop(Csubi, [Cconst_int 2; transl env arg], dbg)
   | Pctconst c ->
-      let const_of_bool b = tag_int (Cconst_int (if b then 1 else 0)) dbg in
+      let const_of_bool b = int_const (if b then 1 else 0) in
       begin
         match c with
         | Big_endian -> const_of_bool Arch.big_endian
-        | Word_size -> tag_int (Cconst_int (8*Arch.size_int)) dbg
-        | Int_size -> tag_int (Cconst_int ((8*Arch.size_int) - 1)) dbg
-        | Max_wosize ->
-            tag_int (Cconst_int ((1 lsl ((8*Arch.size_int) - 10)) - 1 )) dbg
+        | Word_size -> int_const (8*Arch.size_int)
+        | Int_size -> int_const (8*Arch.size_int - 1)
+        | Max_wosize -> int_const ((1 lsl ((8*Arch.size_int) - 10)) - 1)
         | Ostype_unix -> const_of_bool (Sys.os_type = "Unix")
         | Ostype_win32 -> const_of_bool (Sys.os_type = "Win32")
         | Ostype_cygwin -> const_of_bool (Sys.os_type = "Cygwin")
-        | Backend_type ->
-            tag_int (Cconst_int 0) dbg (* tag 0 is the same as Native here *)
+        | Backend_type -> int_const 0 (* tag 0 is the same as Native here *)
       end
   | Poffsetint n ->
       if no_overflow_lsl n 1 then
@@ -2036,7 +2157,8 @@ and transl_prim_1 env p arg dbg =
               bind "header" hdr (fun hdr ->
                 Cifthenelse(is_addr_array_hdr hdr dbg,
                             Cop(Clsr, [hdr; Cconst_int wordsize_shift], dbg),
-                            Cop(Clsr, [hdr; Cconst_int numfloat_shift], dbg))) in
+                            Cop(Clsr, [hdr; Cconst_int numfloat_shift], dbg)))
+          in
           Cop(Cor, [len; Cconst_int 1], dbg)
       | Paddrarray | Pintarray ->
           Cop(Cor, [addr_array_length hdr dbg; Cconst_int 1], dbg)
@@ -2045,7 +2167,8 @@ and transl_prim_1 env p arg dbg =
       end
   (* Boolean operations *)
   | Pnot ->
-      Cop(Csubi, [Cconst_int 4; transl env arg], dbg) (* 1 -> 3, 3 -> 1 *)
+      transl_if env arg dbg Then_false_else_true
+        (Cconst_pointer 1) (Cconst_pointer 3)
   (* Test integer/block *)
   | Pisint ->
       tag_int(Cop(Cand, [transl env arg; Cconst_int 1], dbg)) dbg
@@ -2106,15 +2229,16 @@ and transl_prim_2 env p arg1 arg2 dbg =
 
   (* Boolean operations *)
   | Psequand ->
-      if_then_else(test_bool dbg (transl env arg1),
-        transl env arg2, Cconst_int 1)
-      (* let id = Ident.create "res1" in
+      let dbg' = Debuginfo.none in
+      transl_sequand env arg1 dbg arg2 dbg' Then_true_else_false
+        (Cconst_pointer 3) (Cconst_pointer 1)
+      (* let id = V.create_local "res1" in
       Clet(id, transl env arg1,
            Cifthenelse(test_bool dbg (Cvar id), transl env arg2, Cvar id)) *)
   | Psequor ->
-      if_then_else(test_bool dbg (transl env arg1),
-        Cconst_int 3, transl env arg2)
-
+      let dbg' = Debuginfo.none in
+      transl_sequor env arg1 dbg arg2 dbg' Then_true_else_false
+        (Cconst_pointer 3) (Cconst_pointer 1)
   (* Integer operations *)
   | Paddint ->
       decr_int(add_int (transl env arg1) (transl env arg2) dbg) dbg
@@ -2159,30 +2283,35 @@ and transl_prim_2 env p arg1 arg2 dbg =
       Cop(Cor, [asr_int (transl env arg1) (untag_int(transl env arg2) dbg) dbg;
                 Cconst_int 1], dbg)
   | Pintcomp cmp ->
-      tag_int(Cop(Ccmpi(transl_comparison cmp),
+      tag_int(Cop(Ccmpi(transl_int_comparison cmp),
                   [transl env arg1; transl env arg2], dbg)) dbg
   | Pisout ->
       transl_isout (transl env arg1) (transl env arg2) dbg
   (* Float operations *)
   | Paddfloat ->
       box_float dbg (Cop(Caddf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
+                    [transl_unbox_float dbg env arg1;
+                     transl_unbox_float dbg env arg2],
                     dbg))
   | Psubfloat ->
       box_float dbg (Cop(Csubf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
+                    [transl_unbox_float dbg env arg1;
+                     transl_unbox_float dbg env arg2],
                     dbg))
   | Pmulfloat ->
       box_float dbg (Cop(Cmulf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
+                    [transl_unbox_float dbg env arg1;
+                     transl_unbox_float dbg env arg2],
                     dbg))
   | Pdivfloat ->
       box_float dbg (Cop(Cdivf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
+                    [transl_unbox_float dbg env arg1;
+                     transl_unbox_float dbg env arg2],
                     dbg))
   | Pfloatcomp cmp ->
-      tag_int(Cop(Ccmpf(transl_comparison cmp),
-                  [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
+      tag_int(Cop(Ccmpf(transl_float_comparison cmp),
+                  [transl_unbox_float dbg env arg1;
+                   transl_unbox_float dbg env arg2],
                   dbg)) dbg
 
   (* String operations *)
@@ -2200,7 +2329,7 @@ and transl_prim_2 env p arg1 arg2 dbg =
               Cop(Cload (Byte_unsigned, Mutable),
                 [add_int str idx dbg], dbg))))) dbg
 
-  | Pstring_load_16(unsafe) ->
+  | Pstring_load_16(unsafe) | Pbytes_load_16(unsafe) ->
      tag_int
        (bind "str" (transl env arg1) (fun str ->
         bind "index" (untag_int (transl env arg2) dbg) (fun idx ->
@@ -2220,7 +2349,7 @@ and transl_prim_2 env p arg1 arg2 dbg =
                                           (Cconst_int 1) dbg) idx
                       (unaligned_load_16 ba_data idx dbg))))) dbg
 
-  | Pstring_load_32(unsafe) ->
+  | Pstring_load_32(unsafe) | Pbytes_load_32(unsafe) ->
      box_int dbg Pint32
        (bind "str" (transl env arg1) (fun str ->
         bind "index" (untag_int (transl env arg2) dbg) (fun idx ->
@@ -2240,7 +2369,7 @@ and transl_prim_2 env p arg1 arg2 dbg =
                                           (Cconst_int 3) dbg) idx
                       (unaligned_load_32 ba_data idx dbg)))))
 
-  | Pstring_load_64(unsafe) ->
+  | Pstring_load_64(unsafe) | Pbytes_load_64(unsafe) ->
      box_int dbg Pint64
        (bind "str" (transl env arg1) (fun str ->
         bind "index" (untag_int (transl env arg2) dbg) (fun idx ->
@@ -2316,18 +2445,6 @@ and transl_prim_2 env p arg1 arg2 dbg =
                 unboxed_float_array_ref arr idx dbg))))
       end
 
-  (* Operations on bitvects *)
-  | Pbittest ->
-      bind "index" (untag_int(transl env arg2) dbg) (fun idx ->
-        tag_int(
-          Cop(Cand, [Cop(Clsr, [Cop(Cload (Byte_unsigned, Mutable),
-                                    [add_int (transl env arg1)
-                                      (Cop(Clsr, [idx; Cconst_int 3], dbg))
-                                      dbg],
-                                    dbg);
-                                Cop(Cand, [idx; Cconst_int 7], dbg)], dbg);
-                     Cconst_int 1], dbg)) dbg)
-
   (* Boxed integers *)
   | Paddbint bi ->
       box_int dbg bi (Cop(Caddi,
@@ -2369,14 +2486,15 @@ and transl_prim_2 env p arg1 arg2 dbg =
                       untag_int(transl env arg2) dbg], dbg))
   | Plsrbint bi ->
       box_int dbg bi (Cop(Clsr,
-                     [make_unsigned_int bi (transl_unbox_int dbg env bi arg1) dbg;
+                     [make_unsigned_int bi (transl_unbox_int dbg env bi arg1)
+                                        dbg;
                       untag_int(transl env arg2) dbg], dbg))
   | Pasrbint bi ->
       box_int dbg bi (Cop(Casr,
                      [transl_unbox_int dbg env bi arg1;
                       untag_int(transl env arg2) dbg], dbg))
   | Pbintcomp(bi, cmp) ->
-      tag_int (Cop(Ccmpi(transl_comparison cmp),
+      tag_int (Cop(Ccmpi(transl_int_comparison cmp),
                      [transl_unbox_int dbg env bi arg1;
                       transl_unbox_int dbg env bi arg2], dbg)) dbg
   | prim ->
@@ -2483,7 +2601,7 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
                       float_array_set arr idx newval dbg))))
       end)
 
-  | Pstring_set_16(unsafe) ->
+  | Pbytes_set_16(unsafe) ->
      return_unit
        (bind "str" (transl env arg1) (fun str ->
         bind "index" (untag_int (transl env arg2) dbg) (fun idx ->
@@ -2506,7 +2624,7 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
                                           dbg)
                       idx (unaligned_set_16 ba_data idx newval dbg))))))
 
-  | Pstring_set_32(unsafe) ->
+  | Pbytes_set_32(unsafe) ->
      return_unit
        (bind "str" (transl env arg1) (fun str ->
         bind "index" (untag_int (transl env arg2) dbg) (fun idx ->
@@ -2529,7 +2647,7 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
                                           dbg)
                       idx (unaligned_set_32 ba_data idx newval dbg))))))
 
-  | Pstring_set_64(unsafe) ->
+  | Pbytes_set_64(unsafe) ->
      return_unit
        (bind "str" (transl env arg1) (fun str ->
         bind "index" (untag_int (transl env arg2) dbg) (fun idx ->
@@ -2616,101 +2734,98 @@ and transl_let env str kind id exp body =
          there may be constant closures inside that need lifting out. *)
       Clet(id, transl env exp, transl env body)
   | Boxed (boxed_number, _false) ->
-      let unboxed_id = Ident.create (Ident.name id) in
-      Clet(unboxed_id, transl_unbox_number dbg env boxed_number exp,
-           transl (add_unboxed_id id unboxed_id boxed_number env) body)
+      let unboxed_id = V.create_local (VP.name id) in
+      Clet(VP.create unboxed_id, transl_unbox_number dbg env boxed_number exp,
+           transl (add_unboxed_id (VP.var id) unboxed_id boxed_number env) body)
 
 and make_catch ncatch body handler = match body with
 | Cexit (nexit,[]) when nexit=ncatch -> handler
 | _ ->  ccatch (ncatch, [], body, handler)
 
-and make_catch2 mk_body handler = match handler with
-| Cexit (_,[])|Ctuple []|Cconst_int _|Cconst_pointer _ ->
-    mk_body handler
-| _ ->
+and is_shareable_cont exp =
+  match exp with
+  | Cexit (_,[]) -> true
+  | _ -> false
+
+and make_shareable_cont mk exp =
+  if is_shareable_cont exp then mk exp
+  else begin
     let nfail = next_raise_count () in
     make_catch
       nfail
-      (mk_body (Cexit (nfail,[])))
-      handler
+      (mk (Cexit (nfail,[])))
+      exp
+  end
 
-and exit_if_true dbg env cond nfail otherwise =
+and transl_if env cond dbg approx then_ else_ =
   match cond with
-  | Uconst (Uconst_ptr 0) -> otherwise
-  | Uconst (Uconst_ptr 1) -> Cexit (nfail,[])
-  | Uifthenelse (arg1, Uconst (Uconst_ptr 1), arg2)
-  | Uprim(Psequor, [arg1; arg2], _) ->
-      exit_if_true dbg env arg1 nfail
-        (exit_if_true dbg env arg2 nfail otherwise)
-  | Uifthenelse (_, _, Uconst (Uconst_ptr 0))
-  | Uprim(Psequand, _, _) ->
-      begin match otherwise with
-      | Cexit (raise_num,[]) ->
-          exit_if_false dbg env cond (Cexit (nfail,[])) raise_num
-      | _ ->
-          let raise_num = next_raise_count () in
-          make_catch
-            raise_num
-            (exit_if_false dbg env cond (Cexit (nfail,[])) raise_num)
-            otherwise
-      end
+  | Uconst (Uconst_ptr 0) -> else_
+  | Uconst (Uconst_ptr 1) -> then_
+  | Uifthenelse (arg1, arg2, Uconst (Uconst_ptr 0)) ->
+      let dbg' = Debuginfo.none in
+      transl_sequand env arg1 dbg' arg2 dbg approx then_ else_
+  | Uprim(Psequand, [arg1; arg2], dbg') ->
+      transl_sequand env arg1 dbg' arg2 dbg approx then_ else_
+  | Uifthenelse (arg1, Uconst (Uconst_ptr 1), arg2) ->
+      let dbg' = Debuginfo.none in
+      transl_sequor env arg1 dbg' arg2 dbg approx then_ else_
+  | Uprim(Psequor, [arg1; arg2], dbg') ->
+      transl_sequor env arg1 dbg' arg2 dbg approx then_ else_
   | Uprim(Pnot, [arg], _) ->
-      exit_if_false dbg env arg otherwise nfail
+      transl_if env arg dbg (invert_then_else approx) else_ then_
+  | Uifthenelse (Uconst (Uconst_ptr 1), ifso, _) ->
+      transl_if env ifso dbg approx then_ else_
+  | Uifthenelse (Uconst (Uconst_ptr 0), _, ifnot) ->
+      transl_if env ifnot dbg approx then_ else_
   | Uifthenelse (cond, ifso, ifnot) ->
-      make_catch2
-        (fun shared ->
-          if_then_else
-            (test_bool dbg (transl env cond),
-             exit_if_true dbg env ifso nfail shared,
-             exit_if_true dbg env ifnot nfail shared))
-        otherwise
-  | _ ->
-      if_then_else(test_bool dbg (transl env cond),
-        Cexit (nfail, []), otherwise)
+      make_shareable_cont
+        (fun shareable_then ->
+           make_shareable_cont
+             (fun shareable_else ->
+                mk_if_then_else
+                  (test_bool dbg (transl env cond))
+                  (transl_if env ifso dbg approx
+                     shareable_then shareable_else)
+                  (transl_if env ifnot dbg approx
+                     shareable_then shareable_else))
+             else_)
+        then_
+  | _ -> begin
+      match approx with
+      | Then_true_else_false ->
+          transl env cond
+      | Then_false_else_true ->
+          mk_not dbg (transl env cond)
+      | Unknown ->
+          mk_if_then_else (test_bool dbg (transl env cond)) then_ else_
+    end
 
-and exit_if_false dbg env cond otherwise nfail =
-  match cond with
-  | Uconst (Uconst_ptr 0) -> Cexit (nfail,[])
-  | Uconst (Uconst_ptr 1) -> otherwise
-  | Uifthenelse (arg1, arg2, Uconst (Uconst_ptr 0))
-  | Uprim(Psequand, [arg1; arg2], _) ->
-      exit_if_false dbg env arg1
-        (exit_if_false dbg env arg2 otherwise nfail) nfail
-  | Uifthenelse (_, Uconst (Uconst_ptr 1), _)
-  | Uprim(Psequor, _, _) ->
-      begin match otherwise with
-      | Cexit (raise_num,[]) ->
-          exit_if_true dbg env cond raise_num (Cexit (nfail,[]))
-      | _ ->
-          let raise_num = next_raise_count () in
-          make_catch
-            raise_num
-            (exit_if_true dbg env cond raise_num (Cexit (nfail,[])))
-            otherwise
-      end
-  | Uprim(Pnot, [arg], _) ->
-      exit_if_true dbg env arg nfail otherwise
-  | Uifthenelse (cond, ifso, ifnot) ->
-      make_catch2
-        (fun shared ->
-          if_then_else
-            (test_bool dbg (transl env cond),
-             exit_if_false dbg env ifso shared nfail,
-             exit_if_false dbg env ifnot shared nfail))
-        otherwise
-  | _ ->
-      if_then_else (test_bool dbg (transl env cond), otherwise,
-        Cexit (nfail, []))
+and transl_sequand env arg1 dbg1 arg2 dbg2 approx then_ else_ =
+  make_shareable_cont
+    (fun shareable_else ->
+       transl_if env arg1 dbg1 Unknown
+         (transl_if env arg2 dbg2 approx then_ shareable_else)
+         shareable_else)
+    else_
 
-and transl_switch _dbg env arg index cases = match Array.length cases with
+and transl_sequor env arg1 dbg1 arg2 dbg2 approx then_ else_ =
+  make_shareable_cont
+    (fun shareable_then ->
+       transl_if env arg1 dbg1 Unknown
+         shareable_then
+         (transl_if env arg2 dbg2 approx shareable_then else_))
+    then_
+
+(* This assumes that [arg] can be safely discarded if it is not used. *)
+and transl_switch loc env arg index cases = match Array.length cases with
 | 0 -> fatal_error "Cmmgen.transl_switch"
 | 1 -> transl env cases.(0)
 | _ ->
     let cases = Array.map (transl env) cases in
-    let store = StoreExp.mk_store () in
+    let store = StoreExpForSwitch.mk_store () in
     let index =
       Array.map
-        (fun j -> store.Switch.act_store cases.(j))
+        (fun j -> store.Switch.act_store j cases.(j))
         index in
     let n_index = Array.length index in
     let inters = ref []
@@ -2735,6 +2850,7 @@ and transl_switch _dbg env arg index cases = match Array.length cases with
         bind "switcher" arg
           (fun a ->
             SwitcherBlocks.zyva
+              loc
               (0,n_index-1)
               a
               (Array.of_list inters) store)
@@ -2742,7 +2858,7 @@ and transl_switch _dbg env arg index cases = match Array.length cases with
 and transl_letrec env bindings cont =
   let dbg = Debuginfo.none in
   let bsz =
-    List.map (fun (id, exp) -> (id, exp, expr_size Ident.empty exp))
+    List.map (fun (id, exp) -> (id, exp, expr_size V.empty exp))
       bindings
   in
   let op_alloc prim sz =
@@ -2768,7 +2884,7 @@ and transl_letrec env bindings cont =
     | (id, exp, (RHS_block _ | RHS_floatblock _)) :: rem ->
         let op =
           Cop(Cextcall("caml_update_dummy", typ_void, false, None),
-              [Cvar id; transl env exp], dbg) in
+              [Cvar (VP.var id); transl env exp], dbg) in
         Csequence(op, fill_blocks rem)
     | (_id, _exp, RHS_nonrec) :: rem ->
         fill_blocks rem
@@ -2776,10 +2892,10 @@ and transl_letrec env bindings cont =
 
 (* Translate a function definition *)
 
-let transl_function f =
+let transl_function ~ppf_dump f =
   let body =
     if Config.flambda then
-      Un_anf.apply f.body ~what:f.label
+      Un_anf.apply ~ppf_dump f.body ~what:f.label
     else
       f.body
   in
@@ -2789,29 +2905,29 @@ let transl_function f =
       Afl_instrument.instrument_function (transl env body)
     else
       transl env body in
+  let fun_codegen_options =
+    if !Clflags.optimize_for_speed then
+      []
+    else
+      [ Reduce_code_size ]
+  in
   Cfunction {fun_name = f.label;
-             fun_args = List.map (fun id -> (id, typ_val)) f.params;
+             fun_args = List.map (fun (id, _) -> (id, typ_val)) f.params;
              fun_body = cmm_body;
-             fun_fast = !Clflags.optimize_for_speed;
+             fun_codegen_options;
              fun_dbg  = f.dbg}
 
 (* Translate all function definitions *)
 
-module StringSet =
-  Set.Make(struct
-    type t = string
-    let compare (x:t) y = compare x y
-  end)
-
-let rec transl_all_functions already_translated cont =
+let rec transl_all_functions ~ppf_dump already_translated cont =
   try
     let f = Queue.take functions in
-    if StringSet.mem f.label already_translated then
-      transl_all_functions already_translated cont
+    if String.Set.mem f.label already_translated then
+      transl_all_functions ~ppf_dump already_translated cont
     else begin
-      transl_all_functions
-        (StringSet.add f.label already_translated)
-        ((f.dbg, transl_function f) :: cont)
+      transl_all_functions ~ppf_dump
+        (String.Set.add f.label already_translated)
+        ((f.dbg, transl_function ~ppf_dump f) :: cont)
     end
   with Queue.Empty ->
     cont, already_translated
@@ -2951,7 +3067,7 @@ let emit_constant_table symb elems =
 let emit_constants cont (constants:Clambda.preallocated_constant list) =
   let c = ref cont in
   List.iter
-    (fun { symbol = lbl; exported; definition = cst } ->
+    (fun { symbol = lbl; exported; definition = cst; provenance = _; } ->
        let global = if exported then Global else Not_global in
        let cst = emit_structured_constant (lbl, global) cst [] in
          c:= Cdata(cst):: !c)
@@ -2971,20 +3087,20 @@ let emit_all_constants cont =
   Compilenv.clear_structured_constants ();
   emit_constants cont constants
 
-let transl_all_functions_and_emit_all_constants cont =
+let transl_all_functions_and_emit_all_constants ~ppf_dump cont =
   let rec aux already_translated cont translated_functions =
     if Compilenv.structured_constants () = [] &&
        Queue.is_empty functions
     then cont, translated_functions
     else
       let translated_functions, already_translated =
-        transl_all_functions already_translated translated_functions
+        transl_all_functions ~ppf_dump already_translated translated_functions
       in
       let cont = emit_all_constants cont in
       aux already_translated cont translated_functions
   in
   let cont, translated_functions =
-    aux StringSet.empty cont []
+    aux String.Set.empty cont []
   in
   let translated_functions =
     (* Sort functions according to source position *)
@@ -3007,18 +3123,24 @@ let emit_gc_roots_table ~symbols cont =
 (* Build preallocated blocks (used for Flambda [Initialize_symbol]
    constructs, and Clambda global module) *)
 
-let preallocate_block cont { Clambda.symbol; exported; tag; size } =
+let preallocate_block cont { Clambda.symbol; exported; tag; fields } =
   let space =
     (* These words will be registered as roots and as such must contain
        valid values, in case we are in no-naked-pointers mode.  Likewise
        the block header must be black, below (see [caml_darken]), since
        the overall record may be referenced. *)
-    Array.to_list
-      (Array.init size (fun _index ->
-        Cint (Nativeint.of_int 1 (* Val_unit *))))
+    List.map (fun field ->
+        match field with
+        | None ->
+            Cint (Nativeint.of_int 1 (* Val_unit *))
+        | Some (Uconst_field_int n) ->
+            cint_const n
+        | Some (Uconst_field_ref label) ->
+            Csymbol_address label)
+      fields
   in
   let data =
-    Cint(black_block_header tag size) ::
+    Cint(black_block_header tag (List.length fields)) ::
     if exported then
       Cglobal_symbol symbol ::
       Cdefine_symbol symbol :: space
@@ -3037,7 +3159,7 @@ let emit_preallocated_blocks preallocated_blocks cont =
 
 (* Translate a compilation unit *)
 
-let compunit (ulam, preallocated_blocks, constants) =
+let compunit ~ppf_dump (ulam, preallocated_blocks, constants) =
   let init_code =
     if !Clflags.afl_instrument then
       Afl_instrument.instrument_initialiser (transl empty_env ulam)
@@ -3045,10 +3167,19 @@ let compunit (ulam, preallocated_blocks, constants) =
       transl empty_env ulam in
   let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
                        fun_args = [];
-                       fun_body = init_code; fun_fast = false;
+                       fun_body = init_code;
+                       (* This function is often large and run only once.
+                          Compilation time matter more than runtime.
+                          See MPR#7630 *)
+                       fun_codegen_options =
+                         if Config.flambda then [
+                           Reduce_code_size;
+                           No_CSE;
+                         ]
+                         else [ Reduce_code_size ];
                        fun_dbg  = Debuginfo.none }] in
   let c2 = emit_constants c1 constants in
-  let c3 = transl_all_functions_and_emit_all_constants c2 in
+  let c3 = transl_all_functions_and_emit_all_constants ~ppf_dump c2 in
   emit_preallocated_blocks preallocated_blocks c3
 
 (*
@@ -3067,18 +3198,18 @@ CAMLprim value caml_cache_public_method (value meths, value tag, value *cache)
 
 let cache_public_method meths tag cache dbg =
   let raise_num = next_raise_count () in
-  let li = Ident.create "li" and hi = Ident.create "hi"
-  and mi = Ident.create "mi" and tagged = Ident.create "tagged" in
+  let li = V.create_local "li" and hi = V.create_local "hi"
+  and mi = V.create_local "mi" and tagged = V.create_local "tagged" in
   Clet (
-  li, Cconst_int 3,
+  VP.create li, Cconst_int 3,
   Clet (
-  hi, Cop(Cload (Word_int, Mutable), [meths], dbg),
+  VP.create hi, Cop(Cload (Word_int, Mutable), [meths], dbg),
   Csequence(
   ccatch
     (raise_num, [],
      Cloop
        (Clet(
-        mi,
+        VP.create mi,
         Cop(Cor,
             [Cop(Clsr, [Cop(Caddi, [Cvar li; Cvar hi], dbg); Cconst_int 1],
                dbg);
@@ -3100,7 +3231,7 @@ let cache_public_method meths tag cache dbg =
            Ctuple [])))),
      Ctuple []),
   Clet (
-    tagged,
+    VP.create tagged,
       Cop(Cadda, [lsl_const (Cvar li) log2_size_addr dbg;
         Cconst_int(1 - 3 * size_addr)], dbg),
     Csequence(Cop (Cstore (Word_int, Assignment), [cache; Cvar tagged], dbg),
@@ -3119,17 +3250,17 @@ let cache_public_method meths tag cache dbg =
 
 let apply_function_body arity =
   let dbg = Debuginfo.none in
-  let arg = Array.make arity (Ident.create "arg") in
-  for i = 1 to arity - 1 do arg.(i) <- Ident.create "arg" done;
-  let clos = Ident.create "clos" in
+  let arg = Array.make arity (V.create_local "arg") in
+  for i = 1 to arity - 1 do arg.(i) <- V.create_local "arg" done;
+  let clos = V.create_local "clos" in
   let env = empty_env in
   let rec app_fun clos n =
     if n = arity-1 then
       Cop(Capply typ_val,
           [get_field env (Cvar clos) 0 dbg; Cvar arg.(n); Cvar clos], dbg)
     else begin
-      let newclos = Ident.create "clos" in
-      Clet(newclos,
+      let newclos = V.create_local "clos" in
+      Clet(VP.create newclos,
            Cop(Capply typ_val,
                [get_field env (Cvar clos) 0 dbg; Cvar arg.(n); Cvar clos], dbg),
            app_fun newclos (n+1))
@@ -3148,26 +3279,26 @@ let apply_function_body arity =
 let send_function arity =
   let dbg = Debuginfo.none in
   let (args, clos', body) = apply_function_body (1+arity) in
-  let cache = Ident.create "cache"
+  let cache = V.create_local "cache"
   and obj = List.hd args
-  and tag = Ident.create "tag" in
+  and tag = V.create_local "tag" in
   let env = empty_env in
   let clos =
     let cache = Cvar cache and obj = Cvar obj and tag = Cvar tag in
-    let meths = Ident.create "meths" and cached = Ident.create "cached" in
-    let real = Ident.create "real" in
+    let meths = V.create_local "meths" and cached = V.create_local "cached" in
+    let real = V.create_local "real" in
     let mask = get_field env (Cvar meths) 1 dbg in
     let cached_pos = Cvar cached in
     let tag_pos = Cop(Cadda, [Cop (Cadda, [cached_pos; Cvar meths], dbg);
                               Cconst_int(3*size_addr-1)], dbg) in
     let tag' = Cop(Cload (Word_int, Mutable), [tag_pos], dbg) in
     Clet (
-    meths, Cop(Cload (Word_val, Mutable), [obj], dbg),
+    VP.create meths, Cop(Cload (Word_val, Mutable), [obj], dbg),
     Clet (
-    cached,
+    VP.create cached,
       Cop(Cand, [Cop(Cload (Word_int, Mutable), [cache], dbg); mask], dbg),
     Clet (
-    real,
+    VP.create real,
     Cifthenelse(Cop(Ccmpa Cne, [tag'; tag], dbg),
                 cache_public_method (Cvar meths) tag cache dbg,
                 cached_pos),
@@ -3176,28 +3307,28 @@ let send_function arity =
        Cconst_int(2*size_addr-1)], dbg)], dbg))))
 
   in
-  let body = Clet(clos', clos, body) in
+  let body = Clet(VP.create clos', clos, body) in
   let cache = cache in
   let fun_args =
     [obj, typ_val; tag, typ_int; cache, typ_val]
     @ List.map (fun id -> (id, typ_val)) (List.tl args) in
-  let fun_name = "caml_send" ^ string_of_int arity in
+  let fun_name = "caml_send" ^ Int.to_string arity in
   Cfunction
    {fun_name;
-    fun_args = fun_args;
+    fun_args = List.map (fun (arg, ty) -> VP.create arg, ty) fun_args;
     fun_body = body;
-    fun_fast = true;
+    fun_codegen_options = [];
     fun_dbg  = Debuginfo.none }
 
 let apply_function arity =
   let (args, clos, body) = apply_function_body arity in
   let all_args = args @ [clos] in
-  let fun_name = "caml_apply" ^ string_of_int arity in
+  let fun_name = "caml_apply" ^ Int.to_string arity in
   Cfunction
    {fun_name;
-    fun_args = List.map (fun id -> (id, typ_val)) all_args;
+    fun_args = List.map (fun arg -> (VP.create arg, typ_val)) all_args;
     fun_body = body;
-    fun_fast = true;
+    fun_codegen_options = [];
     fun_dbg  = Debuginfo.none;
    }
 
@@ -3207,22 +3338,22 @@ let apply_function arity =
 
 let tuplify_function arity =
   let dbg = Debuginfo.none in
-  let arg = Ident.create "arg" in
-  let clos = Ident.create "clos" in
+  let arg = V.create_local "arg" in
+  let clos = V.create_local "clos" in
   let env = empty_env in
   let rec access_components i =
     if i >= arity
     then []
     else get_field env (Cvar arg) i dbg :: access_components(i+1) in
-  let fun_name = "caml_tuplify" ^ string_of_int arity in
+  let fun_name = "caml_tuplify" ^ Int.to_string arity in
   Cfunction
    {fun_name;
-    fun_args = [arg, typ_val; clos, typ_val];
+    fun_args = [VP.create arg, typ_val; VP.create clos, typ_val];
     fun_body =
       Cop(Capply typ_val,
           get_field env (Cvar clos) 2 dbg :: access_components 0 @ [Cvar clos],
           dbg);
-    fun_fast = true;
+    fun_codegen_options = [];
     fun_dbg  = Debuginfo.none;
    }
 
@@ -3257,8 +3388,8 @@ let tuplify_function arity =
 let max_arity_optimized = 15
 let final_curry_function arity =
   let dbg = Debuginfo.none in
-  let last_arg = Ident.create "arg" in
-  let last_clos = Ident.create "clos" in
+  let last_arg = V.create_local "arg" in
+  let last_clos = V.create_local "clos" in
   let env = empty_env in
   let rec curry_fun args clos n =
     if n = 0 then
@@ -3269,23 +3400,24 @@ let final_curry_function arity =
     else
       if n = arity - 1 || arity > max_arity_optimized then
         begin
-      let newclos = Ident.create "clos" in
-      Clet(newclos,
+      let newclos = V.create_local "clos" in
+      Clet(VP.create newclos,
            get_field env (Cvar clos) 3 dbg,
            curry_fun (get_field env (Cvar clos) 2 dbg :: args) newclos (n-1))
         end else
         begin
-          let newclos = Ident.create "clos" in
-          Clet(newclos,
+          let newclos = V.create_local "clos" in
+          Clet(VP.create newclos,
                get_field env (Cvar clos) 4 dbg,
-               curry_fun (get_field env (Cvar clos) 3 dbg :: args) newclos (n-1))
+               curry_fun (get_field env (Cvar clos) 3 dbg :: args)
+                         newclos (n-1))
     end in
   Cfunction
-   {fun_name = "caml_curry" ^ string_of_int arity ^
-               "_" ^ string_of_int (arity-1);
-    fun_args = [last_arg, typ_val; last_clos, typ_val];
+   {fun_name = "caml_curry" ^ Int.to_string arity ^
+               "_" ^ Int.to_string (arity-1);
+    fun_args = [VP.create last_arg, typ_val; VP.create last_clos, typ_val];
     fun_body = curry_fun [] last_clos (arity-1);
-    fun_fast = true;
+    fun_codegen_options = [];
     fun_dbg  = Debuginfo.none }
 
 let rec intermediate_curry_functions arity num =
@@ -3294,34 +3426,34 @@ let rec intermediate_curry_functions arity num =
   if num = arity - 1 then
     [final_curry_function arity]
   else begin
-    let name1 = "caml_curry" ^ string_of_int arity in
-    let name2 = if num = 0 then name1 else name1 ^ "_" ^ string_of_int num in
-    let arg = Ident.create "arg" and clos = Ident.create "clos" in
+    let name1 = "caml_curry" ^ Int.to_string arity in
+    let name2 = if num = 0 then name1 else name1 ^ "_" ^ Int.to_string num in
+    let arg = V.create_local "arg" and clos = V.create_local "clos" in
     Cfunction
      {fun_name = name2;
-      fun_args = [arg, typ_val; clos, typ_val];
+      fun_args = [VP.create arg, typ_val; VP.create clos, typ_val];
       fun_body =
          if arity - num > 2 && arity <= max_arity_optimized then
            Cop(Calloc,
                [alloc_closure_header 5 Debuginfo.none;
-                Cconst_symbol(name1 ^ "_" ^ string_of_int (num+1));
+                Cconst_symbol(name1 ^ "_" ^ Int.to_string (num+1));
                 int_const (arity - num - 1);
-                Cconst_symbol(name1 ^ "_" ^ string_of_int (num+1) ^ "_app");
+                Cconst_symbol(name1 ^ "_" ^ Int.to_string (num+1) ^ "_app");
                 Cvar arg; Cvar clos],
                dbg)
          else
            Cop(Calloc,
                 [alloc_closure_header 4 Debuginfo.none;
-                 Cconst_symbol(name1 ^ "_" ^ string_of_int (num+1));
+                 Cconst_symbol(name1 ^ "_" ^ Int.to_string (num+1));
                  int_const 1; Cvar arg; Cvar clos],
                 dbg);
-      fun_fast = true;
+      fun_codegen_options = [];
       fun_dbg  = Debuginfo.none }
     ::
       (if arity <= max_arity_optimized && arity - num > 2 then
           let rec iter i =
             if i <= arity then
-              let arg = Ident.create (Printf.sprintf "arg%d" i) in
+              let arg = V.create_local (Printf.sprintf "arg%d" i) in
               (arg, typ_val) :: iter (i+1)
             else []
           in
@@ -3332,18 +3464,22 @@ let rec intermediate_curry_functions arity num =
                   (get_field env (Cvar clos) 2 dbg) :: args @ [Cvar clos],
                   dbg)
             else
-              let newclos = Ident.create "clos" in
-              Clet(newclos,
+              let newclos = V.create_local "clos" in
+              Clet(VP.create newclos,
                    get_field env (Cvar clos) 4 dbg,
                    iter (i-1) (get_field env (Cvar clos) 3 dbg :: args) newclos)
           in
+          let fun_args =
+            List.map (fun (arg, ty) -> VP.create arg, ty)
+              (direct_args @ [clos, typ_val])
+          in
           let cf =
             Cfunction
-              {fun_name = name1 ^ "_" ^ string_of_int (num+1) ^ "_app";
-               fun_args = direct_args @ [clos, typ_val];
+              {fun_name = name1 ^ "_" ^ Int.to_string (num+1) ^ "_app";
+               fun_args;
                fun_body = iter (num+1)
                   (List.map (fun (arg,_) -> Cvar arg) direct_args) clos;
-               fun_fast = true;
+               fun_codegen_options = [];
                fun_dbg = Debuginfo.none }
           in
           cf :: intermediate_curry_functions arity (num+1)
@@ -3358,30 +3494,25 @@ let curry_function arity =
   then intermediate_curry_functions arity 0
   else [tuplify_function (-arity)]
 
+module Int = Numbers.Int
 
-module IntSet = Set.Make(
-  struct
-    type t = int
-    let compare (x:t) y = compare x y
-  end)
-
-let default_apply = IntSet.add 2 (IntSet.add 3 IntSet.empty)
+let default_apply = Int.Set.add 2 (Int.Set.add 3 Int.Set.empty)
   (* These apply funs are always present in the main program because
-     the run-time system needs them (cf. asmrun/<arch>.S) . *)
+     the run-time system needs them (cf. runtime/<arch>.S) . *)
 
 let generic_functions shared units =
   let (apply,send,curry) =
     List.fold_left
       (fun (apply,send,curry) ui ->
-         List.fold_right IntSet.add ui.ui_apply_fun apply,
-         List.fold_right IntSet.add ui.ui_send_fun send,
-         List.fold_right IntSet.add ui.ui_curry_fun curry)
-      (IntSet.empty,IntSet.empty,IntSet.empty)
+         List.fold_right Int.Set.add ui.ui_apply_fun apply,
+         List.fold_right Int.Set.add ui.ui_send_fun send,
+         List.fold_right Int.Set.add ui.ui_curry_fun curry)
+      (Int.Set.empty,Int.Set.empty,Int.Set.empty)
       units in
-  let apply = if shared then apply else IntSet.union apply default_apply in
-  let accu = IntSet.fold (fun n accu -> apply_function n :: accu) apply [] in
-  let accu = IntSet.fold (fun n accu -> send_function n :: accu) send accu in
-  IntSet.fold (fun n accu -> curry_function n @ accu) curry accu
+  let apply = if shared then apply else Int.Set.union apply default_apply in
+  let accu = Int.Set.fold (fun n accu -> apply_function n :: accu) apply [] in
+  let accu = Int.Set.fold (fun n accu -> send_function n :: accu) send accu in
+  Int.Set.fold (fun n accu -> curry_function n @ accu) curry accu
 
 (* Generate the entry point *)
 
@@ -3406,7 +3537,7 @@ let entry_point namelist =
   Cfunction {fun_name = "caml_program";
              fun_args = [];
              fun_body = body;
-             fun_fast = false;
+             fun_codegen_options = [Reduce_code_size];
              fun_dbg  = Debuginfo.none }
 
 (* Generate the table of globals *)

@@ -16,6 +16,7 @@
 (** The functions to get a string from different kinds of elements (types, modules, ...). *)
 
 module Name = Odoc_name
+let () = Printtyp.Naming_context.enable false
 
 let string_of_variance t (co,cn) =
   if ( t.Odoc_type.ty_kind = Odoc_type.Type_abstract ||
@@ -254,7 +255,7 @@ let string_of_type t =
       )
 
   | M.Type_open ->
-      "= .." (* FIXME MG: when introducing new constuctors next time,
+      "= .." (* FIXME MG: when introducing new constructors next time,
                 thanks to setup a minimal correct output *)
   | M.Type_record l ->
      P.sprintf "= %s{\n%s\n}\n" (if priv then "private " else "")

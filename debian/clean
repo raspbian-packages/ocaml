@@ -8,3 +8,13 @@ myocamlbuild_config.ml
 tools/myocamlbuild_config.ml
 ocamlc
 ocamlcomp.sh
+debian/installed-files
+debian/ocaml-base-nox.install
+debian/ocaml-base.install
+debian/ocaml-compiler-libs.install
+debian/ocaml-interp.install
+debian/ocaml-man.install
+debian/ocaml-nox.install
+debian/ocaml.install
+install-stamp-arch
+install-stamp-indep
