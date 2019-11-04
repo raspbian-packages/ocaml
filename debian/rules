@@ -275,6 +275,12 @@ ifneq (,$(findstring kfreebsd,$(DEB_BUILD_ARCH)))
 	rm -f testsuite/tests/lib-systhreads/testpreempt.ml
 endif
 endif
+ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
+	sed -i /beat.ml/d testsuite/tests/lib-threads/ocamltests
+	rm -f testsuite/tests/lib-threads/beat.ml
+	sed -i /threadsigmask.ml/d testsuite/tests/lib-systhreads/ocamltests
+	rm -f testsuite/tests/lib-systhreads/threadsigmask.ml
+endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 	cd testsuite && make all
 endif
