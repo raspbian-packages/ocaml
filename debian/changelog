@@ -1,3 +1,11 @@
+ocaml (4.08.1-2) UNRELEASED; urgency=medium
+
+  * Merge with unstable
+    - do no longer provide libnum-ocaml{,-dev}
+  * Disable failing tests on hurd
+
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 04 Nov 2019 10:44:30 +0100
+
 ocaml (4.08.1-1) experimental; urgency=medium
 
   * New upstream release
