@@ -50,7 +50,6 @@ let ocaml_base_nox = ref [ "debian/ld.conf usr/lib/ocaml" ]
 let ocaml_base = ref []
 let ocaml_nox =
   ref [
-      "debian/ocamlfind/ocaml-native-compilers.conf usr/share/ocaml-findlib/";
       "debian/native-archs usr/lib/ocaml";
     ]
 let ocaml = ref []
