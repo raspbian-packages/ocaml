@@ -30,8 +30,8 @@ Depends:
  ${shlibs:Depends},
 Provides:
  ${ocaml:Provides}
-Replaces: ocaml-base (<< 4.08)
-Breaks: ocaml-base (<< 4.08)
+Replaces: ocaml-base (<< 4.08), ocaml-nox (<< 4.08)
+Breaks: ocaml-base (<< 4.08), ocaml-nox (<< 4.08)
 Description: Runtime system for OCaml bytecode executables (no X)
  Objective Caml (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
