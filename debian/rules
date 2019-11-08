@@ -215,6 +215,9 @@ endif
 	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
 	  fi \
 	done
+# Install the seq compatibility package (OCaml >= 4.07)
+	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq
+	cp debian/META.seq debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq/META
 endif
 # Remaining stuff
 	touch $@
