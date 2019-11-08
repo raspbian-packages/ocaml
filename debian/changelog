@@ -1,3 +1,10 @@
+ocaml (4.08.1-4) unstable; urgency=medium
+
+  * ocaml-base-nox Breaks/Replaces also ocaml-nox (Closes: #944126)
+  * Install seq compatibility package
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 08 Nov 2019 11:43:37 +0100
+
 ocaml (4.08.1-3) unstable; urgency=medium
 
   * Do no longer install ocaml-native-compilers.conf (should fix FTBFS of
