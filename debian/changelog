@@ -25,6 +25,7 @@ ocaml (4.08.1-1) experimental; urgency=medium
 
   * New upstream release
   * Statically link -lbfd to avoid a tight dependency with libbinutils
+    (Closes: #940579)
   * Put VERSION in ocaml-base-nox
   * Add Breaks/Replaces: ocaml-base to ocaml-base-nox (Closes: #933792)
   * Disable testpreempt test on kfreebsd for now
