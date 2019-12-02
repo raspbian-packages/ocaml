@@ -81,8 +81,8 @@ Suggests:
 Recommends:
  ocaml-man,
  file
-Replaces: ocaml-base-nox (<< 4.08)
-Breaks: ocaml-base-nox (<< 4.08)
+Replaces: ocaml-base-nox (<< 4.08), ocaml-compiler-libs (<< 4.08)
+Breaks: ocaml-base-nox (<< 4.08), ocaml-compiler-libs (<< 4.08)
 Description: ML implementation with a class-based object system (no X)
  Objective Caml (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
