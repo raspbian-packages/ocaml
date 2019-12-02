@@ -1,3 +1,10 @@
+ocaml (4.08.1-5) unstable; urgency=medium
+
+  * ocaml-nox: add Breaks+Replaces ocaml-compiler-libs (Closes: #945495)
+  * Bump Standards-Version to 4.4.1
+
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 02 Dec 2019 13:04:37 +0100
+
 ocaml (4.08.1-4) unstable; urgency=medium
 
   * ocaml-base-nox Breaks/Replaces also ocaml-nox (Closes: #944126)
