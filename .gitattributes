@@ -137,7 +137,6 @@ menhir-bench.bash typo.missing-header typo.utf8
 *.check-program-output text eol=lf
 *.run text eol=lf
 
-/tools/ci/appveyor/appveyor_build.cmd text eol=crlf
 
 configure text eol=lf
 configure.ac text eol=lf

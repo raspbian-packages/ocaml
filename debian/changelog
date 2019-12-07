@@ -7,7 +7,10 @@ ocaml (4.08.1-5+rpi1) bullseye-staging; urgency=medium
   * Edit configure.ac to select armv6 when using "arm-linux-gnueabihf"
   * Partially fix clean target.
 
- -- Raspbian forward porter <root@raspbian.org>  Sat, 07 Dec 2019 05:03:46 +0000
+  [changes introduced in 4.08.1-5+rpi1 by Peter Michael Green]
+  * Remove gitattributes that cause problems for dgit.
+
+ -- Raspbian forward porter <root@raspbian.org>  Sat, 07 Dec 2019 05:28:33 +0000
 
 ocaml (4.08.1-5) unstable; urgency=medium
 
