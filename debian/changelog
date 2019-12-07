@@ -1,12 +1,20 @@
-ocaml (4.08.1-4+rpi2) bullseye-staging; urgency=medium
+ocaml (4.08.1-5+rpi1) bullseye-staging; urgency=medium
 
+  [changes brought forward from 4.08.1-4+rpi2 by Peter Michael Green <plugwash@raspbian.org> at Tue, 26 Nov 2019 19:38:59 +0000]
   * Revert previous raspbian changes, changing the triplet 
     now seems to cause more problems than it solves (specifically
     it causes ocaml to try and use nonexistant compilers).
   * Edit configure.ac to select armv6 when using "arm-linux-gnueabihf"
   * Partially fix clean target.
 
- -- Peter Michael Green <plugwash@raspbian.org>  Tue, 26 Nov 2019 19:38:59 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sat, 07 Dec 2019 05:03:46 +0000
+
+ocaml (4.08.1-5) unstable; urgency=medium
+
+  * ocaml-nox: add Breaks+Replaces ocaml-compiler-libs (Closes: #945495)
+  * Bump Standards-Version to 4.4.1
+
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 02 Dec 2019 13:04:37 +0100
 
 ocaml (4.08.1-4) unstable; urgency=medium
 
@@ -35,6 +43,7 @@ ocaml (4.08.1-1) experimental; urgency=medium
 
   * New upstream release
   * Statically link -lbfd to avoid a tight dependency with libbinutils
+    (Closes: #940579)
   * Put VERSION in ocaml-base-nox
   * Add Breaks/Replaces: ocaml-base to ocaml-base-nox (Closes: #933792)
   * Disable testpreempt test on kfreebsd for now

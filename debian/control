@@ -16,7 +16,7 @@ Build-Depends:
  libx11-dev,
  zlib1g-dev,
  dh-ocaml (>= 1.0.0~)
-Standards-Version: 4.4.0
+Standards-Version: 4.4.1
 Vcs-Git: https://salsa.debian.org/ocaml-team/ocaml.git
 Vcs-Browser: https://salsa.debian.org/ocaml-team/ocaml
 Homepage: https://ocaml.org/
@@ -81,8 +81,8 @@ Suggests:
 Recommends:
  ocaml-man,
  file
-Replaces: ocaml-base-nox (<< 4.08)
-Breaks: ocaml-base-nox (<< 4.08)
+Replaces: ocaml-base-nox (<< 4.08), ocaml-compiler-libs (<< 4.08)
+Breaks: ocaml-base-nox (<< 4.08), ocaml-compiler-libs (<< 4.08)
 Description: ML implementation with a class-based object system (no X)
  Objective Caml (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
