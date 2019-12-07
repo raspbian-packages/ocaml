@@ -1,0 +1,18 @@
+From: Peter Michael Green <plugwash@raspbian.org>
+Date: Sat, 7 Dec 2019 05:28:18 +0000
+X-Dgit-Generated: 4.08.1-5+rpi1 4372289b19cfc4744b8e5c224da3b2f94ff5285d
+Subject: Remove gitattributes that cause problems for dgit.
+
+
+---
+
+--- ocaml-4.08.1.orig/.gitattributes
++++ ocaml-4.08.1/.gitattributes
+@@ -137,7 +137,6 @@ menhir-bench.bash typo.missing-header ty
+ *.check-program-output text eol=lf
+ *.run text eol=lf
+ 
+-/tools/ci/appveyor/appveyor_build.cmd text eol=crlf
+ 
+ configure text eol=lf
+ configure.ac text eol=lf
