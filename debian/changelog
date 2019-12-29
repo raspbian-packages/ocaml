@@ -1,3 +1,11 @@
+ocaml (4.08.1-6) unstable; urgency=medium
+
+  * Fix generation of ocaml-man (Closes: #947197)
+  * Add Rules-Requires-Root: no
+  * Provide libseq-ocaml{,-dev}
+
+ -- Stéphane Glondu <glondu@debian.org>  Sun, 29 Dec 2019 10:28:39 +0100
+
 ocaml (4.08.1-5) unstable; urgency=medium
 
   * ocaml-nox: add Breaks+Replaces ocaml-compiler-libs (Closes: #945495)
