@@ -156,7 +156,7 @@ endif
 else
 	@echo "===> WARNING: $(BUILDCACHE) detected, compilation skipped! <==="
 	rsync -a --exclude=debian --exclude=.git $(BUILDCACHE)/ .
-	rm -f build-stamp install-stamp-arch install-stamp-indep
+	rm -f build-stamp install-stamp*
 endif
 	touch $@
 
@@ -188,10 +188,24 @@ endif
 override_dh_auto_install-arch: install-stamp-arch
 override_dh_auto_install-indep: install-stamp-indep
 
-install-stamp-indep:
+install-stamp-indep: install-stamp
 	touch $@
 
-install-stamp-arch:
+install-stamp-arch: install-stamp
+# Install additional files not handled by dh_install
+# Beware: dh_install does not handle renamings, please pay attention
+	set -e; for u in dumpobj; do \
+	  if [ -f tools/$$u ]; then \
+	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
+	  fi \
+	done
+# Install the seq compatibility package (OCaml >= 4.07)
+	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq
+	cp debian/META.seq debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq/META
+# Remaining stuff
+	touch $@
+
+install-stamp:
 # Install OCaml
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
@@ -213,18 +227,7 @@ endif
 	find debian/tmp \( -type f -or -type l \) -printf '%P\n' > debian/installed-files
 	boot/ocamlrun ./ocaml -nostdlib -I debian/tmp/usr/lib/ocaml debian/dispatch.ml
 	dh_install
-# Install additional files not handled by dh_install
-# Beware: dh_install does not handle renamings, please pay attention
-	set -e; for u in dumpobj; do \
-	  if [ -f tools/$$u ]; then \
-	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
-	  fi \
-	done
-# Install the seq compatibility package (OCaml >= 4.07)
-	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq
-	cp debian/META.seq debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq/META
 endif
-# Remaining stuff
 	touch $@
 
 .PHONY: override_dh_gencontrol

@@ -1,4 +1,4 @@
-ocaml (4.08.1-5+rpi1) bullseye-staging; urgency=medium
+ocaml (4.08.1-6+rpi1) bullseye-staging; urgency=medium
 
   [changes brought forward from 4.08.1-4+rpi2 by Peter Michael Green <plugwash@raspbian.org> at Tue, 26 Nov 2019 19:38:59 +0000]
   * Revert previous raspbian changes, changing the triplet 
@@ -10,7 +10,15 @@ ocaml (4.08.1-5+rpi1) bullseye-staging; urgency=medium
   [changes introduced in 4.08.1-5+rpi1 by Peter Michael Green]
   * Remove gitattributes that cause problems for dgit.
 
- -- Raspbian forward porter <root@raspbian.org>  Sat, 07 Dec 2019 05:28:33 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sat, 11 Jan 2020 03:28:12 +0000
+
+ocaml (4.08.1-6) unstable; urgency=medium
+
+  * Fix generation of ocaml-man (Closes: #947197)
+  * Add Rules-Requires-Root: no
+  * Provide libseq-ocaml{,-dev}
+
+ -- Stéphane Glondu <glondu@debian.org>  Sun, 29 Dec 2019 10:28:39 +0100
 
 ocaml (4.08.1-5) unstable; urgency=medium
 
