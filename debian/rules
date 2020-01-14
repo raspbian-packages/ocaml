@@ -71,7 +71,7 @@ CONFIGURE_OPTS += --disable-native-compiler
 endif
 
 # To avoid Lintian's file-references-package-build-path
-export BUILD_PATH_PREFIX_MAP=/usr/src/ocaml=$(CURDIR)
+export BUILD_PATH_PREFIX_MAP=.=$(CURDIR)
 
 %:
 	dh $@
