@@ -1,3 +1,13 @@
+ocaml (4.08.1-7) unstable; urgency=medium
+
+  [ Stéphane Glondu ]
+  * Install stdlib-shims compatibility package
+
+  [ Andy Li ]
+  * Install uchar compatibility package
+
+ -- Stéphane Glondu <glondu@debian.org>  Tue, 14 Jan 2020 13:36:36 +0100
+
 ocaml (4.08.1-6) unstable; urgency=medium
 
   * Fix generation of ocaml-man (Closes: #947197)
