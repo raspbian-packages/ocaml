@@ -17,6 +17,7 @@ Build-Depends:
  zlib1g-dev,
  dh-ocaml (>= 1.0.0~)
 Standards-Version: 4.4.1
+Rules-Requires-Root: no
 Vcs-Git: https://salsa.debian.org/ocaml-team/ocaml.git
 Vcs-Browser: https://salsa.debian.org/ocaml-team/ocaml
 Homepage: https://ocaml.org/
@@ -29,6 +30,7 @@ Depends:
  ${misc:Depends},
  ${shlibs:Depends},
 Provides:
+ libseq-ocaml,
  ${ocaml:Provides}
 Replaces: ocaml-base (<< 4.08), ocaml-nox (<< 4.08)
 Breaks: ocaml-base (<< 4.08), ocaml-nox (<< 4.08)
@@ -72,6 +74,7 @@ Depends:
  gcc,
  binutils
 Provides:
+ libseq-ocaml-dev,
  ${ocaml:Provides},
  ocaml-best-compilers (= ${binary:Version}),
  ${F:NativeProvides}
