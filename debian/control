@@ -31,6 +31,8 @@ Depends:
  ${shlibs:Depends},
 Provides:
  libseq-ocaml,
+ libuchar-ocaml,
+ libstdlib-shims-ocaml,
  ${ocaml:Provides}
 Replaces: ocaml-base (<< 4.08), ocaml-nox (<< 4.08)
 Breaks: ocaml-base (<< 4.08), ocaml-nox (<< 4.08)
@@ -75,6 +77,8 @@ Depends:
  binutils
 Provides:
  libseq-ocaml-dev,
+ libuchar-ocaml-dev,
+ libstdlib-shims-ocaml-dev,
  ${ocaml:Provides},
  ocaml-best-compilers (= ${binary:Version}),
  ${F:NativeProvides}

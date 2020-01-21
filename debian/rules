@@ -71,7 +71,7 @@ CONFIGURE_OPTS += --disable-native-compiler
 endif
 
 # To avoid Lintian's file-references-package-build-path
-export BUILD_PATH_PREFIX_MAP=/usr/src/ocaml=$(CURDIR)
+export BUILD_PATH_PREFIX_MAP=.=$(CURDIR)
 
 %:
 	dh $@
@@ -202,6 +202,12 @@ install-stamp-arch: install-stamp
 # Install the seq compatibility package (OCaml >= 4.07)
 	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq
 	cp debian/META.seq debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq/META
+# Install the uchar compatibility package (OCaml >= 4.03)
+	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/uchar
+	cp debian/META.uchar debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/uchar/META
+# Install the stdlib-shims compatibility package (OCaml >= 4.07)
+	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/stdlib-shims
+	cp debian/META.stdlib-shims debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/stdlib-shims/META
 # Remaining stuff
 	touch $@
 
