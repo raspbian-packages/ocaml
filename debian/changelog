@@ -1,3 +1,9 @@
+ocaml (4.08.1-8) unstable; urgency=medium
+
+  * read_main_debug_info: do not die in -custom executables
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 30 Jan 2020 13:11:32 +0100
+
 ocaml (4.08.1-7) unstable; urgency=medium
 
   [ Stéphane Glondu ]
