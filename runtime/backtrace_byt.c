@@ -378,7 +378,7 @@ static void read_main_debug_info(struct debug_info *di)
 
   fd = caml_attempt_open(&exec_name, &trail, 1);
   if (fd < 0){
-    caml_fatal_error ("executable program file not found");
+    /* caml_fatal_error ("executable program file not found"); */
     CAMLreturn0;
   }
 
