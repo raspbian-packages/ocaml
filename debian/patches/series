@@ -3,5 +3,6 @@
 0013-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
 0005-Check-for-definition-of-AT_SECURE-before-using-it.patch
 0008-Reimplement-custom-without-hacks.patch
+0006-read_main_debug_info-do-not-die-in-custom-executable.patch
 use-armv6-for-raspbian.patch
 remove-gitattributes-that-cause-problems.patch
