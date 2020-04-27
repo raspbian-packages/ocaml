@@ -1,3 +1,10 @@
+ocaml (4.08.1-9) UNRELEASED; urgency=medium
+
+  * Replace suggestion of tuareg-mode, which is now a transitional package,
+    by elpa-tuareg.
+
+ -- Ralf Treinen <treinen@debian.org>  Mon, 27 Apr 2020 15:41:48 +0200
+
 ocaml (4.08.1-8) unstable; urgency=medium
 
   * read_main_debug_info: do not die in -custom executables

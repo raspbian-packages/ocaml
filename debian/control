@@ -84,7 +84,7 @@ Provides:
  ${F:NativeProvides}
 Suggests:
  ocaml-doc,
- tuareg-mode
+ elpa-tuareg
 Recommends:
  ocaml-man,
  file
