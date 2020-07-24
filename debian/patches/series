@@ -4,3 +4,4 @@
 0005-Check-for-definition-of-AT_SECURE-before-using-it.patch
 0008-Reimplement-custom-without-hacks.patch
 0006-read_main_debug_info-do-not-die-in-custom-executable.patch
+0007-Avoid-duplicate-definitions-of-common-global-variabl.patch
