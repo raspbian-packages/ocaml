@@ -1,5 +1,11 @@
 ocaml (4.08.1-9) UNRELEASED; urgency=medium
 
+  [ Stéphane Glondu ]
+  * Fix FTBFS with gcc-10 (Closes: #957623)
+  * Bump debhelper compat level to 13
+  * Bump Standards-Version to 4.5.0
+
+  [ Ralf Treinen ]
   * Replace suggestion of tuareg-mode, which is now a transitional package,
     by elpa-tuareg.
 
