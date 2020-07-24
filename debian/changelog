@@ -1,4 +1,4 @@
-ocaml (4.08.1-9) UNRELEASED; urgency=medium
+ocaml (4.08.1-9) unstable; urgency=medium
 
   [ Stéphane Glondu ]
   * Fix FTBFS with gcc-10 (Closes: #957623)
@@ -9,7 +9,7 @@ ocaml (4.08.1-9) UNRELEASED; urgency=medium
   * Replace suggestion of tuareg-mode, which is now a transitional package,
     by elpa-tuareg.
 
- -- Ralf Treinen <treinen@debian.org>  Mon, 27 Apr 2020 15:41:48 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 24 Jul 2020 16:51:04 +0200
 
 ocaml (4.08.1-8) unstable; urgency=medium
 
