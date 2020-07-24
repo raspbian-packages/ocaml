@@ -303,10 +303,6 @@ override_dh_installdocs:
 	dh_installdocs --package=ocaml-base-nox --doc-main-package=ocaml
 	dh_installdocs --remaining-packages
 
-.PHONY: override_dh_missing
-override_dh_missing:
-	dh_missing --fail-missing
-
 override_dh_autoreconf:
 	./autogen
 
