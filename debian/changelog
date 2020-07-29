@@ -1,3 +1,10 @@
+ocaml (4.08.1-10) UNRELEASED; urgency=medium
+
+  * Disable DT_TEXTREL warnings on i386
+  * Unconditionally disable testpreempt test
+
+ -- Stéphane Glondu <glondu@debian.org>  Wed, 29 Jul 2020 16:24:14 +0200
+
 ocaml (4.08.1-9) unstable; urgency=medium
 
   [ Stéphane Glondu ]
