@@ -952,6 +952,16 @@ AS_CASE(["$arch,$system"],
   [power,netbsd], [profiling=true],
   [profiling=false])
 
+# Disable DT_TEXTREL warnings on Linux i386
+# See https://github.com/ocaml/ocaml/issues/9800
+
+AS_CASE([$host],
+  [i?86-*-linux-*],
+    [common_cflags="-Wl,-z,notext $common_cflags"
+    mksharedlib="$mksharedlib -Wl,-z,notext"
+    mkmaindll="$mkmaindll -Wl,-z,notext"],
+  [])
+
 # Assembler
 
 AS_CASE([$host],
