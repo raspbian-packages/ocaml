@@ -1,0 +1,28 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Wed, 29 Jul 2020 16:22:39 +0200
+Subject: Disable PIE on Debian Linux i386
+
+Bug: https://github.com/ocaml/ocaml/issues/9800
+---
+ configure.ac | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index 82172d7..1664ff4 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -952,6 +952,14 @@ AS_CASE(["$arch,$system"],
+   [power,netbsd], [profiling=true],
+   [profiling=false])
+ 
++# Disable PIE on Debian Linux i386
++# See https://github.com/ocaml/ocaml/issues/9800
++
++AS_CASE([$host],
++  [i686-pc-linux-gnu],
++    [common_cflags="-no-pie $common_cflags"],
++  [])
++
+ # Assembler
+ 
+ AS_CASE([$host],

@@ -5,3 +5,4 @@
 0008-Reimplement-custom-without-hacks.patch
 0006-read_main_debug_info-do-not-die-in-custom-executable.patch
 0007-Avoid-duplicate-definitions-of-common-global-variabl.patch
+0008-Disable-PIE-on-Debian-Linux-i386.patch
