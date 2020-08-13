@@ -284,14 +284,10 @@ ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	sed -i /almabench.ml/d testsuite/tests/misc-unsafe/ocamltests
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
-ifeq ($(OCAMLMAJOR),4.08)
-ifneq (,$(findstring kfreebsd,$(DEB_BUILD_ARCH)))
-# We temporarily disable testpreempt test which should be fixed in 4.09
-# See https://github.com/ocaml/ocaml/pull/8849
+# testpreempt test is too unreliable.
+# It failed at least once on kfreebsd and amd64.
 	sed -i /testpreempt.ml/d testsuite/tests/lib-systhreads/ocamltests
 	rm -f testsuite/tests/lib-systhreads/testpreempt.ml
-endif
-endif
 ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
 	sed -i /beat.ml/d testsuite/tests/lib-threads/ocamltests
 	rm -f testsuite/tests/lib-threads/beat.ml
@@ -307,10 +303,6 @@ endif
 override_dh_installdocs:
 	dh_installdocs --package=ocaml-base-nox --doc-main-package=ocaml
 	dh_installdocs --remaining-packages
-
-.PHONY: override_dh_missing
-override_dh_missing:
-	dh_missing --fail-missing
 
 override_dh_autoreconf:
 	./autogen

@@ -3,5 +3,6 @@ ocaml-nox: script-not-executable .@OCamlStdlibDir@/target_camlheaderd
 ocaml-nox: script-not-executable .@OCamlStdlibDir@/target_camlheaderi
 ocaml-nox: unusual-interpreter .@OCamlStdlibDir@/target_camlheaderd #!/usr/bin/ocamlrund
 ocaml-nox: unusual-interpreter .@OCamlStdlibDir@/target_camlheaderi #!/usr/bin/ocamlruni
-ocaml-nox: binary-without-manpage usr/bin/ocaml*.byte
-ocaml-nox: binary-without-manpage usr/bin/ocaml*.opt
+ocaml-nox: no-manual-page usr/bin/ocaml*.byte
+ocaml-nox: no-manual-page usr/bin/ocaml*.opt
+ocaml-nox: ocaml-dangling-cmx .@OCamlStdlibDir@/ocamldoc/odoc*.cmx

@@ -5,7 +5,6 @@ Subject: read_main_debug_info: do not die in -custom executables
 This fatal error occurred with some executables linked with -custom
 (with the Debian-specific patch), notably ppx preprocessors during the
 build of ppxlib.
-
 ---
  runtime/backtrace_byt.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
