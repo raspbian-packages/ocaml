@@ -277,9 +277,6 @@ ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
-# testpreempt test is too unreliable.
-# It failed at least once on kfreebsd and amd64.
-	rm -f testsuite/tests/lib-systhreads/testpreempt.ml
 ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
 	rm -f testsuite/tests/lib-threads/beat.ml
 	rm -f testsuite/tests/lib-systhreads/threadsigmask.ml
