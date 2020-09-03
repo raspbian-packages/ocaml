@@ -2005,7 +2005,6 @@ third-party libraries such as Lwt, but with a different API."
     include Core
     include Compiler
     let _compat_32 = set bytecode_compatible_32
-    let _custom = set custom_runtime
     let _dcamlprimc = set keep_camlprimc_file
     let _dinstr = set dump_instr
     let _dllib s = Compenv.defer (ProcessDLLs (Misc.rev_split_words s))
@@ -2024,6 +2023,15 @@ third-party libraries such as Lwt, but with a different API."
     let _use_runtime s = use_runtime := s
     let _v () = Compenv.print_version_and_library "compiler"
     let _vmthread () = Compenv.fatal vmthread_removed_message
+    let _custom () =
+      if
+        match Sys.getenv_opt "OCAML_CUSTOM_USE_OUTPUT_COMPLETE_EXE" with
+        | None | Some "" -> false
+        | Some _ -> true
+      then
+        _output_complete_exe ()
+      else
+        set custom_runtime ()
   end
 
 end
