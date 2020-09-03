@@ -1,3 +1,9 @@
+ocaml (4.11.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 03 Sep 2020 14:53:10 +0200
+
 ocaml (4.08.1-10) unstable; urgency=medium
 
   * Disable DT_TEXTREL warnings on i386
