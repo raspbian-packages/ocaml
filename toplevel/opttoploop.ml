@@ -187,7 +187,7 @@ let parse_mod_use_file name lb =
   [ Ptop_def
       [ Str.module_
           (Mb.mk
-             (Location.mknoloc modname)
+             (Location.mknoloc (Some modname))
              (Mod.structure items)
           )
        ]
@@ -248,19 +248,24 @@ let load_lambda ppf ~module_ident ~required_globals lam size =
     if !Clflags.keep_asm_file then !phrase_name ^ ext_dll
     else Filename.temp_file ("caml" ^ !phrase_name) ext_dll
   in
-  let fn = Filename.chop_extension dll in
-  if not Config.flambda then
-    Asmgen.compile_implementation_clambda
-      ~toplevel:need_symbol fn ~backend ~ppf_dump:ppf
-      { Lambda.code=slam ; main_module_block_size=size;
-        module_ident; required_globals }
-  else
-    Asmgen.compile_implementation_flambda
-      ~required_globals ~backend ~toplevel:need_symbol fn ~ppf_dump:ppf
-      (Flambda_middle_end.middle_end ~ppf_dump:ppf ~prefixname:fn ~backend ~size
-         ~module_ident ~module_initializer:slam ~filename:"toplevel");
-  Asmlink.call_linker_shared [fn ^ ext_obj] dll;
-  Sys.remove (fn ^ ext_obj);
+  let filename = Filename.chop_extension dll in
+  let program =
+    { Lambda.
+      code = slam;
+      main_module_block_size = size;
+      module_ident;
+      required_globals;
+    }
+  in
+  let middle_end =
+    if Config.flambda then Flambda_middle_end.lambda_to_clambda
+    else Closure_middle_end.lambda_to_clambda
+  in
+  Asmgen.compile_implementation ~toplevel:need_symbol
+    ~backend ~filename ~prefixname:filename
+    ~middle_end ~ppf_dump:ppf program;
+  Asmlink.call_linker_shared [filename ^ ext_obj] dll;
+  Sys.remove (filename ^ ext_obj);
 
   let dll =
     if Filename.is_implicit dll
@@ -539,17 +544,42 @@ let _ =
   Clflags.dlcode := true;
   ()
 
+let find_ocamlinit () =
+  let ocamlinit = ".ocamlinit" in
+  if Sys.file_exists ocamlinit then Some ocamlinit else
+  let getenv var = match Sys.getenv var with
+    | exception Not_found -> None | "" -> None | v -> Some v
+  in
+  let exists_in_dir dir file = match dir with
+    | None -> None
+    | Some dir ->
+        let file = Filename.concat dir file in
+        if Sys.file_exists file then Some file else None
+  in
+  let home_dir () = getenv "HOME" in
+  let config_dir () =
+    if Sys.win32 then None else
+    match getenv "XDG_CONFIG_HOME" with
+    | Some _ as v -> v
+    | None ->
+        match home_dir () with
+        | None -> None
+        | Some dir -> Some (Filename.concat dir ".config")
+  in
+  let init_ml = Filename.concat "ocaml" "init.ml" in
+  match exists_in_dir (config_dir ()) init_ml with
+  | Some _ as v -> v
+  | None -> exists_in_dir (home_dir ()) ocamlinit
+
 let load_ocamlinit ppf =
   if !Clflags.noinit then ()
   else match !Clflags.init_file with
   | Some f -> if Sys.file_exists f then ignore (use_silently ppf f)
               else fprintf ppf "Init file not found: \"%s\".@." f
   | None ->
-     if Sys.file_exists ".ocamlinit" then ignore (use_silently ppf ".ocamlinit")
-     else try
-       let home_init = Filename.concat (Sys.getenv "HOME") ".ocamlinit" in
-       if Sys.file_exists home_init then ignore (use_silently ppf home_init)
-     with Not_found -> ()
+      match find_ocamlinit () with
+      | None -> ()
+      | Some file -> ignore (use_silently ppf file)
 ;;
 
 let set_paths () =

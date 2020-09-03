@@ -778,7 +778,7 @@ class o = object method x : 'a. ([> `A] as 'a) t -> unit = fun _ -> () end
 ;;
 [%%expect {|
 type 'a t = unit
-class o : object method x : [> `A ] t -> unit end
+class o : object method x : unit -> unit end
 |}];;
 
 class c = object method m = new d () end and d ?(x=0) () = object end;;
@@ -1109,8 +1109,10 @@ Line 2, characters 3-4:
 Error: This expression has type < m : 'a. 'a * < m : 'a * 'b > > as 'b
        but an expression was expected of type
          < m : 'a. 'a * (< m : 'a * < m : 'c. 'c * 'd > > as 'd) >
-       The method m has type 'a. 'a * 'd, but the expected method type was
-       'c. 'c * 'd
+       The method m has type
+       'a. 'a * (< m : 'a * < m : 'c. 'c * 'b > > as 'b),
+       but the expected method type was
+       'c. 'c * < m : 'a * < m : 'c. 'b > > as 'b
        The universal variable 'a would escape its scope
 |}];;
 
@@ -1357,7 +1359,8 @@ Line 4, characters 16-22:
                     ^^^^^^
 Error: This expression has type [> `Int of int ]
        but an expression was expected of type [< `Int of int ]
-       Types for tag `Int are incompatible
+       The second variant type is bound to the universal type variable 'a,
+       it may not allow the tag(s) `Int
 |}];;
 
 (* Yet another example *)
@@ -1578,7 +1581,7 @@ let c (f : u -> u) =
 [%%expect{|
 type u
 type 'a t = u
-val c : (u -> u) -> < apply : 'a. 'a t -> 'a t > = <fun>
+val c : (u -> u) -> < apply : 'a. u -> u > = <fun>
 |}]
 
 (* PR#7496 *)
@@ -1752,4 +1755,14 @@ val x : [ `Foo of 'a s ] = `Foo []
 let x : [ `Foo of 'a t | `Foo of _ s ] = id (`Foo []);;
 [%%expect{|
 val x : [ `Foo of 'a list t ] = `Foo []
+|}]
+
+(* generalize spine of inherited methods too *)
+
+class c = object (self) method m ?(x=0) () = x method n = self#m () end;;
+class d = object (self) inherit c method n' = self#m () end;;
+[%%expect{|
+class c : object method m : ?x:int -> unit -> int method n : int end
+class d :
+  object method m : ?x:int -> unit -> int method n : int method n' : int end
 |}]

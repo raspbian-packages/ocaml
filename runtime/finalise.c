@@ -68,6 +68,7 @@ static struct to_do *to_do_tl = NULL;
   It is the finalising set.
 */
 
+static int running_finalisation_function = 0;
 
 /* [size] is a number of elements for the [to_do.item] array */
 static void alloc_to_do (int size)
@@ -80,6 +81,7 @@ static void alloc_to_do (int size)
   if (to_do_tl == NULL){
     to_do_hd = result;
     to_do_tl = result;
+    if(!running_finalisation_function) caml_set_action_pending();
   }else{
     CAMLassert (to_do_tl->next == NULL);
     to_do_tl->next = result;
@@ -161,13 +163,10 @@ void caml_final_update_clean_phase (){
   generic_final_update(&finalisable_last, /* darken_value */ 0);
 }
 
-
-static int running_finalisation_function = 0;
-
 /* Call the finalisation functions for the finalising set.
    Note that this function must be reentrant.
 */
-void caml_final_do_calls (void)
+value caml_final_do_calls_exn (void)
 {
   struct final f;
   value res;
@@ -175,8 +174,7 @@ void caml_final_do_calls (void)
   void* saved_spacetime_trie_node_ptr;
 #endif
 
-  if (running_finalisation_function) return;
-  if (to_do_hd != NULL){
+  if (!running_finalisation_function && to_do_hd != NULL){
     if (caml_finalise_begin_hook != NULL) (*caml_finalise_begin_hook) ();
     caml_gc_message (0x80, "Calling finalisation functions.\n");
     while (1){
@@ -203,11 +201,12 @@ void caml_final_do_calls (void)
       caml_spacetime_trie_node_ptr = saved_spacetime_trie_node_ptr;
 #endif
       running_finalisation_function = 0;
-      if (Is_exception_result (res)) caml_raise (Extract_exception (res));
+      if (Is_exception_result (res)) return res;
     }
     caml_gc_message (0x80, "Done calling finalisation functions.\n");
     if (caml_finalise_end_hook != NULL) (*caml_finalise_end_hook) ();
   }
+  return Val_unit;
 }
 
 /* Call a scanning_action [f] on [x]. */
@@ -420,10 +419,12 @@ CAMLprim value caml_final_register_called_without_value (value f, value v){
   return Val_unit;
 }
 
-
 CAMLprim value caml_final_release (value unit)
 {
   running_finalisation_function = 0;
+  /* Some finalisers might be waiting. */
+  if (to_do_tl != NULL)
+    caml_set_action_pending();
   return Val_unit;
 }
 

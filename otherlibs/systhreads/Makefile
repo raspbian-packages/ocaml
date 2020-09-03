@@ -17,13 +17,22 @@ ROOTDIR=../..
 
 include $(ROOTDIR)/Makefile.config
 include $(ROOTDIR)/Makefile.common
+include $(ROOTDIR)/Makefile.best_binaries
+
+OC_CFLAGS += $(SHAREDLIB_CFLAGS)
+
+OC_CPPFLAGS += -I$(ROOTDIR)/runtime
+
+NATIVE_CPPFLAGS = \
+  -DNATIVE_CODE -DTARGET_$(ARCH) -DMODEL_$(MODEL) -DSYS_$(SYSTEM)
 
 CAMLRUN ?= $(ROOTDIR)/boot/ocamlrun
 
 LIBS = -nostdlib -I $(ROOTDIR)/stdlib -I $(ROOTDIR)/otherlibs/$(UNIXLIB)
 
-CAMLC=$(CAMLRUN) $(ROOTDIR)/ocamlc $(LIBS)
-CAMLOPT=$(CAMLRUN) $(ROOTDIR)/ocamlopt $(LIBS)
+CAMLC=$(BEST_OCAMLC) $(LIBS)
+CAMLOPT=$(BEST_OCAMLOPT) $(LIBS)
+
 MKLIB=$(CAMLRUN) $(ROOTDIR)/tools/ocamlmklib
 COMPFLAGS=-w +33..39 -warn-error A -g -bin-annot -safe-string
 ifeq "$(FLAMBDA)" "true"
@@ -92,15 +101,13 @@ $(LIBNAME).cmxa: $(THREADS_NCOBJS)
 # st_stubs_n.$(O) from the same source file st_stubs.c (it is compiled
 # twice, each time with different options).
 
+st_stubs_n.$(O): OC_CPPFLAGS += $(NATIVE_CPPFLAGS)
+
 st_stubs_b.$(O): st_stubs.c $(HEADER)
-	$(CC) -c $(OC_CFLAGS) $(OC_CPPFLAGS) -I$(ROOTDIR)/runtime  \
-	  $(SHAREDLIB_CFLAGS) $(OUTPUTOBJ)$@ $<
+	$(CC) -c $(OC_CFLAGS) $(OC_CPPFLAGS) $(OUTPUTOBJ)$@ $<
 
 st_stubs_n.$(O): st_stubs.c $(HEADER)
-	$(CC) $(OC_CFLAGS) $(OC_CPPFLAGS) \
-	  -I$(ROOTDIR)/runtime $(SHAREDLIB_CFLAGS) -DNATIVE_CODE \
-	  -DTARGET_$(ARCH) -DMODEL_$(MODEL) -DSYS_$(SYSTEM) \
-	  $(OUTPUTOBJ)$@ -c $<
+	$(CC) -c $(OC_CFLAGS) $(OC_CPPFLAGS) $(OUTPUTOBJ)$@ $<
 
 partialclean:
 	rm -f *.cm*
@@ -154,11 +161,10 @@ depend:
 	$(error Dependencies cannot be regenerated using the MSVC ports)
 else
 depend:
-	$(CC) -MM $(OC_CPPFLAGS) -I$(ROOTDIR)/runtime st_stubs.c \
+	$(CC) -MM $(OC_CPPFLAGS) st_stubs.c \
 	  | sed -e 's/st_stubs\.o/st_stubs_b.$$(O)/' \
 	  -e 's/ st_\(posix\|win32\)\.h//g' > .depend
-	$(CC) -MM $(OC_CPPFLAGS) -I$(ROOTDIR)/runtime \
-	  -DNATIVE_CODE -DTARGET_$(ARCH) -DMODEL_$(MODEL) -DSYS_$(SYSTEM) \
+	$(CC) -MM $(OC_CPPFLAGS) $(NATIVE_CPPFLAGS) \
 	  st_stubs.c | sed -e 's/st_stubs\.o/st_stubs_n.$$(O)/' \
 	  -e 's/ st_\(posix\|win32\)\.h//g' >> .depend
 	$(CAMLRUN) $(ROOTDIR)/boot/ocamlc -depend -slash *.mli *.ml >> .depend

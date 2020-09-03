@@ -82,6 +82,7 @@ let mknoloc txt = mkloc txt none
 
 let input_name = ref "_none_"
 let input_lexbuf = ref (None : lexbuf option)
+let input_phrase_buffer = ref (None : Buffer.t option)
 
 (******************************************************************************)
 (* Terminal info *)
@@ -452,7 +453,7 @@ let highlight_quote ppf
         |> infer_line_numbers
         |> List.map (fun (lnum, { text; start_pos }) ->
           (text,
-           Misc.Stdlib.Option.value_default Int.to_string ~default:"" lnum,
+           Option.fold ~some:Int.to_string ~none:"" lnum,
            start_pos))
       in
     Format.fprintf ppf "@[<v>";
@@ -546,6 +547,23 @@ let lines_around_from_lexbuf
     lines_around ~start_pos ~end_pos ~seek ~read_char
   end
 
+(* Attempt to get lines from the phrase buffer *)
+let lines_around_from_phrasebuf
+    ~(start_pos: position) ~(end_pos: position)
+    (pb: Buffer.t):
+  input_line list
+  =
+  let pos = ref 0 in
+  let seek n = pos := n in
+  let read_char () =
+    if !pos >= Buffer.length pb then None
+    else begin
+      let c = Buffer.nth pb !pos in
+      incr pos; Some c
+    end
+  in
+  lines_around ~start_pos ~end_pos ~seek ~read_char
+
 (* Get lines from a file *)
 let lines_around_from_file
     ~(start_pos: position) ~(end_pos: position)
@@ -583,15 +601,23 @@ let lines_around_from_current_input ~start_pos ~end_pos =
     else
       []
   in
-  match !input_lexbuf with
-  | Some lb ->
+  match !input_lexbuf, !input_phrase_buffer, !input_name with
+  | _, Some pb, "//toplevel//" ->
+      begin match lines_around_from_phrasebuf pb ~start_pos ~end_pos with
+      | [] -> (* Could not read the input from the phrase buffer. This is likely
+                 a sign that we were given a buggy location. *)
+          []
+      | lines ->
+          lines
+      end
+  | Some lb, _, _ ->
       begin match lines_around_from_lexbuf lb ~start_pos ~end_pos with
       | [] -> (* The input is likely not in the lexbuf anymore *)
           from_file ()
       | lines ->
           lines
       end
-  | None ->
+  | None, _, _ ->
       from_file ()
 
 (******************************************************************************)

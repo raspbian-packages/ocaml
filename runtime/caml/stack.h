@@ -107,15 +107,17 @@ extern uintnat caml_stack_usage (void);
 extern uintnat (*caml_stack_usage_hook)(void);
 
 /* Declaration of variables used in the asm code */
-extern char * caml_top_of_stack;
-extern char * caml_bottom_of_stack;
-extern uintnat caml_last_return_address;
-extern value * caml_gc_regs;
-extern char * caml_exception_pointer;
 extern value * caml_globals[];
 extern char caml_globals_map[];
 extern intnat caml_globals_inited;
 extern intnat * caml_frametable[];
+
+/* Global variables moved to Caml_state in 4.10 */
+#define caml_top_of_stack (Caml_state_field(top_of_stack))
+#define caml_bottom_of_stack (Caml_state_field(bottom_of_stack))
+#define caml_last_return_address (Caml_state_field(last_return_address))
+#define caml_gc_regs (Caml_state_field(gc_regs))
+#define caml_exception_pointer (Caml_state_field(exception_pointer))
 
 CAMLextern frame_descr * caml_next_frame_descriptor(uintnat * pc, char ** sp);
 

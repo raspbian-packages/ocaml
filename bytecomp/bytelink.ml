@@ -330,7 +330,16 @@ let link_bytecode ?final_name tolink exec_name standalone =
        (* The path to the bytecode interpreter (in use_runtime mode) *)
        if String.length !Clflags.use_runtime > 0 && !Clflags.with_runtime then
        begin
-         output_string outchan (make_absolute !Clflags.use_runtime);
+         let runtime = make_absolute !Clflags.use_runtime in
+         let runtime =
+           (* shebang mustn't exceed 128 including the #! and \0 *)
+           if String.length runtime > 125 then
+             "/bin/sh\n\
+              exec \"" ^ runtime ^ "\" \"$0\" \"$@\""
+           else
+             runtime
+         in
+         output_string outchan runtime;
          output_char outchan '\n';
          Bytesections.record outchan "RNTM"
        end;
@@ -445,7 +454,7 @@ let output_cds_file outfile =
 
 (* Output a bytecode executable as a C file *)
 
-let link_bytecode_as_c tolink outfile =
+let link_bytecode_as_c tolink outfile with_main =
   let outchan = open_out outfile in
   Misc.try_finally
     ~always:(fun () -> close_out outchan)
@@ -488,7 +497,23 @@ let link_bytecode_as_c tolink outfile =
        (* The table of primitives *)
        Symtable.output_primitive_table outchan;
        (* The entry point *)
-       output_string outchan "\
+       if with_main then begin
+         output_string outchan "\
+\n#ifdef _WIN32\
+\nint wmain(int argc, wchar_t **argv)\
+\n#else\
+\nint main(int argc, char **argv)\
+\n#endif\
+\n{\
+\n  caml_startup_code(caml_code, sizeof(caml_code),\
+\n                    caml_data, sizeof(caml_data),\
+\n                    caml_sections, sizeof(caml_sections),\
+\n                    /* pooling */ 0,\
+\n                    argv);\
+\n  return 0; /* not reached */\
+\n}\n"
+       end else begin
+         output_string outchan "\
 \nvoid caml_startup(char_os ** argv)\
 \n{\
 \n  caml_startup_code(caml_code, sizeof(caml_code),\
@@ -523,7 +548,9 @@ let link_bytecode_as_c tolink outfile =
 \n                               caml_sections, sizeof(caml_sections),\
 \n                               /* pooling */ 1,\
 \n                               argv);\
-\n}\
+\n}\n"
+       end;
+       output_string outchan "\
 \n#ifdef __cplusplus\
 \n}\
 \n#endif\n";
@@ -627,7 +654,7 @@ let link objfiles output_name =
            append_bytecode bytecode_name exec_name
       )
   end else begin
-    let basename = Filename.chop_extension output_name in
+    let basename = Filename.remove_extension output_name in
     let c_file, stable_name =
       if !Clflags.output_complete_object
          && not (Filename.check_suffix output_name ".c")
@@ -647,8 +674,12 @@ let link objfiles output_name =
     Misc.try_finally
       ~always:(fun () -> List.iter remove_file !temps)
       (fun () ->
-         link_bytecode_as_c tolink c_file;
-         if not (Filename.check_suffix output_name ".c") then begin
+         link_bytecode_as_c tolink c_file !Clflags.output_complete_executable;
+         if !Clflags.output_complete_executable then begin
+           temps := c_file :: !temps;
+           if not (build_custom_runtime c_file output_name) then
+             raise(Error Custom_runtime)
+         end else if not (Filename.check_suffix output_name ".c") then begin
            temps := c_file :: !temps;
            if Ccomp.compile_file ~output:obj_file ?stable_name c_file <> 0 then
              raise(Error Custom_runtime);

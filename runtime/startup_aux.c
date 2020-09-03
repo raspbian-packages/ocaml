@@ -30,6 +30,10 @@
 #include "caml/startup_aux.h"
 
 
+#ifdef _WIN32
+extern void caml_win32_unregister_overflow_detection (void);
+#endif
+
 CAMLexport header_t *caml_atom_table = NULL;
 
 /* Initialize the atom table */
@@ -109,9 +113,10 @@ void caml_parse_ocamlrunparam(void)
   if (opt != NULL){
     while (*opt != '\0'){
       switch (*opt++){
-      case 'a': scanmult (opt, &p); caml_set_allocation_policy (p); break;
+      case 'a': scanmult (opt, &p); caml_set_allocation_policy ((intnat) p);
+        break;
       case 'b': scanmult (opt, &p); caml_record_backtrace(Val_bool (p));
-                    break;
+        break;
       case 'c': scanmult (opt, &p); caml_cleanup_on_exit = (p != 0); break;
       case 'h': scanmult (opt, &caml_init_heap_wsz); break;
       case 'H': scanmult (opt, &caml_use_huge_pages); break;
@@ -189,6 +194,9 @@ CAMLexport void caml_shutdown(void)
   caml_free_shared_libs();
 #endif
   caml_stat_destroy_pool();
+#if defined(_WIN32) && defined(NATIVE_CODE)
+  caml_win32_unregister_overflow_detection();
+#endif
 
   shutdown_happened = 1;
 }

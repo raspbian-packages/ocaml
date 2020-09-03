@@ -20,18 +20,11 @@ ROOTDIR = .
 include Makefile.config
 include Makefile.common
 
-# For users who don't read the INSTALL file
 .PHONY: defaultentry
-defaultentry:
-ifeq "$(UNIX_OR_WIN32)" "unix"
-	@echo "Please refer to the installation instructions in file INSTALL."
-	@echo "If you've just unpacked the distribution, something like"
-	@echo "	./configure"
-	@echo "	make world.opt"
-	@echo "	make install"
-	@echo "should work.  But see the file INSTALL for more details."
+ifeq "$(NATIVE_COMPILER)" "true"
+defaultentry: world.opt
 else
-	@echo "Please refer to the instructions in file README.win32.adoc."
+defaultentry: world
 endif
 
 MKDIR=mkdir -p
@@ -55,6 +48,11 @@ INCLUDES=-I utils -I parsing -I typing -I bytecomp -I file_formats \
 COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-40-41-42-44-45-48-66 \
 	  -warn-error A \
           -bin-annot -safe-string -strict-formats $(INCLUDES)
+ifeq "$(FUNCTION_SECTIONS)" "true"
+OPTCOMPFLAGS= -function-sections
+else
+OPTCOMPFLAGS=
+endif
 LINKFLAGS=
 
 ifeq "$(strip $(NATDYNLINKOPTS))" ""
@@ -72,14 +70,12 @@ DEPINCLUDES=$(INCLUDES)
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
 
 UTILS=utils/config.cmo utils/build_path_prefix_map.cmo utils/misc.cmo \
-  utils/identifiable.cmo utils/numbers.cmo utils/arg_helper.cmo \
-  utils/clflags.cmo utils/profile.cmo \
-  utils/load_path.cmo \
-  utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
-  utils/consistbl.cmo \
-  utils/strongly_connected_components.cmo \
-  utils/targetint.cmo \
-  utils/int_replace_polymorphic_compare.cmo
+	utils/identifiable.cmo utils/numbers.cmo utils/arg_helper.cmo \
+	utils/clflags.cmo utils/profile.cmo utils/load_path.cmo \
+	utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
+	utils/consistbl.cmo utils/strongly_connected_components.cmo \
+	utils/targetint.cmo utils/int_replace_polymorphic_compare.cmo \
+	utils/domainstate.cmo
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/docstrings.cmo parsing/syntaxerr.cmo \
@@ -91,7 +87,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/builtin_attributes.cmo parsing/ast_invariants.cmo parsing/depend.cmo
 
 TYPING=typing/ident.cmo typing/path.cmo \
-  typing/primitive.cmo typing/types.cmo \
+  typing/primitive.cmo typing/type_immediacy.cmo typing/types.cmo \
   typing/btype.cmo typing/oprint.cmo \
   typing/subst.cmo typing/predef.cmo \
   typing/datarepr.cmo file_formats/cmi_format.cmo \
@@ -121,8 +117,8 @@ COMP=\
   bytecomp/meta.cmo bytecomp/opcodes.cmo \
   bytecomp/bytesections.cmo bytecomp/dll.cmo \
   bytecomp/symtable.cmo \
-  driver/pparse.cmo driver/main_args.cmo \
-  driver/compenv.cmo driver/compmisc.cmo \
+  driver/pparse.cmo driver/compenv.cmo \
+  driver/main_args.cmo driver/compmisc.cmo \
   driver/makedepend.cmo \
   driver/compile_common.cmo
 
@@ -161,6 +157,7 @@ ASMCOMP=\
   asmcomp/afl_instrument.cmo \
   asmcomp/strmatch.cmo \
   asmcomp/cmmgen_state.cmo \
+  asmcomp/cmm_helpers.cmo \
   asmcomp/cmmgen.cmo \
   asmcomp/interval.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo \
@@ -173,7 +170,7 @@ ASMCOMP=\
   asmcomp/linscan.cmo \
   asmcomp/reloadgen.cmo asmcomp/reload.cmo \
   asmcomp/deadcode.cmo \
-  asmcomp/printlinear.cmo asmcomp/linearize.cmo \
+  asmcomp/linear.cmo asmcomp/printlinear.cmo asmcomp/linearize.cmo \
   asmcomp/debug/available_regs.cmo \
   asmcomp/debug/compute_ranges_intf.cmo \
   asmcomp/debug/compute_ranges.cmo \
@@ -189,7 +186,8 @@ ASMCOMP=\
 # the native code compiler is not present for some particular target.
 
 MIDDLE_END_CLOSURE=\
-  middle_end/closure/closure.cmo
+  middle_end/closure/closure.cmo \
+  middle_end/closure/closure_middle_end.cmo
 
 # Owing to dependencies through [Compilenv], which would be
 # difficult to remove, some of the lower parts of Flambda (anything that is
@@ -323,19 +321,25 @@ endif
 
 # The configuration file
 
-utils/config.ml: utils/config.mlp Makefile.config utils/Makefile Makefile
+utils/config.ml: utils/config.mlp Makefile.config utils/Makefile
 	$(MAKE) -C utils config.ml
 
 .PHONY: reconfigure
 reconfigure:
-	./configure $(CONFIGURE_ARGS)
+	ac_read_git_config=true ./configure $(CONFIGURE_ARGS)
+
+utils/domainstate.ml: utils/domainstate.ml.c runtime/caml/domain_state.tbl
+	$(CPP) -I runtime/caml $< > $@
+
+utils/domainstate.mli: utils/domainstate.mli.c runtime/caml/domain_state.tbl
+	$(CPP) -I runtime/caml $< > $@
 
 .PHONY: partialclean
 partialclean::
-	rm -f utils/config.ml
+	rm -f utils/config.ml utils/domainstate.ml utils/domainstate.mli
 
 .PHONY: beforedepend
-beforedepend:: utils/config.ml
+beforedepend:: utils/config.ml utils/domainstate.ml utils/domainstate.mli
 
 # Start up the system from the distribution compiler
 .PHONY: coldstart
@@ -399,7 +403,7 @@ opt-core: runtimeopt
 	$(MAKE) libraryopt
 
 .PHONY: opt
-opt:
+opt: checknative
 	$(MAKE) runtimeopt
 	$(MAKE) ocamlopt
 	$(MAKE) libraryopt
@@ -407,7 +411,7 @@ opt:
 
 # Native-code versions of the tools
 .PHONY: opt.opt
-opt.opt:
+opt.opt: checknative
 	$(MAKE) checkstack
 	$(MAKE) runtime
 	$(MAKE) core
@@ -419,6 +423,9 @@ opt.opt:
 	$(MAKE) otherlibrariesopt
 	$(MAKE) ocamllex.opt ocamltoolsopt ocamltoolsopt.opt $(OCAMLDOC_OPT) \
 	  ocamltest.opt
+ifneq "$(WITH_OCAMLDOC)" ""
+	$(MAKE) manpages
+endif
 
 # Core bootstrapping cycle
 .PHONY: coreboot
@@ -446,6 +453,9 @@ coreboot:
 all: coreall
 	$(MAKE) ocaml
 	$(MAKE) otherlibraries $(WITH_DEBUGGER) $(WITH_OCAMLDOC) ocamltest
+ifneq "$(WITH_OCAMLDOC)" ""
+	$(MAKE) manpages
+endif
 
 # Bootstrap and rebuild the whole system.
 # The compilation of ocaml will fail if the runtime has changed.
@@ -462,7 +472,8 @@ world: coldstart
 
 # Compile also native code compiler and libraries, fast
 .PHONY: world.opt
-world.opt: coldstart
+world.opt: checknative
+	$(MAKE) coldstart
 	$(MAKE) opt.opt
 
 # FlexDLL sources missing error messages
@@ -601,9 +612,9 @@ endif
 # from an previous installation of OCaml before otherlibs/num was removed.
 	rm -f "$(INSTALL_LIBDIR)"/num.cm?
 # End transitional
-	if test -n "$(WITH_OCAMLDOC)"; then \
-	  $(MAKE) -C ocamldoc install; \
-	fi
+ifneq "$(WITH_OCAMLDOC)" ""
+	$(MAKE) -C ocamldoc install
+endif
 	if test -n "$(WITH_DEBUGGER)"; then \
 	  $(MAKE) -C debugger install; \
 	fi
@@ -679,9 +690,9 @@ endif
 	$(INSTALL_DATA) \
 	    $(OPTSTART) \
 	    "$(INSTALL_COMPLIBDIR)"
-	if test -n "$(WITH_OCAMLDOC)"; then \
-	  $(MAKE) -C ocamldoc installopt; \
-	fi
+ifneq "$(WITH_OCAMLDOC)" ""
+	$(MAKE) -C ocamldoc installopt
+endif
 	for i in $(OTHERLIBRARIES); do \
 	  $(MAKE) -C otherlibs/$$i installopt || exit $$?; \
 	done
@@ -859,7 +870,7 @@ otherlibs/dynlink/dynlink.cmxa: otherlibs/dynlink/native/dynlink.ml
 # The lexer
 
 parsing/lexer.ml: parsing/lexer.mll
-	$(CAMLLEX) $<
+	$(CAMLLEX) $(OCAMLLEX_FLAGS) $<
 
 partialclean::
 	rm -f parsing/lexer.ml
@@ -1026,7 +1037,7 @@ partialclean::
 # The lexer and parser generators
 
 .PHONY: ocamllex
-ocamllex: ocamlyacc ocamlc
+ocamllex: ocamlyacc
 	$(MAKE) -C lex all
 
 .PHONY: ocamllex.opt
@@ -1068,7 +1079,8 @@ include Makefile.menhir
 parsing/camlinternalMenhirLib.ml: boot/menhir/menhirLib.ml
 	cp $< $@
 parsing/camlinternalMenhirLib.mli: boot/menhir/menhirLib.mli
-	cp $< $@
+	echo '[@@@ocaml.warning "-67"]' > $@
+	cat $< >> $@
 
 # Copy parsing/parser.ml from boot/
 
@@ -1079,6 +1091,9 @@ parsing/parser.ml: boot/menhir/parser.ml parsing/parser.mly \
 parsing/parser.mli: boot/menhir/parser.mli
 	sed "s/MenhirLib/CamlinternalMenhirLib/g" $< > $@
 
+beforedepend:: parsing/camlinternalMenhirLib.ml \
+  parsing/camlinternalMenhirLib.mli \
+	parsing/parser.ml parsing/parser.mli
 
 partialclean:: partialclean-menhir
 
@@ -1095,10 +1110,10 @@ ocamldoc.opt: ocamlc.opt ocamlyacc ocamllex
 
 # OCamltest
 ocamltest: ocamlc ocamlyacc ocamllex
-	$(MAKE) -C ocamltest
+	$(MAKE) -C ocamltest all
 
 ocamltest.opt: ocamlc.opt ocamlyacc ocamllex
-	$(MAKE) -C ocamltest ocamltest.opt$(EXE)
+	$(MAKE) -C ocamltest allopt
 
 partialclean::
 	$(MAKE) -C ocamltest clean
@@ -1109,6 +1124,10 @@ partialclean::
 html_doc: ocamldoc
 	$(MAKE) -C ocamldoc $@
 	@echo "documentation is in ./ocamldoc/stdlib_html/"
+
+.PHONY: manpages
+manpages:
+	$(MAKE) -C ocamldoc $@
 
 partialclean::
 	$(MAKE) -C ocamldoc clean
@@ -1137,6 +1156,16 @@ ocamldebugger: ocamlc ocamlyacc ocamllex otherlibraries
 
 partialclean::
 	$(MAKE) -C debugger clean
+
+# Check that the native-code compiler is supported
+.PHONY: checknative
+checknative:
+ifeq "$(ARCH)" "none"
+checknative:
+	$(error The native-code compiler is not supported on this platform)
+else
+	@
+endif
 
 # Check that the stack limit is reasonable (Unix-only)
 .PHONY: checkstack
@@ -1277,7 +1306,7 @@ endif
 	$(CAMLC) $(COMPFLAGS) -c $<
 
 .ml.cmx:
-	$(CAMLOPT) $(COMPFLAGS) -c $<
+	$(CAMLOPT) $(COMPFLAGS) $(OPTCOMPFLAGS) -c $<
 
 partialclean::
 	for d in utils parsing typing bytecomp asmcomp middle_end file_formats \
@@ -1307,3 +1336,15 @@ distclean: clean
 	rm -f testsuite/_log*
 
 include .depend
+
+Makefile.config Makefile.common:
+	@echo "Please refer to the installation instructions:"
+	@echo "- In file INSTALL for Unix systems."
+	@echo "- In file README.win32.adoc for Windows systems."
+	@echo "On Unix systems, if you've just unpacked the distribution,"
+	@echo "something like"
+	@echo "	./configure"
+	@echo "	make"
+	@echo "	make install"
+	@echo "should work."
+	@false

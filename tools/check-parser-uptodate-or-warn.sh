@@ -46,7 +46,7 @@ fi
 mtime() {
   if test -z "$MTIME"
   then echo 0
-  else $MTIME $1
+  else $MTIME "$1"
   fi
 }
 

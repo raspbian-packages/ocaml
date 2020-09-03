@@ -42,6 +42,7 @@
 #include "caml/backtrace.h"
 #include "caml/fail.h"
 #include "caml/backtrace_prim.h"
+#include "caml/debugger.h"
 
 /* The table of debug information fragments */
 struct ext_table caml_debug_info;
@@ -178,6 +179,9 @@ CAMLprim value caml_add_debug_info(code_t code_start, value code_size,
   CAMLparam1(events_heap);
   struct debug_info *debug_info;
 
+  if (events_heap != Val_unit)
+    caml_debugger(DEBUG_INFO_ADDED, events_heap);
+
   /* build the OCaml-side debug_info value */
   debug_info = caml_stat_alloc(sizeof(struct debug_info));
 
@@ -219,39 +223,36 @@ CAMLprim value caml_remove_debug_info(code_t start)
 }
 
 int caml_alloc_backtrace_buffer(void){
-  CAMLassert(caml_backtrace_pos == 0);
-  caml_backtrace_buffer =
+  CAMLassert(Caml_state->backtrace_pos == 0);
+  Caml_state->backtrace_buffer =
     caml_stat_alloc_noexc(BACKTRACE_BUFFER_SIZE * sizeof(code_t));
-  if (caml_backtrace_buffer == NULL) return -1;
+  if (Caml_state->backtrace_buffer == NULL) return -1;
   return 0;
 }
 
 /* Store the return addresses contained in the given stack fragment
    into the backtrace array */
 
-void caml_stash_backtrace(value exn, code_t pc, value * sp, int reraise)
+void caml_stash_backtrace(value exn, value * sp, int reraise)
 {
-  if (pc != NULL) pc = pc - 1;
-  if (exn != caml_backtrace_last_exn || !reraise) {
-    caml_backtrace_pos = 0;
-    caml_backtrace_last_exn = exn;
+  if (exn != Caml_state->backtrace_last_exn || !reraise) {
+    Caml_state->backtrace_pos = 0;
+    Caml_state->backtrace_last_exn = exn;
   }
 
-  if (caml_backtrace_buffer == NULL && caml_alloc_backtrace_buffer() == -1)
+  if (Caml_state->backtrace_buffer == NULL &&
+      caml_alloc_backtrace_buffer() == -1)
     return;
-
-  if (caml_backtrace_pos >= BACKTRACE_BUFFER_SIZE) return;
-  /* testing the code region is needed: PR#8026 */
-  if (find_debug_info(pc) != NULL)
-    caml_backtrace_buffer[caml_backtrace_pos++] = pc;
 
   /* Traverse the stack and put all values pointing into bytecode
      into the backtrace buffer. */
-  for (/*nothing*/; sp < caml_trapsp; sp++) {
-    code_t p = (code_t) *sp;
-    if (caml_backtrace_pos >= BACKTRACE_BUFFER_SIZE) break;
+  for (/*nothing*/; sp < Caml_state->trapsp; sp++) {
+    code_t p;
+    if (Is_long(*sp)) continue;
+    p = (code_t) *sp;
+    if (Caml_state->backtrace_pos >= BACKTRACE_BUFFER_SIZE) break;
     if (find_debug_info(p) != NULL)
-      caml_backtrace_buffer[caml_backtrace_pos++] = p;
+      Caml_state->backtrace_buffer[Caml_state->backtrace_pos++] = p;
   }
 }
 
@@ -261,8 +262,11 @@ void caml_stash_backtrace(value exn, code_t pc, value * sp, int reraise)
 
 code_t caml_next_frame_pointer(value ** sp, value ** trsp)
 {
-  while (*sp < caml_stack_high) {
-    code_t *p = (code_t*) (*sp)++;
+  while (*sp < Caml_state->stack_high) {
+    value *spv = (*sp)++;
+    code_t *p;
+    if (Is_long(*spv)) continue;
+    p = (code_t*) spv;
     if(&Trap_pc(*trsp) == p) {
       *trsp = Trap_link(*trsp);
       continue;
@@ -274,50 +278,32 @@ code_t caml_next_frame_pointer(value ** sp, value ** trsp)
   return NULL;
 }
 
-/* Stores upto [max_frames_value] frames of the current call stack to
-   return to the user. This is used not in an exception-raising
-   context, but only when the user requests to save the trace
-   (hopefully less often). Instead of using a bounded buffer as
-   [caml_stash_backtrace], we first traverse the stack to compute the
-   right size, then allocate space for the trace. */
-
-CAMLprim value caml_get_current_callstack(value max_frames_value)
+intnat caml_current_callstack_size(intnat max_frames)
 {
-  CAMLparam1(max_frames_value);
-  CAMLlocal1(trace);
-
-  /* we use `intnat` here because, were it only `int`, passing `max_int`
-     from the OCaml side would overflow on 64bits machines. */
-  intnat max_frames = Long_val(max_frames_value);
   intnat trace_size;
+  value * sp = Caml_state->extern_sp;
+  value * trsp = Caml_state->trapsp;
 
-  /* first compute the size of the trace */
-  {
-    value * sp = caml_extern_sp;
-    value * trsp = caml_trapsp;
-
-    for (trace_size = 0; trace_size < max_frames; trace_size++) {
-      code_t p = caml_next_frame_pointer(&sp, &trsp);
-      if (p == NULL) break;
-    }
+  for (trace_size = 0; trace_size < max_frames; trace_size++) {
+    code_t p = caml_next_frame_pointer(&sp, &trsp);
+    if (p == NULL) break;
   }
 
-  trace = caml_alloc(trace_size, 0);
+  return trace_size;
+}
 
-  /* then collect the trace */
-  {
-    value * sp = caml_extern_sp;
-    value * trsp = caml_trapsp;
-    uintnat trace_pos;
+void caml_current_callstack_write(value trace) {
+  value * sp = Caml_state->extern_sp;
+  value * trsp = Caml_state->trapsp;
+  uintnat trace_pos, trace_size = Wosize_val(trace);
 
-    for (trace_pos = 0; trace_pos < trace_size; trace_pos++) {
-      code_t p = caml_next_frame_pointer(&sp, &trsp);
-      CAMLassert(p != NULL);
-      Field(trace, trace_pos) = Val_backtrace_slot(p);
-    }
+  for (trace_pos = 0; trace_pos < trace_size; trace_pos++) {
+    code_t p = caml_next_frame_pointer(&sp, &trsp);
+    CAMLassert(p != NULL);
+    /* [Val_backtrace_slot(...)] is always a long, no need to call
+       [caml_modify]. */
+    Field(trace, trace_pos) = Val_backtrace_slot(p);
   }
-
-  CAMLreturn(trace);
 }
 
 /* Read the debugging info contained in the current bytecode executable. */

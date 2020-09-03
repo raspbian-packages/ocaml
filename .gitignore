@@ -45,6 +45,7 @@ _build
 /autom4te.cache
 /ocamlc
 /config.cache
+/ocaml-*.cache
 /config.log
 /config.status
 /libtool
@@ -69,7 +70,6 @@ _build
 /boot/camlheader
 /boot/ocamlc.opt
 
-/bytecomp/runtimedef.ml
 /bytecomp/opcodes.ml
 /bytecomp/opcodes.mli
 
@@ -177,6 +177,7 @@ _build
 /runtime/caml/m.h
 /runtime/caml/s.h
 /runtime/primitives
+/runtime/primitives.new
 /runtime/prims.c
 /runtime/caml/opnames.h
 /runtime/caml/version.h
@@ -189,6 +190,8 @@ _build
 /runtime/.gdb_history
 /runtime/*.d.c
 /runtime/*.pic.c
+/runtime/domain_state32.inc
+/runtime/domain_state64.inc
 
 /stdlib/camlheader
 /stdlib/target_camlheader
@@ -242,14 +245,9 @@ _build
 /tools/primreq.opt
 /tools/ocamldumpobj
 /tools/keywords
-/tools/lexer299.ml
-/tools/ocaml299to3
 /tools/ocamlmklib
 /tools/ocamlmklib.opt
 /tools/ocamlmklibconfig.ml
-/tools/lexer301.ml
-/tools/scrapelabels
-/tools/addlabels
 /tools/objinfo_helper
 /tools/read_cmt
 /tools/read_cmt.opt
@@ -262,6 +260,8 @@ _build
 /tools/caml-tex
 
 /utils/config.ml
+/utils/domainstate.ml
+/utils/domainstate.mli
 
 /yacc/ocamlyacc
 /yacc/version.h

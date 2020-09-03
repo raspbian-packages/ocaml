@@ -27,6 +27,7 @@
 #include "caml/memory.h"
 #include "caml/mlvalues.h"
 #include "caml/stacks.h"
+#include "caml/signals.h"
 
 #define Setup_for_gc
 #define Restore_after_gc

@@ -110,7 +110,9 @@ CAMLexport value caml_ephemeron_create (mlsize_t len)
 
 CAMLprim value caml_ephe_create (value len)
 {
-  return caml_ephemeron_create(Long_val(len));
+  value res = caml_ephemeron_create(Long_val(len));
+  // run memprof callbacks
+  return caml_process_pending_actions_with_root(res);
 }
 
 CAMLprim value caml_weak_create (value len)
@@ -189,7 +191,7 @@ static void do_set (value ar, mlsize_t offset, value v)
     value old = Field (ar, offset);
     Field (ar, offset) = v;
     if (!(Is_block (old) && Is_young (old))){
-      add_to_ephe_ref_table (&caml_ephe_ref_table, ar, offset);
+      add_to_ephe_ref_table (Caml_state->ephe_ref_table, ar, offset);
     }
   }else{
     Field (ar, offset) = v;
@@ -290,6 +292,9 @@ static value optionalize(int status, value *x)
   } else {
     res = None_val;
   }
+  // run memprof callbacks both for the option we are allocating here
+  // and the calling function.
+  caml_process_pending_actions();
   CAMLreturn(res);
 }
 
@@ -404,8 +409,7 @@ CAMLexport int caml_ephemeron_get_key_copy(value ar, mlsize_t offset,
     if(8 == loop){ /** One minor gc must be enough */
       elt = Val_unit;
       CAML_INSTR_INT ("force_minor/weak@", 1);
-      caml_request_minor_gc ();
-      caml_gc_dispatch ();
+      caml_minor_collection ();
     } else {
       /* cases where loop is between 0 to 7 and where loop is equal to 9 */
       elt = caml_alloc (Wosize_val (v), Tag_val (v));
@@ -419,8 +423,8 @@ CAMLexport int caml_ephemeron_get_key_copy(value ar, mlsize_t offset,
 CAMLprim value caml_ephe_get_key_copy (value ar, value n)
 {
   value key;
-  return optionalize(caml_ephemeron_get_key_copy(ar, Long_val(n), &key),
-                     &key);
+  int status = caml_ephemeron_get_key_copy(ar, Long_val(n), &key);
+  return optionalize(status, &key);
 }
 
 CAMLprim value caml_weak_get_copy (value ar, value n)
@@ -460,8 +464,7 @@ CAMLexport int caml_ephemeron_get_data_copy (value ar, value *data)
     if(8 == loop){ /** One minor gc must be enough */
       elt = Val_unit;
       CAML_INSTR_INT ("force_minor/weak@", 1);
-      caml_request_minor_gc ();
-      caml_gc_dispatch ();
+      caml_minor_collection ();
     } else {
       /* cases where loop is between 0 to 7 and where loop is equal to 9 */
       elt = caml_alloc (Wosize_val (v), Tag_val (v));
@@ -475,7 +478,8 @@ CAMLexport int caml_ephemeron_get_data_copy (value ar, value *data)
 CAMLprim value caml_ephe_get_data_copy (value ar)
 {
   value data;
-  return optionalize(caml_ephemeron_get_data_copy(ar, &data), &data);
+  int status = caml_ephemeron_get_data_copy(ar, &data);
+  return optionalize(status, &data);
 }
 
 CAMLexport int caml_ephemeron_key_is_set(value ar, mlsize_t offset)

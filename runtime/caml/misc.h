@@ -27,6 +27,8 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 /* Basic types and constants */
 
@@ -36,8 +38,20 @@ typedef size_t asize_t;
 #define NULL 0
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+  /* Supported since at least GCC 3.1 */
+  #define CAMLdeprecated_typedef(name, type) \
+    typedef type name __attribute ((deprecated))
+#elif _MSC_VER >= 1310
+  /* NB deprecated("message") only supported from _MSC_VER >= 1400 */
+  #define CAMLdeprecated_typedef(name, type) \
+    typedef __declspec(deprecated) type name
+#else
+  #define CAMLdeprecated_typedef(name, type) typedef type name
+#endif
+
 #ifdef CAML_INTERNALS
-typedef char * addr;
+CAMLdeprecated_typedef(addr, char *);
 #endif /* CAML_INTERNALS */
 
 /* Noreturn is preserved for compatibility reasons.
@@ -81,18 +95,61 @@ typedef char * addr;
 #define CAMLweakdef
 #endif
 
+/* Alignment is necessary for domain_state.h, since the code generated */
+/* by ocamlopt makes direct references into the domain state structure,*/
+/* which is stored in a register on many platforms. For this to work, */
+/* we need to be able to compute the exact offset of each member. */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#define CAMLalign(n) _Alignas(n)
+#elif defined(SUPPORTS_ALIGNED_ATTRIBUTE)
+#define CAMLalign(n) __attribute__((aligned(n)))
+#elif _MSC_VER >= 1500
+#define CAMLalign(n) __declspec(align(n))
+#else
+#error "How do I align values on this platform?"
+#endif
+
+/* CAMLunused is preserved for compatibility reasons.
+   Instead of the legacy GCC/Clang-only
+     CAMLunused foo;
+   you should prefer
+     CAMLunused_start foo CAMLunused_end;
+   which supports both GCC/Clang and MSVC.
+*/
+#if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 7))
+  #define CAMLunused_start __attribute__ ((unused))
+  #define CAMLunused_end
+  #define CAMLunused __attribute__ ((unused))
+#elif _MSC_VER >= 1500
+  #define CAMLunused_start  __pragma( warning (push) )           \
+    __pragma( warning (disable:4189 ) )
+  #define CAMLunused_end __pragma( warning (pop))
+  #define CAMLunused
+#else
+  #define CAMLunused_start
+  #define CAMLunused_end
+  #define CAMLunused
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* GC timing hooks. These can be assigned by the user.
-   [caml_minor_gc_begin_hook] must not allocate nor change any heap value.
-   The others can allocate and even call back to OCaml code.
+/* GC timing hooks. These can be assigned by the user. These hooks
+   must not allocate, change any heap value, nor call OCaml code.
 */
 typedef void (*caml_timing_hook) (void);
 extern caml_timing_hook caml_major_slice_begin_hook, caml_major_slice_end_hook;
 extern caml_timing_hook caml_minor_gc_begin_hook, caml_minor_gc_end_hook;
 extern caml_timing_hook caml_finalise_begin_hook, caml_finalise_end_hook;
+
+#define CAML_STATIC_ASSERT_3(b, l) \
+  CAMLunused_start \
+    CAMLextern char static_assertion_failure_line_##l[(b) ? 1 : -1] \
+  CAMLunused_end
+
+#define CAML_STATIC_ASSERT_2(b, l) CAML_STATIC_ASSERT_3(b, l)
+#define CAML_STATIC_ASSERT(b) CAML_STATIC_ASSERT_2(b, __LINE__)
 
 /* Windows Unicode support (rest below - char_os is needed earlier) */
 
@@ -125,6 +182,15 @@ CAMLnoreturn_end;
 #else
 #define CAMLassert(x) ((void) 0)
 #endif
+
+/* This hook is called when a fatal error occurs in the OCaml
+   runtime. It is given arguments to be passed to the [vprintf]-like
+   functions in order to synthetize the error message.
+   If it returns, the runtime calls [abort()].
+
+   If it is [NULL], the error message is printed on stderr and then
+   [abort()] is called. */
+extern void (*caml_fatal_error_hook) (char *msg, va_list args);
 
 CAMLnoreturn_start
 CAMLextern void caml_fatal_error (char *, ...)
@@ -179,6 +245,9 @@ static inline int caml_umul_overflow(uintnat a, uintnat b, uintnat * res)
 extern int caml_umul_overflow(uintnat a, uintnat b, uintnat * res);
 #endif
 
+/* From floats.c */
+extern double caml_log1p(double);
+
 /* Windows Unicode support */
 
 #ifdef _WIN32
@@ -205,6 +274,9 @@ extern int caml_umul_overflow(uintnat a, uintnat b, uintnat * res);
 #define strcmp_os wcscmp
 #define strlen_os wcslen
 #define sscanf_os swscanf
+#define strcpy_os wcscpy
+#define mktemp_os _wmktemp
+#define fopen_os _wfopen
 
 #define caml_stat_strdup_os caml_stat_wcsdup
 #define caml_stat_strconcat_os caml_stat_wcsconcat
@@ -237,6 +309,9 @@ extern int caml_umul_overflow(uintnat a, uintnat b, uintnat * res);
 #define strcmp_os strcmp
 #define strlen_os strlen
 #define sscanf_os sscanf
+#define strcpy_os strcpy
+#define mktemp_os mktemp
+#define fopen_os fopen
 
 #define caml_stat_strdup_os caml_stat_strdup
 #define caml_stat_strconcat_os caml_stat_strconcat
@@ -299,6 +374,7 @@ int caml_runtime_warnings_active(void);
   01 -> fields of free list blocks in major heap
   03 -> heap chunks deallocated by heap shrinking
   04 -> fields deallocated by [caml_obj_truncate]
+  05 -> unused child pointers in large free blocks
   10 -> uninitialised fields of minor objects
   11 -> uninitialised fields of major objects
   15 -> uninitialised words of [caml_stat_alloc_aligned] blocks
@@ -312,6 +388,7 @@ int caml_runtime_warnings_active(void);
 #define Debug_free_major     Debug_tag (0x01)
 #define Debug_free_shrink    Debug_tag (0x03)
 #define Debug_free_truncate  Debug_tag (0x04)
+#define Debug_free_unused    Debug_tag (0x05)
 #define Debug_uninit_minor   Debug_tag (0x10)
 #define Debug_uninit_major   Debug_tag (0x11)
 #define Debug_uninit_align   Debug_tag (0x15)
@@ -340,7 +417,6 @@ extern int caml_snprintf(char * buf, size_t size, const char * format, ...);
 #include <time.h>
 #include <stdio.h>
 
-extern intnat caml_stat_minor_collections;
 extern intnat caml_instr_starttime, caml_instr_stoptime;
 
 struct caml_instr_block {
@@ -358,15 +434,15 @@ extern struct caml_instr_block *caml_instr_log;
 
 /* Allocate the data block for a given name.
    [t] must have been declared with [CAML_INSTR_DECLARE]. */
-#define CAML_INSTR_ALLOC(t) do{                                     \
-    if (caml_stat_minor_collections >= caml_instr_starttime         \
-        && caml_stat_minor_collections < caml_instr_stoptime){      \
-      t = caml_stat_alloc_noexc (sizeof (struct caml_instr_block)); \
-      t->index = 0;                                                 \
-      t->tag[0] = "";                                               \
-      t->next = caml_instr_log;                                     \
-      caml_instr_log = t;                                           \
-    }                                                               \
+#define CAML_INSTR_ALLOC(t) do{                                             \
+    if (Caml_state_field(stat_minor_collections) >= caml_instr_starttime    \
+        && Caml_state_field(stat_minor_collections) < caml_instr_stoptime){ \
+      t = caml_stat_alloc_noexc (sizeof (struct caml_instr_block));         \
+      t->index = 0;                                                         \
+      t->tag[0] = "";                                                       \
+      t->next = caml_instr_log;                                             \
+      caml_instr_log = t;                                                   \
+    }                                                                       \
   }while(0)
 
 /* Allocate the data block and start the timer.
@@ -432,7 +508,42 @@ extern void caml_instr_atexit (void);
 
 #endif /* CAML_INSTR */
 
+/* Macro used to deactivate thread and address sanitizers on some
+   functions. */
+#define CAMLno_tsan
+#define CAMLno_asan
+#if defined(__has_feature)
+#  if __has_feature(thread_sanitizer)
+#    undef CAMLno_tsan
+#    define CAMLno_tsan __attribute__((no_sanitize("thread")))
+#  endif
+#  if __has_feature(address_sanitizer)
+#    undef CAMLno_asan
+#    define CAMLno_asan __attribute__((no_sanitize("address")))
+#  endif
+#endif
+
+/* A table of all code fragments (main program and dynlinked modules) */
+struct code_fragment {
+  char *code_start;
+  char *code_end;
+  unsigned char digest[16];
+  char digest_computed;
+};
+
+extern struct ext_table caml_code_fragments_table;
+
+int caml_find_code_fragment(char *pc, int *index, struct code_fragment **cf);
+
 #endif /* CAML_INTERNALS */
+
+/* The [backtrace_slot] type represents values stored in
+ * [Caml_state->backtrace_buffer].  In bytecode, it is the same as a
+ * [code_t], in native code it as a [frame_descr *].  The difference
+ * doesn't matter for code outside [backtrace_{byt,nat}.c],
+ * so it is just exposed as a [void *].
+ */
+typedef void * backtrace_slot;
 
 #ifdef __cplusplus
 }

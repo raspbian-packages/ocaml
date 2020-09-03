@@ -81,11 +81,9 @@ INCLUDES = $(addprefix -I $(ROOTDIR)/,utils parsing typing bytecomp \
                        middle_end/flambda/base_types driver toplevel \
                        file_formats lambda)
 COMPFLAGS = -absname -w +a-4-9-41-42-44-45-48 -strict-sequence -warn-error A \
- -safe-string -strict-formats -bin-annot $(INCLUDES)
+ -principal -safe-string -strict-formats -bin-annot $(INCLUDES)
 LINKFLAGS = $(INCLUDES)
 VPATH := $(filter-out -I,$(INCLUDES))
-
-# scrapelabels addlabels
 
 .PHONY: all allopt opt.opt # allopt and opt.opt are synonyms
 allopt: opt.opt
@@ -123,7 +121,9 @@ $(call byte_and_opt,ocamlprof,$(CSLPROF_IMPORTS) profiling.cmo $(CSLPROF),)
 
 ocamlcp_cmos = config.cmo build_path_prefix_map.cmo misc.cmo profile.cmo \
                warnings.cmo identifiable.cmo numbers.cmo arg_helper.cmo \
-               clflags.cmo main_args.cmo
+               clflags.cmo \
+               terminfo.cmo location.cmo load_path.cmo ccomp.cmo compenv.cmo \
+               main_args.cmo
 
 $(call byte_and_opt,ocamlcp,$(ocamlcp_cmos) ocamlcp.cmo,)
 
@@ -168,56 +168,13 @@ clean::
 OCAMLMKTOP=ocamlmktop.cmo
 OCAMLMKTOP_IMPORTS=config.cmo build_path_prefix_map.cmo misc.cmo \
        identifiable.cmo numbers.cmo arg_helper.cmo clflags.cmo \
-       load_path.cmo ccomp.cmo
+       load_path.cmo profile.cmo ccomp.cmo
 
 $(call byte_and_opt,ocamlmktop,$(OCAMLMKTOP_IMPORTS) $(OCAMLMKTOP),)
 
 # Converter olabl/ocaml 2.99 to ocaml 3
 
-OCAML299TO3=lexer299.cmo ocaml299to3.cmo
 LIBRARY3=config.cmo build_path_prefix_map.cmo misc.cmo warnings.cmo location.cmo
-
-ocaml299to3: $(OCAML299TO3)
-	$(CAMLC) $(LINKFLAGS) -o ocaml299to3 $(LIBRARY3) $(OCAML299TO3)
-
-lexer299.ml: lexer299.mll
-	$(CAMLLEX) lexer299.mll
-
-#install::
-#	$(INSTALL_PROG) ocaml299to3 "$(INSTALL_BINDIR)/ocaml299to3$(EXE)"
-
-clean::
-	rm -f ocaml299to3 lexer299.ml
-
-# Label remover for interface files (upgrade 3.02 to 3.03)
-
-SCRAPELABELS= lexer301.cmo scrapelabels.cmo
-
-scrapelabels: $(SCRAPELABELS)
-	$(CAMLC) $(LINKFLAGS) -o scrapelabels $(LIBRARY3) $(SCRAPELABELS)
-
-lexer301.ml: lexer301.mll
-	$(CAMLLEX) lexer301.mll
-
-#install::
-#	$(INSTALL_PROG) scrapelabels "$(INSTALL_LIBDIR)"
-
-clean::
-	rm -f scrapelabels lexer301.ml
-
-# Insert labels following an interface file (upgrade 3.02 to 3.03)
-
-ADDLABELS_IMPORTS=config.cmo build_path_prefix_map.cmo misc.cmo arg_helper.cmo \
-  clflags.cmo identifiable.cmo numbers.cmo terminfo.cmo \
-  warnings.cmo location.cmo longident.cmo docstrings.cmo \
-  syntaxerr.cmo ast_helper.cmo parser.cmo lexer.cmo parse.cmo
-
-addlabels: addlabels.cmo
-	$(CAMLC) $(LINKFLAGS) -w sl -o addlabels \
-		$(ADDLABELS_IMPORTS) addlabels.cmo
-
-#install::
-#	$(INSTALL_PROG) addlabels "$(INSTALL_LIBDIR)"
 
 ifeq ($(UNIX_OR_WIN32),unix)
 LN := ln -sf
@@ -247,9 +204,6 @@ else
 	done
 endif
 
-clean::
-	rm -f addlabels
-
 # The preprocessor for asm generators
 
 CVT_EMIT=cvt_emit.cmo
@@ -262,9 +216,6 @@ cvt_emit: $(CVT_EMIT)
 .PRECIOUS: cvt_emit
 clean::
 	if test -f cvt_emit; then mv -f cvt_emit cvt_emit.bak; else :; fi
-
-cvt_emit.ml: cvt_emit.mll
-	$(CAMLLEX) cvt_emit.mll
 
 clean::
 	rm -f cvt_emit.ml
@@ -300,9 +251,6 @@ DUMPOBJ= \
 
 $(call byte_and_opt,dumpobj,$(DUMPOBJ),)
 
-make_opcodes.ml: make_opcodes.mll
-	$(CAMLLEX) make_opcodes.mll
-
 make_opcodes: make_opcodes.ml
 	$(CAMLC) make_opcodes.ml -o $@
 
@@ -316,10 +264,14 @@ beforedepend:: opnames.ml
 
 # Display info on compiled files
 
+DEF_SYMBOL_PREFIX = '-Dsymbol_prefix=""'
+
 ifeq "$(SYSTEM)" "macosx"
 DEF_SYMBOL_PREFIX = '-Dsymbol_prefix="_"'
-else
-DEF_SYMBOL_PREFIX = '-Dsymbol_prefix=""'
+endif
+
+ifeq "$(SYSTEM)" "cygwin"
+DEF_SYMBOL_PREFIX = '-Dsymbol_prefix="_"'
 endif
 
 objinfo_helper$(EXE): objinfo_helper.$(O)
@@ -413,7 +365,8 @@ clean::
 
 # Common stuff
 
-.SUFFIXES:
+%.ml: %.mll
+	$(CAMLLEX) $(OCAMLLEX_FLAGS) $<
 
 %.cmo: %.ml
 	$(CAMLC) -c $(COMPFLAGS) - $<

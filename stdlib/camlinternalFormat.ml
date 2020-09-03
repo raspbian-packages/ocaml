@@ -219,8 +219,9 @@ type precision_ebb = Precision_EBB : ('a, 'b) precision -> precision_ebb
 (* Default precision for float printing. *)
 let default_float_precision fconv =
   match snd fconv with
-  | Float_f | Float_e | Float_E | Float_g | Float_G | Float_h | Float_H -> -6
-  (* For %h and %H formats, a negative precision means "as many digits as
+  | Float_f | Float_e | Float_E | Float_g | Float_G | Float_h | Float_H
+  | Float_CF -> -6
+  (* For %h %H and %#F formats, a negative precision means "as many digits as
      necessary".  For the other FP formats, we take the absolute value
      of the precision, hence 6 digits by default. *)
   | Float_F -> 12
@@ -297,6 +298,7 @@ let char_of_fconv ?(cF='F') fconv = match snd fconv with
   | Float_E -> 'E' | Float_g -> 'g'
   | Float_G -> 'G' | Float_F -> cF
   | Float_h -> 'h' | Float_H -> 'H'
+  | Float_CF -> 'F'
 
 
 (* Convert a scanning counter to char. *)
@@ -438,11 +440,16 @@ let bprint_altint_fmt buf ign_flag iconv pad prec c =
 
 (***)
 
-(* Print the optional '+' associated to a float conversion. *)
-let bprint_fconv_flag buf fconv = match fst fconv with
+(* Print the optional '+', ' ' and/or '#' associated to a float conversion. *)
+let bprint_fconv_flag buf fconv =
+  begin match fst fconv with
   | Float_flag_p -> buffer_add_char buf '+'
   | Float_flag_s -> buffer_add_char buf ' '
-  | Float_flag_ -> ()
+  | Float_flag_ -> () end;
+  match snd fconv with
+  | Float_CF -> buffer_add_char buf '#'
+  | Float_f | Float_e | Float_E | Float_g | Float_G
+  | Float_F | Float_h | Float_H -> ()
 
 (* Print a complete float format in a buffer (ex: "%+*.3f"). *)
 let bprint_float_fmt buf ign_flag fconv pad prec =
@@ -453,8 +460,8 @@ let bprint_float_fmt buf ign_flag fconv pad prec =
   bprint_precision buf prec;
   buffer_add_char buf (char_of_fconv fconv)
 
-(* Compute the literal string representation of a formatting_lit. *)
-(* Also used by Printf and Scanf where formatting is not interpreted. *)
+(* Compute the literal string representation of a Formatting_lit. *)
+(* Used by Printf and Scanf where formatting is not interpreted. *)
 let string_of_formatting_lit formatting_lit = match formatting_lit with
   | Close_box            -> "@]"
   | Close_tag            -> "@}"
@@ -466,14 +473,6 @@ let string_of_formatting_lit formatting_lit = match formatting_lit with
   | Escaped_at           -> "@@"
   | Escaped_percent      -> "@%"
   | Scan_indic c -> "@" ^ (String.make 1 c)
-
-(* Compute the literal string representation of a formatting. *)
-(* Also used by Printf and Scanf where formatting is not interpreted. *)
-let string_of_formatting_gen : type a b c d e f .
-    (a, b, c, d, e, f) formatting_gen -> string =
-  fun formatting_gen -> match formatting_gen with
-  | Open_tag (Format (_, str)) -> str
-  | Open_box (Format (_, str)) -> str
 
 (***)
 
@@ -626,8 +625,12 @@ let bprint_fmt buf fmt =
       bprint_string_literal buf (string_of_formatting_lit fmting_lit);
       fmtiter rest ign_flag;
     | Formatting_gen (fmting_gen, rest) ->
-      bprint_string_literal buf "@{";
-      bprint_string_literal buf (string_of_formatting_gen fmting_gen);
+      begin match fmting_gen with
+      | Open_tag (Format (_, str)) ->
+        buffer_add_string buf "@{"; buffer_add_string buf str
+      | Open_box (Format (_, str)) ->
+        buffer_add_string buf "@["; buffer_add_string buf str
+      end;
       fmtiter rest ign_flag;
 
     | End_of_format -> ()
@@ -1456,34 +1459,34 @@ let convert_int64 iconv n =
 (* Convert a float to string. *)
 (* Fix special case of "OCaml float format". *)
 let convert_float fconv prec x =
-  match snd fconv with
-  | Float_h | Float_H ->
+  let hex () =
     let sign =
       match fst fconv with
       | Float_flag_p -> '+'
       | Float_flag_s -> ' '
       | _ -> '-' in
-    let str = hexstring_of_float x prec sign in
-    begin match snd fconv with
-    | Float_H -> String.uppercase_ascii str
-    | _ -> str
-    end
-  | _ ->
+    hexstring_of_float x prec sign in
+  let add_dot_if_needed str =
+    let len = String.length str in
+    let rec is_valid i =
+      if i = len then false else
+        match str.[i] with
+        | '.' | 'e' | 'E' -> true
+        | _ -> is_valid (i + 1) in
+    if is_valid 0 then str else str ^ "." in
+  let caml_special_val str = match classify_float x with
+    | FP_normal | FP_subnormal | FP_zero -> str
+    | FP_infinite -> if x < 0.0 then "neg_infinity" else "infinity"
+    | FP_nan -> "nan" in
+  match snd fconv with
+  | Float_h -> hex ()
+  | Float_H -> String.uppercase_ascii (hex ())
+  | Float_CF -> caml_special_val (hex ())
+  | Float_F ->
     let str = format_float (format_of_fconv fconv prec) x in
-    if snd fconv <> Float_F then str else
-      let len = String.length str in
-      let rec is_valid i =
-        if i = len then false else
-          match str.[i] with
-          | '.' | 'e' | 'E' -> true
-          | _ -> is_valid (i + 1)
-      in
-      match classify_float x with
-      | FP_normal | FP_subnormal | FP_zero ->
-        if is_valid 0 then str else str ^ "."
-      | FP_infinite ->
-        if x < 0.0 then "neg_infinity" else "infinity"
-      | FP_nan -> "nan"
+    caml_special_val (add_dot_if_needed str)
+  | Float_f | Float_e | Float_E | Float_g | Float_G ->
+    format_float (format_of_fconv fconv prec) x
 
 (* Convert a char to a string according to the OCaml lexical convention. *)
 let format_caml_char c =
@@ -2477,8 +2480,9 @@ let fmt_ebb_of_string ?legacy_behavior str =
           make_padprec_fmt_ebb (get_int_pad ()) (get_prec ()) fmt_rest in
         Fmt_EBB (Int64 (iconv, pad', prec', fmt_rest'))
     | 'f' | 'e' | 'E' | 'g' | 'G' | 'F' | 'h' | 'H' ->
-      let fconv = compute_float_conv pct_ind str_ind (get_plus ())
-        (get_space ()) symb in
+      let fconv =
+        compute_float_conv pct_ind str_ind
+          (get_plus ()) (get_hash ()) (get_space ()) symb in
       let Fmt_EBB fmt_rest = parse str_ind end_ind in
       if get_ign () then
         let ignored = Ignored_float (get_pad_opt '_', get_prec_opt ()) in
@@ -2629,14 +2633,6 @@ let fmt_ebb_of_string ?legacy_behavior str =
         let Fmt_EBB fmt_rest = parse (str_ind + 1) end_ind in
         Fmt_EBB (Formatting_lit (Scan_indic c, fmt_rest))
 
-  and check_open_box : type a b c d e f . (a, b, c, d, e, f) fmt -> unit =
-  fun fmt -> match fmt with
-    | String_literal (str, End_of_format) -> (
-      try ignore (open_box_of_string str) with Failure _ ->
-        ((* Emit warning: invalid open box *))
-    )
-    | _ -> ()
-
   (* Try to read the optional <name> after "@{" or "@[". *)
   and parse_tag : type e f . bool -> int -> int -> (_, _, e, f) fmt_ebb =
   fun is_open_tag str_ind end_ind ->
@@ -2650,9 +2646,8 @@ let fmt_ebb_of_string ?legacy_behavior str =
         let Fmt_EBB fmt_rest = parse (ind + 1) end_ind in
         let Fmt_EBB sub_fmt = parse str_ind (ind + 1) in
         let sub_format = Format (sub_fmt, sub_str) in
-        let formatting = if is_open_tag then Open_tag sub_format else (
-          check_open_box sub_fmt;
-          Open_box sub_format) in
+        let formatting =
+          if is_open_tag then Open_tag sub_format else Open_box sub_format in
         Fmt_EBB (Formatting_gen (formatting, fmt_rest))
       | _ ->
         raise Not_found
@@ -2940,7 +2935,7 @@ let fmt_ebb_of_string ?legacy_behavior str =
     | false, _, false, _ -> assert false
 
   (* Convert (plus, space, symb) to its associated float_conv. *)
-  and compute_float_conv pct_ind str_ind plus space symb =
+  and compute_float_conv pct_ind str_ind plus hash space symb =
     let flag = match plus, space with
     | false, false -> Float_flag_
     | false,  true -> Float_flag_s
@@ -2949,15 +2944,16 @@ let fmt_ebb_of_string ?legacy_behavior str =
       (* plus and space: legacy implementation prefers plus *)
       if legacy_behavior then Float_flag_p
       else incompatible_flag pct_ind str_ind ' ' "'+'" in
-    let kind = match symb with
-    | 'f' -> Float_f
-    | 'e' -> Float_e
-    | 'E' -> Float_E
-    | 'g' -> Float_g
-    | 'G' -> Float_G
-    | 'h' -> Float_h
-    | 'H' -> Float_H
-    | 'F' -> Float_F
+    let kind = match hash, symb with
+    | _, 'f' -> Float_f
+    | _, 'e' -> Float_e
+    | _, 'E' -> Float_E
+    | _, 'g' -> Float_g
+    | _, 'G' -> Float_G
+    | _, 'h' -> Float_h
+    | _, 'H' -> Float_H
+    | false, 'F' -> Float_F
+    | true, 'F' -> Float_CF
     | _ -> assert false in
     flag, kind
 

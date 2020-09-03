@@ -64,6 +64,8 @@ typedef unsigned int tag_t;             /* Actually, an unsigned char */
 typedef uintnat color_t;
 typedef uintnat mark_t;
 
+#include "domain_state.h"
+
 /* Longs vs blocks. */
 #define Is_long(x)   (((x) & 1) != 0)
 #define Is_block(x)  (((x) & 1) == 0)
@@ -78,6 +80,13 @@ typedef uintnat mark_t;
 #define Int_val(x) ((int) Long_val(x))
 #define Unsigned_long_val(x) ((uintnat)(x) >> 1)
 #define Unsigned_int_val(x)  ((int) Unsigned_long_val(x))
+
+/* Encoded exceptional return values, when functions are suffixed with
+   _exn. Encoded exceptions are invalid values and must not be seen
+   by the garbage collector. */
+#define Make_exception_result(v) ((v) | 2)
+#define Is_exception_result(v) (((v) & 3) == 2)
+#define Extract_exception(v) ((v) & ~3)
 
 /* Structure of the header:
 

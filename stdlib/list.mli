@@ -141,6 +141,13 @@ val filter_map : ('a -> 'b option) -> 'a list -> 'b list
     @since 4.08.0
 *)
 
+val concat_map : ('a -> 'b list) -> 'a list -> 'b list
+(** [List.concat_map f l] gives the same result as
+    {!List.concat}[ (]{!List.map}[ f l)]. Tail-recursive.
+
+    @since 4.10.0
+*)
+
 val fold_left : ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
 (** [List.fold_left f a [b1; ...; bn]] is
    [f (... (f (f a b1) b2) ...) bn]. *)
@@ -229,6 +236,13 @@ val find_opt: ('a -> bool) -> 'a list -> 'a option
     satisfies the predicate [p], or [None] if there is no value that
     satisfies [p] in the list [l].
     @since 4.05 *)
+
+val find_map: ('a -> 'b option) -> 'a list -> 'b option
+(** [find_map f l] applies [f] to the elements of [l] in order,
+    and returns the first result of the form [Some v], or [None]
+    if none exist.
+    @since 4.10.0
+*)
 
 val filter : ('a -> bool) -> 'a list -> 'a list
 (** [filter p l] returns all the elements of the list [l]

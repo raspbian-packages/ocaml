@@ -19,6 +19,7 @@ ROOTDIR = ..
 
 include $(ROOTDIR)/Makefile.config
 include $(ROOTDIR)/Makefile.common
+include $(ROOTDIR)/Makefile.best_binaries
 
 ifeq "$(filter str,$(OTHERLIBRARIES))" ""
   str := false
@@ -96,13 +97,15 @@ core := \
   run_command.mli run_command.ml \
   filecompare.mli filecompare.ml \
   variables.mli variables.ml \
+  environments.mli environments.ml \
   result.mli result.ml \
   actions.mli actions.ml \
   tests.mli tests.ml \
+  strace.mli strace.ml \
   tsl_ast.mli tsl_ast.ml \
   tsl_parser.mly \
   tsl_lexer.mli tsl_lexer.mll \
-  environments.mli environments.ml \
+  modifier_parser.mli modifier_parser.ml \
   tsl_semantics.mli tsl_semantics.ml \
   builtin_variables.mli builtin_variables.ml \
   actions_helpers.mli actions_helpers.ml \
@@ -176,15 +179,15 @@ flags := -g -nostdlib $(include_directories) \
   -strict-sequence -safe-string -strict-formats \
   -w +a-4-9-41-42-44-45-48 -warn-error A
 
-ocamlc := $(ROOTDIR)/runtime/ocamlrun $(ROOTDIR)/ocamlc $(flags)
+ocamlc := $(BEST_OCAMLC) $(flags)
 
-ocamlopt := $(ROOTDIR)/runtime/ocamlrun $(ROOTDIR)/ocamlopt $(flags)
+ocamlopt :=  $(BEST_OCAMLOPT) $(flags)
 
-ocamldep := $(ROOTDIR)/runtime/ocamlrun $(ROOTDIR)/boot/ocamlc -depend
+ocamldep := $(BEST_OCAMLDEP)
 depflags := -slash
 depincludes :=
 
-ocamllex := $(ROOTDIR)/runtime/ocamlrun $(ROOTDIR)/lex/ocamllex
+ocamllex := $(BEST_OCAMLLEX)
 
 ocamlyacc := $(ROOTDIR)/yacc/ocamlyacc
 
@@ -218,10 +221,7 @@ ocamltest.opt$(EXE): $(native_modules)
 	$(ocamlyacc) $<
 
 %.ml: %.mll
-	$(ocamllex) -q $<
-
-%.$(O): %.c
-	$(CC) $(OC_CFLAGS) $(OC_CPPFLAGS) -c $<
+	$(ocamllex) $(OCAMLLEX_FLAGS) $<
 
 ocamltest_config.ml: ocamltest_config.ml.in Makefile ../Makefile.config
 	sed \
@@ -257,6 +257,7 @@ ocamltest_config.ml: ocamltest_config.ml.in Makefile ../Makefile.config
 	  -e 's|@@CFLAGS@@|$(OC_CFLAGS)|' \
 	  -e 's|@@CCOMPTYPE@@|$(CCOMPTYPE)|' \
 	  -e 's|@@WINDOWS_UNICODE@@|$(WINDOWS_UNICODE)|' \
+	  -e 's|@@FUNCTION_SECTIONS@@|$(FUNCTION_SECTIONS)|' \
 	  $< > $@
 
 .PHONY: clean

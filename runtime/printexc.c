@@ -28,6 +28,7 @@
 #include "caml/mlvalues.h"
 #include "caml/printexc.h"
 #include "caml/memory.h"
+#include "caml/memprof.h"
 
 struct stringbuf {
   char * ptr;
@@ -117,18 +118,18 @@ static void default_fatal_uncaught_exception(value exn)
   msg = caml_format_exception(exn);
   /* Perform "at_exit" processing, ignoring all exceptions that may
      be triggered by this */
-  saved_backtrace_active = caml_backtrace_active;
-  saved_backtrace_pos = caml_backtrace_pos;
-  caml_backtrace_active = 0;
+  saved_backtrace_active = Caml_state->backtrace_active;
+  saved_backtrace_pos = Caml_state->backtrace_pos;
+  Caml_state->backtrace_active = 0;
   at_exit = caml_named_value("Pervasives.do_at_exit");
   if (at_exit != NULL) caml_callback_exn(*at_exit, Val_unit);
-  caml_backtrace_active = saved_backtrace_active;
-  caml_backtrace_pos = saved_backtrace_pos;
+  Caml_state->backtrace_active = saved_backtrace_active;
+  Caml_state->backtrace_pos = saved_backtrace_pos;
   /* Display the uncaught exception */
   fprintf(stderr, "Fatal error: exception %s\n", msg);
   caml_stat_free(msg);
   /* Display the backtrace if available */
-  if (caml_backtrace_active && !DEBUGGER_IN_USE)
+  if (Caml_state->backtrace_active && !DEBUGGER_IN_USE)
     caml_print_exception_backtrace();
 }
 
@@ -140,6 +141,13 @@ void caml_fatal_uncaught_exception(value exn)
 
   handle_uncaught_exception =
     caml_named_value("Printexc.handle_uncaught_exception");
+
+  /* If the callback allocates, memprof could be called. In this case,
+     memprof's callback could raise an exception while
+     [handle_uncaught_exception] is running, so that the printing of
+     the exception fails. */
+  caml_memprof_suspended = 1;
+
   if (handle_uncaught_exception != NULL)
     /* [Printexc.handle_uncaught_exception] does not raise exception. */
     caml_callback2(*handle_uncaught_exception, exn, Val_bool(DEBUGGER_IN_USE));

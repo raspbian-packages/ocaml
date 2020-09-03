@@ -31,11 +31,8 @@
 #include "signals_osdep.h"
 #include "caml/stack.h"
 #include "caml/spacetime.h"
-
-#ifdef HAS_STACK_OVERFLOW_DETECTION
-#include <sys/time.h>
-#include <sys/resource.h>
-#endif
+#include "caml/memprof.h"
+#include "caml/finalise.h"
 
 #ifndef NSIG
 #define NSIG 64
@@ -72,19 +69,29 @@ extern char caml_system__code_begin, caml_system__code_end;
 
 void caml_garbage_collection(void)
 {
-  caml_young_limit = caml_young_trigger;
-  if (caml_requested_major_slice || caml_requested_minor_gc ||
-      caml_young_ptr - caml_young_trigger < Max_young_whsize){
+  /* TEMPORARY: if we have just sampled an allocation in native mode,
+     we simply renew the sample to ignore it. Otherwise, renewing now
+     will not have any effect on the sampling distribution, because of
+     the memorylessness of the Bernoulli process.
+
+     FIXME: if the sampling rate is 1, this leads to infinite loop,
+     because we are using a binomial distribution in [memprof.c]. This
+     will go away when the sampling of natively allocated blocks will
+     be correctly implemented.
+  */
+  caml_memprof_renew_minor_sample();
+  if (Caml_state->requested_major_slice || Caml_state->requested_minor_gc ||
+      Caml_state->young_ptr - Caml_state->young_trigger < Max_young_whsize){
     caml_gc_dispatch ();
   }
 
 #ifdef WITH_SPACETIME
-  if (caml_young_ptr == caml_young_alloc_end) {
+  if (Caml_state->young_ptr == Caml_state->young_alloc_end) {
     caml_spacetime_automatic_snapshot();
   }
 #endif
 
-  caml_process_pending_signals();
+  caml_raise_if_exception(caml_do_pending_actions_exn());
 }
 
 DECLARE_SIGNAL_HANDLER(handle_signal)
@@ -97,16 +104,16 @@ DECLARE_SIGNAL_HANDLER(handle_signal)
 #endif
   if (sig < 0 || sig >= NSIG) return;
   if (caml_try_leave_blocking_section_hook ()) {
-    caml_execute_signal(sig, 1);
+    caml_raise_if_exception(caml_execute_signal_exn(sig, 1));
     caml_enter_blocking_section_hook();
   } else {
     caml_record_signal(sig);
-  /* Some ports cache [caml_young_limit] in a register.
+  /* Some ports cache [Caml_state->young_limit] in a register.
      Use the signal context to modify that register too, but only if
      we are inside OCaml code (not inside C code). */
 #if defined(CONTEXT_PC) && defined(CONTEXT_YOUNG_LIMIT)
     if (Is_in_code_area(CONTEXT_PC))
-      CONTEXT_YOUNG_LIMIT = (context_reg) caml_young_limit;
+      CONTEXT_YOUNG_LIMIT = (context_reg) Caml_state->young_limit;
 #endif
   }
   errno = saved_errno;
@@ -169,10 +176,10 @@ DECLARE_SIGNAL_HANDLER(trap_handler)
     caml_sigmask_hook(SIG_UNBLOCK, &mask, NULL);
   }
 #endif
-  caml_exception_pointer = (char *) CONTEXT_EXCEPTION_POINTER;
-  caml_young_ptr = (value *) CONTEXT_YOUNG_PTR;
-  caml_bottom_of_stack = (char *) CONTEXT_SP;
-  caml_last_return_address = (uintnat) CONTEXT_PC;
+  Caml_state->exception_pointer = (char *) CONTEXT_EXCEPTION_POINTER;
+  Caml_state->young_ptr = (value *) CONTEXT_YOUNG_PTR;
+  Caml_state->bottom_of_stack = (char *) CONTEXT_SP;
+  Caml_state->last_return_address = (uintnat) CONTEXT_PC;
   caml_array_bound_error();
 }
 #endif
@@ -180,38 +187,37 @@ DECLARE_SIGNAL_HANDLER(trap_handler)
 /* Machine- and OS-dependent handling of stack overflow */
 
 #ifdef HAS_STACK_OVERFLOW_DETECTION
+#ifndef CONTEXT_SP
+#error "CONTEXT_SP is required if HAS_STACK_OVERFLOW_DETECTION is defined"
+#endif
 
-static char * system_stack_top;
 static char sig_alt_stack[SIGSTKSZ];
 
-#if defined(SYS_linux)
-/* PR#4746: recent Linux kernels with support for stack randomization
-   silently add 2 Mb of stack space on top of RLIMIT_STACK.
-   2 Mb = 0x200000, to which we add 8 kB (=0x2000) for overshoot. */
-#define EXTRA_STACK 0x202000
-#else
-#define EXTRA_STACK 0x2000
-#endif
+/* Code compiled with ocamlopt never accesses more than
+   EXTRA_STACK bytes below the stack pointer. */
+#define EXTRA_STACK 256
 
 #ifdef RETURN_AFTER_STACK_OVERFLOW
-extern void caml_stack_overflow(void);
+extern void caml_stack_overflow(caml_domain_state*);
 #endif
 
+/* Address sanitizer is confused when running the stack overflow
+   handler in an alternate stack. We deactivate it for all the
+   functions used by the stack overflow handler. */
+CAMLno_asan
 DECLARE_SIGNAL_HANDLER(segv_handler)
 {
-  struct rlimit limit;
   struct sigaction act;
   char * fault_addr;
 
   /* Sanity checks:
      - faulting address is word-aligned
-     - faulting address is within the stack
+     - faulting address is on the stack, or within EXTRA_STACK of it
      - we are in OCaml code */
   fault_addr = CONTEXT_FAULTING_ADDRESS;
   if (((uintnat) fault_addr & (sizeof(intnat) - 1)) == 0
-      && getrlimit(RLIMIT_STACK, &limit) == 0
-      && fault_addr < system_stack_top
-      && fault_addr >= system_stack_top - limit.rlim_cur - EXTRA_STACK
+      && fault_addr < Caml_state->top_of_stack
+      && (uintnat)fault_addr >= CONTEXT_SP - EXTRA_STACK
 #ifdef CONTEXT_PC
       && Is_in_code_area(CONTEXT_PC)
 #endif
@@ -221,6 +227,7 @@ DECLARE_SIGNAL_HANDLER(segv_handler)
        handler, we jump to the asm function [caml_stack_overflow]
        (from $ARCH.S). */
 #ifdef CONTEXT_PC
+    CONTEXT_C_ARG_1 = (context_reg) Caml_state;
     CONTEXT_PC = (context_reg) &caml_stack_overflow;
 #else
 #error "CONTEXT_PC must be defined if RETURN_AFTER_STACK_OVERFLOW is"
@@ -228,8 +235,8 @@ DECLARE_SIGNAL_HANDLER(segv_handler)
 #else
     /* Raise a Stack_overflow exception straight from this signal handler */
 #if defined(CONTEXT_YOUNG_PTR) && defined(CONTEXT_EXCEPTION_POINTER)
-    caml_exception_pointer = (char *) CONTEXT_EXCEPTION_POINTER;
-    caml_young_ptr = (value *) CONTEXT_YOUNG_PTR;
+    Caml_state->exception_pointer == (char *) CONTEXT_EXCEPTION_POINTER;
+    Caml_state->young_ptr = (value *) CONTEXT_YOUNG_PTR;
 #endif
     caml_raise_stack_overflow();
 #endif
@@ -270,7 +277,6 @@ void caml_init_signals(void)
   }
 #endif
 
-  /* Stack overflow handling */
 #ifdef HAS_STACK_OVERFLOW_DETECTION
   {
     stack_t stk;
@@ -281,8 +287,19 @@ void caml_init_signals(void)
     SET_SIGACT(act, segv_handler);
     act.sa_flags |= SA_ONSTACK | SA_NODEFER;
     sigemptyset(&act.sa_mask);
-    system_stack_top = (char *) &act;
     if (sigaltstack(&stk, NULL) == 0) { sigaction(SIGSEGV, &act, NULL); }
   }
+#endif
+}
+
+void caml_setup_stack_overflow_detection(void)
+{
+#ifdef HAS_STACK_OVERFLOW_DETECTION
+  stack_t stk;
+  stk.ss_sp = malloc(SIGSTKSZ);
+  stk.ss_size = SIGSTKSZ;
+  stk.ss_flags = 0;
+  if (stk.ss_sp)
+    sigaltstack(&stk, NULL);
 #endif
 }

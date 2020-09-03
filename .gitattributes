@@ -27,6 +27,8 @@
 *.png binary
 *.tfm binary
 
+/boot/menhir/parser.ml* -diff
+
 # configure is declared as binary so that it doesn't get included in diffs.
 # This also means it will have the correct Unix line-endings, even on Windows.
 /configure binary
@@ -165,6 +167,7 @@ tools/pre-commit-githook text eol=lf
 tools/markdown-add-pr-links.sh text eol=lf
 runtime/caml/m.h.in text eol=lf
 runtime/caml/s.h.in text eol=lf
+runtime/caml/compatibility.h typo.long-line=may
 
 # These are all Perl scripts, so may not actually require this
 manual/tools/caml-tex text eol=lf
@@ -176,6 +179,7 @@ manual/tools/texexpand text eol=lf
 
 # Tests which include references spanning multiple lines fail with \r\n
 # endings, so use \n endings only, even on Windows.
+testsuite/tests/basic-modules/anonymous.ml text eol=lf
 testsuite/tests/basic-more/morematch.ml text eol=lf
 testsuite/tests/basic-more/robustmatch.ml text eol=lf
 testsuite/tests/parsing/*.ml text eol=lf

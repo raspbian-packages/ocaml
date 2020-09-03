@@ -238,6 +238,16 @@ method! select_operation op args dbg =
           (Ispecific Isextend32, [k])
         | _ -> super#select_operation op args dbg
       end
+  (* Recognize zero extension *)
+  | Cand ->
+    begin match args with
+    | [arg; Cconst_int (0xffff_ffff, _)]
+    | [arg; Cconst_natint (0xffff_ffffn, _)]
+    | [Cconst_int (0xffff_ffff, _); arg]
+    | [Cconst_natint (0xffff_ffffn, _); arg] ->
+      Ispecific Izextend32, [arg]
+    | _ -> super#select_operation op args dbg
+    end
   | _ -> super#select_operation op args dbg
 
 (* Recognize float arithmetic with mem *)
@@ -259,7 +269,7 @@ method select_floatarith commutative regular_op mem_op args =
       assert false
 
 method! mark_c_tailcall =
-  Proc.contains_calls := true
+  contains_calls := true
 
 (* Deal with register constraints *)
 

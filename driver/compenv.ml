@@ -239,6 +239,8 @@ let read_one_param ppf position name v =
 
   | "clambda-checks" -> set "clambda-checks" [ clambda_checks ] v
 
+  | "function-sections" ->
+    set "function-sections" [ Clflags.function_sections ] v
   (* assembly sources *)
   |  "s" ->
     set "s" [ Clflags.keep_asm_file ; Clflags.keep_startup_file ] v
@@ -659,7 +661,7 @@ let process_deferred_actions env =
 
           if List.length (List.filter (function
               | ProcessImplementation _
-              | ProcessInterface _
+              | ProcessInterface _ -> true
               | _ -> false) !deferred_actions) > 1 then
             fatal "Options -c -o are incompatible with compiling multiple files"
         end;

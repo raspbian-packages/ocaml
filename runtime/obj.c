@@ -28,6 +28,7 @@
 #include "caml/misc.h"
 #include "caml/mlvalues.h"
 #include "caml/prims.h"
+#include "caml/signals.h"
 #include "caml/spacetime.h"
 
 /* [size] is a value encoding a number of bytes */
@@ -118,6 +119,8 @@ CAMLprim value caml_obj_with_tag(value new_tag_v, value arg)
   } else {
     res = caml_alloc_shr(sz, tg);
     for (i = 0; i < sz; i++) caml_initialize(&Field(res, i), Field(arg, i));
+    // Give gc a chance to run, and run memprof callbacks
+    caml_process_pending_actions();
   }
   CAMLreturn (res);
 }

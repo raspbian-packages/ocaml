@@ -30,6 +30,9 @@ OPTCOMPFLAGS=-O3
 else
 OPTCOMPFLAGS=
 endif
+ifeq "$(FUNCTION_SECTIONS)" "true"
+OPTCOMPFLAGS += -function-sections
+endif
 OPTCOMPILER=$(ROOTDIR)/ocamlopt
 CAMLOPT=$(CAMLRUN) $(OPTCOMPILER)
 CAMLDEP=$(BOOT_OCAMLC) -depend
@@ -40,25 +43,10 @@ OC_CPPFLAGS += -I$(ROOTDIR)/runtime
 # Object file prefix
 P=stdlib__
 
-OBJS=camlinternalFormatBasics.cmo stdlib.cmo $(OTHERS)
-OTHERS= $(P)pervasives.cmo $(P)seq.cmo $(P)option.cmo $(P)result.cmo \
-  $(P)bool.cmo $(P)char.cmo $(P)uchar.cmo $(P)sys.cmo $(P)list.cmo \
-  $(P)bytes.cmo $(P)string.cmo $(P)unit.cmo \
-  $(P)marshal.cmo $(P)obj.cmo $(P)array.cmo $(P)float.cmo \
-  $(P)int.cmo $(P)int32.cmo $(P)int64.cmo $(P)nativeint.cmo \
-  $(P)lexing.cmo $(P)parsing.cmo \
-  $(P)set.cmo $(P)map.cmo $(P)stack.cmo $(P)queue.cmo \
-  camlinternalLazy.cmo $(P)lazy.cmo $(P)stream.cmo \
-  $(P)buffer.cmo camlinternalFormat.cmo $(P)printf.cmo \
-  $(P)arg.cmo $(P)printexc.cmo $(P)fun.cmo $(P)gc.cmo \
-  $(P)digest.cmo $(P)random.cmo $(P)hashtbl.cmo $(P)weak.cmo \
-  $(P)format.cmo $(P)scanf.cmo $(P)callback.cmo \
-  camlinternalOO.cmo $(P)oo.cmo camlinternalMod.cmo \
-  $(P)genlex.cmo $(P)ephemeron.cmo \
-  $(P)filename.cmo $(P)complex.cmo \
-  $(P)arrayLabels.cmo $(P)listLabels.cmo $(P)bytesLabels.cmo \
-  $(P)stringLabels.cmo $(P)moreLabels.cmo $(P)stdLabels.cmo \
-  $(P)spacetime.cmo $(P)bigarray.cmo
+include StdlibModules
+
+OBJS=$(addsuffix .cmo,$(STDLIB_MODULES))
+OTHERS=$(filter-out camlinternalFormatBasics.cmo stdlib.cmo,$(OBJS))
 
 PREFIXED_OBJS=$(filter stdlib__%.cmo,$(OBJS))
 UNPREFIXED_OBJS=$(PREFIXED_OBJS:stdlib__%.cmo=%)
@@ -131,6 +119,9 @@ endif
 
 TARGETHEADERPROGRAM = target_$(HEADERPROGRAM)
 
+# The shebang test in configure.ac will need updating if any runtime is
+# introduced with a suffix more than one character long (camlheader_ur doesn't
+# matter).
 CAMLHEADERS =\
   camlheader target_camlheader camlheader_ur \
   camlheaderd target_camlheaderd \
@@ -138,10 +129,17 @@ CAMLHEADERS =\
 
 # The % in pattern rules must always match something, hence the slightly strange
 # patterns and $(subst ...) since `camlheader%:` wouldn't match `camlheader`
-ifeq "$(HASHBANGSCRIPTS)" "true"
+ifeq "$(SHEBANGSCRIPTS)" "true"
 camlhead%: $(ROOTDIR)/Makefile.config Makefile
+ifeq "$(LONG_SHEBANG)" "true"
+	echo '#!/bin/sh' > $@
+	echo 'exec "$(BINDIR)/ocamlrun$(subst er,,$*)" "$$0" "$$@"' >> $@
+else
 	echo '#!$(BINDIR)/ocamlrun$(subst er,,$*)' > $@
+endif
 
+# TODO This does not take long shebangs into account (since TARGET_BINDIR is not
+#      yet processed by configure)
 target_%: $(ROOTDIR)/Makefile.config Makefile
 	echo '#!$(TARGET_BINDIR)/ocamlrun$(subst camlheader,,$*)' > $@
 
@@ -166,10 +164,11 @@ ifneq "$(UNIX_OR_WIN32)" "win32"
 	strip $@
 endif
 
+$(HEADERPROGRAM)%$(O): \
+  OC_CPPFLAGS += -DRUNTIME_NAME='"$(HEADER_PATH)ocamlrun$(subst .,,$*)"'
+
 $(HEADERPROGRAM)%$(O): $(HEADERPROGRAM).c
-	$(CC) -c $(OC_CFLAGS) $(OC_CPPFLAGS) \
-	      -DRUNTIME_NAME='"$(HEADER_PATH)ocamlrun$(subst .,,$*)"' \
-	      $(OUTPUTOBJ)$@ $^
+	$(CC) -c $(OC_CFLAGS) $(OC_CPPFLAGS) $(OUTPUTOBJ)$@ $^
 
 camlheader_ur: camlheader
 	cp camlheader $@
@@ -192,7 +191,7 @@ target_%: %
 	cp $< $@
 endif
 
-endif # ifeq "$(HASHBANGSCRIPTS)" "true"
+endif # ifeq "$(SHEBANGSCRIPTS)" "true"
 
 stdlib.cma: $(OBJS)
 	$(CAMLC) -a -o $@ $^

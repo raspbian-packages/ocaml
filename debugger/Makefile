@@ -17,19 +17,20 @@ ROOTDIR = ..
 
 include $(ROOTDIR)/Makefile.config
 include $(ROOTDIR)/Makefile.common
+include $(ROOTDIR)/Makefile.best_binaries
 
 DYNLINKDIR=$(ROOTDIR)/otherlibs/dynlink
 UNIXDIR=$(ROOTDIR)/otherlibs/$(UNIXLIB)
 CAMLRUN ?= $(ROOTDIR)/boot/ocamlrun
 CAMLYACC ?= $(ROOTDIR)/yacc/ocamlyacc$(EXE)
 
-CAMLC=$(CAMLRUN) $(ROOTDIR)/ocamlc -g -nostdlib -I $(ROOTDIR)/stdlib
+CAMLC=$(BEST_OCAMLC) -g -nostdlib -I $(ROOTDIR)/stdlib
 COMPFLAGS=$(INCLUDES) -absname -w +a-4-9-41-42-44-45-48 -warn-error A \
           -safe-string -strict-sequence -strict-formats
 LINKFLAGS=-linkall -I $(UNIXDIR) -I $(DYNLINKDIR)
 YACCFLAGS=
-CAMLLEX=$(CAMLRUN) $(ROOTDIR)/boot/ocamllex
-CAMLDEP=$(CAMLRUN) $(ROOTDIR)/boot/ocamlc -depend
+CAMLLEX=$(BEST_OCAMLLEX)
+CAMLDEP=$(BEST_OCAMLDEP)
 DEPFLAGS=-slash
 DEPINCLUDES=$(INCLUDES)
 
@@ -47,8 +48,8 @@ parsing_modules := $(addprefix parsing/,\
   attr_helper builtin_attributes pprintast)
 
 typing_modules := $(addprefix typing/,\
-  ident path types btype primitive typedtree subst predef datarepr \
-  persistent_env env oprint ctype printtyp mtype envaux)
+  ident path type_immediacy types btype primitive typedtree subst predef \
+  datarepr persistent_env env oprint ctype printtyp mtype envaux)
 
 file_formats_modules := $(addprefix file_formats/,\
   cmi_format)
@@ -103,7 +104,7 @@ depend: beforedepend
 	| sed -e 's,$(UNIXDIR)/,$$(UNIXDIR)/,' > .depend
 
 lexer.ml: lexer.mll
-	$(CAMLLEX) lexer.mll
+	$(CAMLLEX) $(OCAMLLEX_FLAGS) $<
 clean::
 	rm -f lexer.ml
 beforedepend:: lexer.ml

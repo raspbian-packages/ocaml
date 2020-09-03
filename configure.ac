@@ -15,6 +15,8 @@
 
 # Process this file with autoconf to produce a configure script.
 
+# Require Autoconf 2.69 for repeatability in CI
+AC_PREREQ([2.69])
 AC_INIT([OCaml],
         m4_esyscmd([head -n1 VERSION | tr -d '\r\n']),
         [caml-list@inria.fr],
@@ -68,6 +70,7 @@ AC_CONFIG_AUX_DIR([build-aux])
 ## Output variables
 
 AC_SUBST([CONFIGURE_ARGS])
+AC_SUBST([native_compiler])
 AC_SUBST([VERSION], [AC_PACKAGE_VERSION])
 AC_SUBST([CC])
 # Note: This is present for the flexdll bootstrap where it exposed as the old
@@ -108,7 +111,8 @@ AC_SUBST([ocamlc_cppflags])
 AC_SUBST([ocamlopt_cflags])
 AC_SUBST([ocamlopt_cppflags])
 AC_SUBST([iflexdir])
-AC_SUBST([hashbangscripts])
+AC_SUBST([long_shebang])
+AC_SUBST([shebangscripts])
 AC_SUBST([AR])
 AC_SUBST([RANLIB])
 AC_SUBST([RANLIBCMD])
@@ -154,12 +158,14 @@ AC_SUBST([flambda_invariants])
 AC_SUBST([max_testsuite_dir_retries])
 AC_SUBST([windows_unicode])
 AC_SUBST([flat_float_array])
+AC_SUBST([function_sections])
 AC_SUBST([afl])
 AC_SUBST([force_safe_string])
 AC_SUBST([default_safe_string])
 AC_SUBST([flexdll_chain])
 AC_SUBST([flexlink_flags])
 AC_SUBST([PACKLD])
+AC_SUBST([stdlib_manpages])
 
 ## Generated files
 
@@ -181,7 +187,6 @@ AS_CASE([$host],
     S=asm
     SO=dll
     outputexe=-Fe
-    mkexedebugflag=''
     syslib='$(1).lib'],
   [ccomptype=cc
   S=s
@@ -326,6 +331,10 @@ AC_ARG_ENABLE([reserved-header-bits],
       profinfo_width="$enable_reserved_header_bits"],
     [AC_MSG_ERROR([invalid argument to --enable-reserved-header-bits])])])
 
+AC_ARG_ENABLE([stdlib-manpages],
+  [AS_HELP_STRING([--disable-stdlib-manpages],
+    [do not build or install the library man pages])])
+
 AC_ARG_VAR([WINDOWS_UNICODE_MODE],
   [how to handle Unicode under Windows: ansi, compatible])
 
@@ -348,13 +357,15 @@ AC_ARG_VAR([WINDOWS_UNICODE_MODE],
 # explicitly passed.
 #
 # The configure-time behavior of OCaml 4.05 and older was equivalent
-# to --disable-force-safe-string DEFAULT_STRING=unsafe. OCaml 4.06
-# and later use --disable-force-safe-string DEFAULT_STRING=safe. We
-# expect --enable-force-safe-string to become the default in the future.
+# to --disable-force-safe-string DEFAULT_STRING=unsafe. With OCaml 4.06
+# and older was equivalent to --disable-force-safe-string DEFAULT_STRING=safe.
+# With OCaml 4.10 and later use --enable-force-safe-string DEFAULT_STRING=safe.
+# We expect the --disable-force-safe-string and DEFAULT_STRING=unsafe options
+# to be removed in the future.
 
 AC_ARG_ENABLE([force-safe-string],
-  [AS_HELP_STRING([--enable-force-safe-string],
-    [force strings to be safe])])
+  [AS_HELP_STRING([--disable-force-safe-string],
+    [do not force strings to be safe])])
 
 AC_ARG_VAR([DEFAULT_STRING],
   [whether strings should be safe (default) or unsafe])
@@ -362,6 +373,12 @@ AC_ARG_VAR([DEFAULT_STRING],
 AC_ARG_ENABLE([flat-float-array],
   [AS_HELP_STRING([--disable-flat-float-array],
     [do not use flat float arrays])])
+
+AC_ARG_ENABLE([function-sections],
+  [AS_HELP_STRING([--disable-function-sections],
+    [do not emit each function in a separate section])],
+  [],
+  [enable_function_sections=auto])
 
 AC_ARG_WITH([afl],
   [AS_HELP_STRING([--with-afl],
@@ -419,6 +436,9 @@ AS_CASE([$host],
     mklib="rm -f \$(1) && ${AR} rc \$(1) \$(2) && ${RANLIB} \$(1)"
   ])
 
+## Find vendor of the C compiler
+OCAML_CC_VENDOR
+
 # Determine how to call the C preprocessor directly.
 # Most of the time, calling the C preprocessor through the C compiler is
 # desirable and even important.
@@ -430,8 +450,10 @@ AS_CASE([$host],
 # We thus figure out how to invoke the C preprocessor directly but
 # let the CPP variable untouched, except for the MSVC port where we set it
 # manually to make sure the backward compatibility is preserved
-AS_CASE([$host],
-  [*-pc-windows],
+AS_CASE([$ocaml_cv_cc_vendor],
+  [xlc-*],
+    [CPP="$CC -E -qnoppline"], # suppress incompatible XLC line directives
+  [msvc-*],
     [CPP="$CC -nologo -EP"])
 
 # Libraries to build depending on the host
@@ -462,14 +484,23 @@ AS_IF([test x"$enable_str_lib" != "xno"],
 ## TODO: have two values, one for host and one for target
 AC_SYS_INTERPRETER
 
+long_shebang=false
 AS_IF(
   [test "x$interpval" = "xyes"],
     [AS_CASE([$host],
       [*-cygwin|*-*-mingw32|*-pc-windows],
-        [hashbangscripts=false],
-      [hashbangscripts=true]
+        [shebangscripts=false],
+      [shebangscripts=true
+       prev_exec_prefix="$exec_prefix"
+       AS_IF([test "x$exec_prefix" = "xNONE"],[exec_prefix="$prefix"])
+       eval "expanded_bindir=\"$bindir\""
+       exec_prefix="$prev_exec_prefix"
+       # Assume maximum shebang is 128 chars; less #!, /ocamlrun, an optional
+       # 1 char suffix and the \0 leaving 115 characters
+       AS_IF([test "${#expanded_bindir}" -gt 115],[long_shebang=true])
+      ]
     )],
-  [hashbangscripts=false]
+  [shebangscripts=false]
 )
 
 # Are we building a cross-compiler
@@ -487,16 +518,13 @@ AS_IF(
 ## Check for C99 support: done by libtool
 ## AC_PROG_CC_C99
 
-## Find vendor of the C compiler
-OCAML_CC_VENDOR
-
 ## Determine which flags to use for the C compiler
 
 AS_CASE([$ocaml_cv_cc_vendor],
   [xlc-*],
     [outputobj='-o $(EMPTY)'; gcc_warnings="-qflag=i:i"], # all warnings enabled
   [msvc-*],
-    [outputobj=-Fo; CPP="cl -nologo -EP"; gcc_warnings=""],
+    [outputobj=-Fo; gcc_warnings=""],
   [outputobj='-o $(EMPTY)'; AS_CASE([AC_PACKAGE_VERSION],
     [*+dev*],
       [gcc_warnings="-Wall -Werror"],
@@ -643,7 +671,7 @@ AS_CASE([$CC,$host],
       flexdir=`$flexlink -where | tr -d '\015'`
       AS_IF([test -z "$flexdir"], [flexdir='$(ROOTDIR)/flexdll'])
       iflexdir="-I\"$flexdir\""
-      mkexedebugflag="-link -g"])],
+      mkexedebugflag=''])],
   [*,x86_64-*-linux*],
     AC_DEFINE([HAS_ARCH_CODE32], [1]),
   [xlc*,powerpc-ibm-aix*],
@@ -816,6 +844,8 @@ AS_CASE(["$CC,$host"],
     [OCAML_CC_HAS_FNO_TREE_VRP
     AS_IF([$cc_has_fno_tree_vrp],
       [internal_cflags="$internal_cflags -fno-tree-vrp"])])
+
+OCAML_CC_SUPPORTS_ALIGNED
 
 # Configure the native-code compiler
 
@@ -1044,7 +1074,7 @@ AC_CHECK_FUNC([secure_getenv],
   [AC_DEFINE([HAS_SECURE_GETENV])],
   [AC_CHECK_FUNC([__secure_getenv], [AC_DEFINE([HAS___SECURE_GETENV])])])
 
-CPP_FLAGS="$saved_CPPFLAGS"
+CPPFLAGS="$saved_CPPFLAGS"
 
 ## issetugid
 
@@ -1388,6 +1418,11 @@ AC_CHECK_FUNC([getauxval], [AC_DEFINE([HAS_GETAUXVAL])])
 
 AC_CHECK_FUNC([execvpe], [AC_DEFINE([HAS_EXECVPE])])
 
+## ffs or _BitScanForward
+
+AC_CHECK_FUNC([ffs], [AC_DEFINE([HAS_FFS])])
+AC_CHECK_FUNC([_BitScanForward], [AC_DEFINE([HAS_BITSCANFORWARD])])
+
 ## Determine whether the debugger should/can be built
 
 AS_CASE([$enable_debugger],
@@ -1481,20 +1516,20 @@ AS_IF([test x"$with_bfd" != "xno"],
     AS_IF([test -z "$bfd_ldlibs"],
       [unset ac_cv_lib_bfd_bfd_openr
       AC_CHECK_LIB([bfd], [bfd_openr],
-        [bfd_ldlibs="-lbfd -ldl"], [], [-ldl])])
+        [bfd_ldlibs="-lbfd $DLLIBS"], [], [$DLLIBS])])
     AS_IF([test -z "$bfd_ldlibs"],
       [unset ac_cv_lib_bfd_bfd_openr
       AC_CHECK_LIB([bfd], [bfd_openr],
-        [bfd_ldlibs="-lbfd -ldl -liberty"], [], [-ldl -liberty])])
+        [bfd_ldlibs="-lbfd $DLLIBS -liberty"], [], [$DLLIBS -liberty])])
     AS_IF([test -z "$bfd_ldlibs"],
       [unset ac_cv_lib_bfd_bfd_openr
       AC_CHECK_LIB([bfd], [bfd_openr],
-        [bfd_ldlibs="-lbfd -ldl -liberty -lz"], [], [-ldl -liberty -lz])])
+        [bfd_ldlibs="-lbfd $DLLIBS -liberty -lz"], [], [$DLLIBS -liberty -lz])])
     AS_IF([test -z "$bfd_ldlibs"],
       [unset ac_cv_lib_bfd_bfd_openr
       AC_CHECK_LIB([bfd], [bfd_openr],
-        [bfd_ldlibs="-lbfd -ldl -liberty -lz -lintl"], [],
-        [-ldl -liberty -lz -lintl])])
+        [bfd_ldlibs="-lbfd $DLLIBS -liberty -lz -lintl"], [],
+        [$DLLIBS -liberty -lz -lintl])])
     AS_IF([test -n "$bfd_ldlibs"],
       [bfd_available=true
       AC_DEFINE([HAS_LIBBFD])])])
@@ -1657,14 +1692,47 @@ AS_IF([test x"$enable_flat_float_array" = "xno"],
   [AC_DEFINE([FLAT_FLOAT_ARRAY])
   flat_float_array=true])
 
+AS_IF([test x"$enable_function_sections" = "xno"],
+  [function_sections=false],
+  [AS_CASE([$arch],
+    [amd64|i386|arm64], # not supported on arm32, see issue #9124.
+     [AS_CASE([$target],
+        [*-cygwin*|*-mingw*|*-windows|*-apple-darwin*],
+          [function_sections=false;
+           AC_MSG_NOTICE([No support for function sections on $target.])],
+        [*],
+          [AS_CASE([$ocaml_cv_cc_vendor],
+            [gcc-[0123]-*|gcc-4-[01234567]],
+              [function_sections=false;
+              AC_MSG_NOTICE([Function sections are not
+              supported in GCC prior to version 4.8.])],
+            [clang-[012]-*|clang-3-[01234]],
+              [function_sections=false;
+              AC_MSG_NOTICE([Function sections are not supported
+              in Clang prior to version 3.5.])],
+            [gcc-*|clang-*],
+              [function_sections=true;
+              internal_cflags="$internal_cflags -ffunction-sections";
+              AC_DEFINE([FUNCTION_SECTIONS])],
+            [*],
+              [function_sections=false;
+              AC_MSG_NOTICE([Function sections are not supported by
+              $ocaml_cv_cc_vendor.])])])],
+    [function_sections=false]);
+  AS_IF([test x"$function_sections" = "xfalse"],
+    [AS_IF([test x"$enable_function_sections" = "xyes"],
+      [AC_MSG_ERROR([Function sections are not supported.])],
+      [AC_MSG_NOTICE([Disabling function sections.])])],
+    [])])
+
 AS_IF([test x"$with_afl" = "xyes"],
   [afl=true],
   [afl=false])
 
-AS_IF([test x"$enable_force_safe_string" = "xyes"],
+AS_IF([test x"$enable_force_safe_string" = "xno"],
+  [force_safe_string=false],
   [AC_DEFINE([CAML_SAFE_STRING])
-  force_safe_string=true],
-  [force_safe_string=false])
+   force_safe_string=true])
 
 AS_IF([test x"$DEFAULT_STRING" = "xunsafe"],
   [default_safe_string=false],
@@ -1727,7 +1795,11 @@ AS_IF([test x"$prefix" = "xNONE"],
     [i686-w64-mingw32], [prefix='C:/ocamlmgw'],
     [x86_64-w64-mingw32], [prefix='C:/ocamlmgw64'],
     [i686-pc-windows], [prefix='C:/ocamlms'],
-    [x86_64-pc-windows], [prefix='C:/ocamlms64'])])
+    [x86_64-pc-windows], [prefix='C:/ocamlms64'])],
+  [AS_IF([test x"$unix_or_win32" = "xwin32" \
+          && test "$host_vendor-$host_os" != "$build_vendor-$build_os" ],
+    [AS_CASE([$build],
+      [*-pc-cygwin], [prefix=`cygpath -m "$prefix"`])])])
 
 # Define a few macros that were defined in config/m-nt.h
 # but whose value is not guessed properly by configure
@@ -1738,5 +1810,8 @@ AS_CASE([$host],
     AC_DEFINE([HAS_STRERROR])
     AC_DEFINE([HAS_IPV6])
     AC_DEFINE([HAS_NICE])])
+
+AS_IF([test x"$enable_stdlib_manpages" != "xno"],
+  [stdlib_manpages=true],[stdlib_manpages=false])
 
 AC_OUTPUT

@@ -2,10 +2,11 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*              Damien Doligez, projet Para, INRIA Rocquencourt           *)
+(*            Damien Doligez, projet Para, INRIA Rocquencourt             *)
+(*            Jacques-Henri Jourdan, projet Gallium, INRIA Paris          *)
 (*                                                                        *)
-(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
-(*     en Automatique.                                                    *)
+(*   Copyright 1996-2016 Institut National de Recherche en Informatique   *)
+(*     et en Automatique.                                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -18,9 +19,7 @@
 type stat =
   { minor_words : float;
     (** Number of words allocated in the minor heap since
-       the program was started.  This number is accurate in
-       byte-code programs, but only an approximation in programs
-       compiled to native code. *)
+       the program was started. *)
 
     promoted_words : float;
     (** Number of words allocated in the minor heap that
@@ -134,7 +133,7 @@ type control =
        (this setting is intended for testing purposes only).
        If [max_overhead >= 1000000], compaction is never triggered.
        If compaction is permanently disabled, it is strongly suggested
-       to set [allocation_policy] to 1.
+       to set [allocation_policy] to 2.
        Default: 500. *)
 
     mutable stack_limit : int;
@@ -146,12 +145,47 @@ type control =
     mutable allocation_policy : int;
     [@ocaml.deprecated_mutable
          "Use {(Gc.get()) with Gc.allocation_policy = ...}"]
-    (** The policy used for allocating in the heap.  Possible
-        values are 0 and 1.  0 is the next-fit policy, which is
-        quite fast but can result in fragmentation.  1 is the
-        first-fit policy, which can be slower in some cases but
-        can be better for programs with fragmentation problems.
-        Default: 0. @since 3.11.0 *)
+    (** The policy used for allocating in the major heap.
+        Possible values are 0, 1 and 2.
+
+        - 0 is the next-fit policy, which is usually fast but can
+          result in fragmentation, increasing memory consumption.
+
+        - 1 is the first-fit policy, which avoids fragmentation but
+          has corner cases (in certain realistic workloads) where it
+          is sensibly slower.
+
+        - 2 is the best-fit policy, which is fast and avoids
+          fragmentation. In our experiments it is faster and uses less
+          memory than both next-fit and first-fit.
+          (since OCaml 4.10)
+
+        The current default is next-fit, as the best-fit policy is new
+        and not yet widely tested. We expect best-fit to become the
+        default in the future.
+
+        On one example that was known to be bad for next-fit and first-fit,
+        next-fit takes 28s using 855Mio of memory,
+        first-fit takes 47s using 566Mio of memory,
+        best-fit takes 27s using 545Mio of memory.
+
+        Note: When changing to a low-fragmentation policy, you may
+        need to augment the [space_overhead] setting, for example
+        using [100] instead of the default [80] which is tuned for
+        next-fit. Indeed, the difference in fragmentation behavior
+        means that different policies will have different proportion
+        of "wasted space" for a given program. Less fragmentation
+        means a smaller heap so, for the same amount of wasted space,
+        a higher proportion of wasted space. This makes the GC work
+        harder, unless you relax it by increasing [space_overhead].
+
+        Note: changing the allocation policy at run-time forces
+        a heap compaction, which is a lengthy operation unless the
+        heap is small (e.g. at the start of the program).
+
+        Default: 0.
+
+        @since 3.11.0 *)
 
     window_size : int;
     (** The size of the window used by the major GC for smoothing

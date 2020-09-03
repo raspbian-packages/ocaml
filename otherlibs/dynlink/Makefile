@@ -23,11 +23,12 @@ ROOTDIR = ../..
 
 include $(ROOTDIR)/Makefile.config
 include $(ROOTDIR)/Makefile.common
+include $(ROOTDIR)/Makefile.best_binaries
 
 CAMLRUN ?= $(ROOTDIR)/boot/ocamlrun
 
-OCAMLC    = $(CAMLRUN) $(ROOTDIR)/ocamlc -nostdlib -I $(ROOTDIR)/stdlib
-OCAMLOPT  = $(CAMLRUN) $(ROOTDIR)/ocamlopt -nostdlib -I $(ROOTDIR)/stdlib
+OCAMLC=$(BEST_OCAMLC) -nostdlib -I $(ROOTDIR)/stdlib
+OCAMLOPT=$(BEST_OCAMLOPT) -nostdlib -I $(ROOTDIR)/stdlib
 
 # COMPFLAGS should be in sync with the toplevel Makefile's COMPFLAGS.
 COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-40-41-42-44-45-48-66 \
@@ -98,6 +99,7 @@ COMPILERLIBS_SOURCES=\
   typing/ident.ml \
   typing/path.ml \
   typing/primitive.ml \
+  typing/type_immediacy.ml \
   typing/types.ml \
   typing/btype.ml \
   typing/subst.ml \
@@ -119,7 +121,7 @@ COMPILERLIBS_SOURCES=\
 # provide .ml files for .mli-only modules---without this, such modules do
 # not seem to be located by the type checker inside bytecode packs.
 
-$(LOCAL_SRC)/Makefile: $(LOCAL_SRC)/Makefile.copy-sources
+$(LOCAL_SRC)/Makefile: $(LOCAL_SRC)/Makefile.copy-sources Makefile
 	cp -f $< $@
 	for ml in $(COMPILERLIBS_SOURCES); do \
           echo "$(LOCAL_SRC)/$$(basename $$ml): $(ROOTDIR)/$$ml" \
@@ -260,6 +262,9 @@ clean: partialclean
 	      $(LOCAL_SRC)/*.ml $(LOCAL_SRC)/*.mli $(LOCAL_SRC)/Makefile \
 	      $(LOCAL_SRC)/.depend byte/dynlink.mli native/dynlink.mli
 
+.PHONY: beforedepend
+beforedepend: dynlink_platform_intf.mli
+
 .PHONY: depend
 ifeq "$(TOOLCHAIN)" "msvc"
 depend:
@@ -269,15 +274,14 @@ DEPEND_DUMMY_FILES=\
   native/dynlink_compilerlibs.ml \
   byte/dynlink_compilerlibs.mli \
   byte/dynlink.mli \
-  native/dynlink.mli \
-  dynlink_platform_intf.mli
+  native/dynlink.mli
 
-depend:
+depend: beforedepend
 	touch $(DEPEND_DUMMY_FILES)
 	$(CAMLRUN) $(ROOTDIR)/boot/ocamlc -depend -slash \
-    -I byte -bytecode *.mli *.ml byte/dynlink.ml > .depend
+	  -I byte -bytecode *.mli *.ml byte/dynlink.ml > .depend
 	$(CAMLRUN) $(ROOTDIR)/boot/ocamlc -depend -slash \
-    -I native -native *.ml native/dynlink.ml >> .depend
+	  -I native -native *.ml native/dynlink.ml >> .depend
 	rm -f $(DEPEND_DUMMY_FILES)
 endif
 
