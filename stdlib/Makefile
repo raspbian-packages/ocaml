@@ -26,12 +26,7 @@ COMPFLAGS=-strict-sequence -absname -w +a-4-9-41-42-44-45-48 \
           -g -warn-error A -bin-annot -nostdlib \
           -safe-string -strict-formats
 ifeq "$(FLAMBDA)" "true"
-OPTCOMPFLAGS=-O3
-else
-OPTCOMPFLAGS=
-endif
-ifeq "$(FUNCTION_SECTIONS)" "true"
-OPTCOMPFLAGS += -function-sections
+OPTCOMPFLAGS += -O3
 endif
 OPTCOMPILER=$(ROOTDIR)/ocamlopt
 CAMLOPT=$(CAMLRUN) $(OPTCOMPILER)
@@ -258,7 +253,7 @@ SPACE := $(EMPTY) $(EMPTY)
 depend:
 	$(CAMLDEP) $(DEPFLAGS) $(filter-out stdlib.%,$(wildcard *.mli *.ml)) \
 	  > .depend.tmp
-	$(CAMLDEP) $(DEPFLAGS) -pp "$(AWK) -f remove_module_aliases.awk" \
+	$(CAMLDEP) $(DEPFLAGS) -pp "$(AWK) -f ./remove_module_aliases.awk" \
 	  stdlib.ml stdlib.mli >> .depend.tmp
 	sed -Ee \
 	  's#(^| )(${subst ${SPACE},|,${UNPREFIXED_OBJS}})[.]#\1stdlib__\2.#g' \

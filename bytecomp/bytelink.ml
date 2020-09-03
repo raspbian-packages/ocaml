@@ -505,11 +505,13 @@ let link_bytecode_as_c tolink outfile with_main =
 \nint main(int argc, char **argv)\
 \n#endif\
 \n{\
+\n  caml_byte_program_mode = COMPLETE_EXE;\
 \n  caml_startup_code(caml_code, sizeof(caml_code),\
 \n                    caml_data, sizeof(caml_data),\
 \n                    caml_sections, sizeof(caml_sections),\
 \n                    /* pooling */ 0,\
 \n                    argv);\
+\n  caml_sys_exit(Val_int(0));\
 \n  return 0; /* not reached */\
 \n}\n"
        end else begin
@@ -594,9 +596,15 @@ let fix_exec_name name =
 
 let link objfiles output_name =
   let objfiles =
-    if !Clflags.nopervasives then objfiles
-    else if !Clflags.output_c_object then "stdlib.cma" :: objfiles
-    else "stdlib.cma" :: (objfiles @ ["std_exit.cmo"]) in
+    match
+      !Clflags.nopervasives,
+      !Clflags.output_c_object,
+      !Clflags.output_complete_executable
+    with
+    | true, _, _         -> objfiles
+    | false, true, false -> "stdlib.cma" :: objfiles
+    | _                  -> "stdlib.cma" :: objfiles @ ["std_exit.cmo"]
+  in
   let tolink = List.fold_right scan_file objfiles [] in
   let missing_modules =
     Ident.Set.filter (fun id -> not (Ident.is_predef id)) !missing_globals

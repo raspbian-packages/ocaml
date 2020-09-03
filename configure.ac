@@ -1006,20 +1006,18 @@ AS_CASE(["$arch,$system"],
   [s390x,elf],
     [default_as="${toolpref}as -m 64 -march=$model"
     default_aspp="${toolpref}gcc -c -Wa,-march=$model"],
-  [arm,freebsd|arm64,freebsd],
-    [default_as="${toolpref}cc -c"
-    default_aspp="${toolpref}cc -c"],
+  [*,freebsd],
+    [default_as="${toolpref}cc -c -Wno-trigraphs"
+    default_aspp="${toolpref}cc -c -Wno-trigraphs"],
   [*,dragonfly],
     [default_as="${toolpref}as"
     default_aspp="${toolpref}cc -c"],
-  [*,freebsd],
-    [default_as="${toolpref}as"
-    default_aspp="${toolpref}cc -c"],
   [amd64,*|arm,*|arm64,*|i386,*],
-    [default_as="${toolpref}as"
-    AS_CASE([$ocaml_cv_cc_vendor],
-      [clang-*], [default_aspp="${toolpref}clang -c -Wno-trigraphs"],
-      [default_aspp="${toolpref}gcc -c"])])
+    [AS_CASE([$ocaml_cv_cc_vendor],
+      [clang-*], [default_as="${toolpref}clang -c -Wno-trigraphs"
+                  default_aspp="${toolpref}clang -c -Wno-trigraphs"],
+      [default_as="${toolpref}as"
+      default_aspp="${toolpref}gcc -c"])])
 
 AS_IF([test "$with_pic"],
   [fpic=true
@@ -1497,7 +1495,7 @@ AS_IF([test x"$with_bfd" != "xno"],
         [BFD_INCLUDE_DIR="/opt/local/include"])
       AS_IF([test -z "$BFD_LIB_DIR"],
         [BFD_LIB_DIR="/opt/local/lib"])],
-    [*-*openbsd*],
+    [*-*-openbsd*|*-*-freebsd*],
       [AS_IF([test -z "$BFD_INCLUDE_DIR"],
         [BFD_INCLUDE_DIR="/usr/local/include"])
       AS_IF([test -z "$BFD_LIB_DIR"],
