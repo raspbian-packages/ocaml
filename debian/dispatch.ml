@@ -104,6 +104,9 @@ let () =
       "usr/bin/ocamlprof", ocaml_nox;
       "usr/bin/ocamlmktop", ocaml_nox;
       "usr/lib/ocaml/camlheader", ocaml_nox;
+      "usr/lib/ocaml/camlheaderd", ocaml_nox;
+      "usr/lib/ocaml/camlheaderi", ocaml_nox;
+      "usr/lib/ocaml/eventlog_metadata", ocaml_nox;
       "usr/lib/ocaml/Makefile.config", ocaml_nox;
       "usr/lib/ocaml/extract_crc", ocaml_nox;
       "usr/lib/ocaml/camlheader_ur", ocaml_nox;

@@ -92,8 +92,8 @@ pre-config-stamp: $(TARBALL_TARGET)
 	set -e; for ext in sub guess; do \
 	  if [ -f /usr/share/misc/config.$$ext ] && \
 	    ! [ -f debian/config.orig.$$ext ]; then \
-	    mv config/gnu/config.$$ext debian/config.orig.$$ext; \
-	    cp -f /usr/share/misc/config.$$ext config/gnu/config.$$ext; \
+	    mv build-aux/config.$$ext debian/config.orig.$$ext; \
+	    cp -f /usr/share/misc/config.$$ext build-aux/config.$$ext; \
 	  fi; \
 	done
 # Debian kfreebsd has non-working shims for dup3/pipe2, see #827935. Upstream
@@ -173,7 +173,7 @@ endif
 	fi
 	set -e; for ext in sub guess; do \
 	  if [ -f debian/config.orig.$$ext ] ; then \
-	    mv -f debian/config.orig.$$ext config/gnu/config.$$ext; \
+	    mv -f debian/config.orig.$$ext build-aux/config.$$ext; \
 	  fi; \
 	done
 # Remaining stuff
@@ -269,28 +269,24 @@ SLOW_ARCHITECTURES := armel armhf ia64 mips mipsel powerpc powerpcspe sparc
 override_dh_auto_test:
 ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
 	: # tries to connect the net
-	sed -i /sockets.ml/d testsuite/tests/lib-threads/ocamltests
 	rm -f testsuite/tests/lib-threads/sockets.*
 	: # FIXME: the following tests fail, we temporarily disable them
 	rm -rf testsuite/tests/tool-debugger/basic/
 	rm -rf testsuite/tests/tool-debugger/find-artifacts/
 	rm -rf testsuite/tests/tool-debugger/no_debug_event/
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
-	sed -i /almabench.ml/d testsuite/tests/misc-unsafe/ocamltests
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
 # testpreempt test is too unreliable.
 # It failed at least once on kfreebsd and amd64.
-	sed -i /testpreempt.ml/d testsuite/tests/lib-systhreads/ocamltests
 	rm -f testsuite/tests/lib-systhreads/testpreempt.ml
 ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
-	sed -i /beat.ml/d testsuite/tests/lib-threads/ocamltests
 	rm -f testsuite/tests/lib-threads/beat.ml
-	sed -i /threadsigmask.ml/d testsuite/tests/lib-systhreads/ocamltests
 	rm -f testsuite/tests/lib-systhreads/threadsigmask.ml
 endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
-	cd testsuite && make all
+	make -C ocamltest
+	make -C testsuite all
 endif
 endif
 
@@ -300,7 +296,7 @@ override_dh_installdocs:
 	dh_installdocs --remaining-packages
 
 override_dh_autoreconf:
-	./autogen
+	./tools/autogen
 
 # FIXME: figure out why dh_dwz fails
 override_dh_dwz:
