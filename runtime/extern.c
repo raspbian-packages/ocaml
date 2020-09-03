@@ -537,7 +537,7 @@ static void extern_rec(value v)
     case Custom_tag: {
       uintnat sz_32, sz_64;
       char * size_header;
-      char * ident = Custom_ops_val(v)->identifier;
+      char const * ident = Custom_ops_val(v)->identifier;
       void (*serialize)(value v, uintnat * bsize_32,
                         uintnat * bsize_64)
         = Custom_ops_val(v)->serialize;
@@ -734,7 +734,7 @@ CAMLprim value caml_output_value_to_bytes(value v, value flags)
   memcpy(&Byte(res, ofs), header, header_len);
   ofs += header_len;
   while (blk != NULL) {
-    int n = blk->end - blk->data;
+    intnat n = blk->end - blk->data;
     memcpy(&Byte(res, ofs), blk->data, n);
     ofs += n;
     nextblk = blk->next;
@@ -800,7 +800,7 @@ CAMLexport void caml_output_value_to_malloc(value v, value flags,
   memcpy(res, header, header_len);
   res += header_len;
   for (blk = extern_output_first; blk != NULL; blk = blk->next) {
-    int n = blk->end - blk->data;
+    intnat n = blk->end - blk->data;
     memcpy(res, blk->data, n);
     res += n;
   }

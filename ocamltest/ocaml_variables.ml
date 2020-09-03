@@ -29,6 +29,9 @@ open Variables (* Should not be necessary with a ppx *)
 let all_modules = make ("all_modules",
   "All the modules to compile and link")
 
+let arch = make ("arch",
+  "Host architecture")
+
 let binary_modules = make ("binary_modules",
   "Additional binary modules to link")
 
@@ -209,7 +212,7 @@ let ocaml_script_as_argument =
     "Whether the ocaml script should be passed as argument or on stdin")
 
 let plugins =
-  Variables.make ( "plugins", "plugins for ocamlc,ocamlopt or ocamldoc" )
+  Variables.make ( "plugins", "plugins for ocamldoc" )
 
 let shared_library_cflags =
   Variables.make ("shared_library_cflags",
@@ -226,6 +229,7 @@ let use_runtime =
 let _ = List.iter register_variable
   [
     all_modules;
+    arch;
     binary_modules;
     bytecc_libs;
     c_preprocessor;

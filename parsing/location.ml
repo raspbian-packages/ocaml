@@ -190,9 +190,10 @@ let print_loc ppf loc =
     if loc.loc_start.pos_fname = "" then !input_name
     else loc.loc_start.pos_fname
   in
-  let line = loc.loc_start.pos_lnum in
+  let startline = loc.loc_start.pos_lnum in
+  let endline = loc.loc_end.pos_lnum in
   let startchar = loc.loc_start.pos_cnum - loc.loc_start.pos_bol in
-  let endchar = loc.loc_end.pos_cnum - loc.loc_start.pos_bol in
+  let endchar = loc.loc_end.pos_cnum - loc.loc_end.pos_bol in
 
   let first = ref true in
   let capitalize s =
@@ -210,8 +211,13 @@ let print_loc ppf loc =
      existing setup of editors that parse locations in error messages (e.g.
      Emacs). *)
   comma ();
-  Format.fprintf ppf "%s %i" (capitalize "line")
-    (if line_valid line then line else 1);
+  let startline = if line_valid startline then startline else 1 in
+  let endline = if line_valid endline then endline else startline in
+  begin if startline = endline then
+    Format.fprintf ppf "%s %i" (capitalize "line") startline
+  else
+    Format.fprintf ppf "%s %i-%i" (capitalize "lines") startline endline
+  end;
 
   if chars_valid ~startchar ~endchar then (
     comma ();
@@ -660,10 +666,9 @@ let is_quotable_loc loc =
   && loc.loc_end.pos_fname = !input_name
 
 let error_style () =
-  let open Misc.Error_style in
   match !Clflags.error_style with
-  | Some Contextual | None -> Contextual
-  | Some Short -> Short
+  | Some setting -> setting
+  | None -> Misc.Error_style.default_setting
 
 let batch_mode_printer : report_printer =
   let pp_loc _self report ppf loc =
@@ -882,17 +887,6 @@ let () =
     (function
       | Sys_error msg ->
           Some (errorf ~loc:(in_file !input_name) "I/O error: %s" msg)
-
-      | Misc.HookExnWrapper {error = e; hook_name;
-                             hook_info={Misc.sourcefile}} ->
-          let sub = match error_of_exn e with
-            | None | Some `Already_displayed ->
-                [msg "%s" (Printexc.to_string e)]
-            | Some (`Ok err) ->
-                (msg ~loc:err.main.loc "%t" err.main.txt) :: err.sub
-          in
-          Some
-            (errorf ~loc:(in_file sourcefile) ~sub "In hook %S:" hook_name)
       | _ -> None
     )
 

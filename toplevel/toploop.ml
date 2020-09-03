@@ -186,7 +186,7 @@ let record_backtrace () =
 
 let load_lambda ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
-  let slam = Simplif.simplify_lambda "//toplevel//" lam in
+  let slam = Simplif.simplify_lambda lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
   let (init_code, fun_code) = Bytegen.compile_phrase slam in
   if !Clflags.dump_instr then
@@ -383,9 +383,6 @@ let preprocess_phrase ppf phr =
         let str =
           Pparse.apply_rewriters_str ~restore:true ~tool_name:"ocaml" str
         in
-        let str =
-          Pparse.ImplementationHooks.apply_hooks
-            { Misc.sourcefile = "//toplevel//" } str in
         Ptop_def str
     | phr -> phr
   in
@@ -491,15 +488,9 @@ let _ =
                  cannot be loaded inside the OCaml toplevel";
   Sys.interactive := true;
   let crc_intfs = Symtable.init_toplevel() in
-  Compmisc.init_path false;
-  List.iter
-    (fun (name, crco) ->
-      Env.add_import name;
-      match crco with
-        None -> ()
-      | Some crc->
-          Consistbl.set Env.crc_units name crc Sys.executable_name)
-    crc_intfs
+  Compmisc.init_path ();
+  Env.import_crcs ~source:Sys.executable_name crc_intfs;
+  ()
 
 let load_ocamlinit ppf =
   if !Clflags.noinit then ()
@@ -574,18 +565,18 @@ let loop ppf =
     | x -> Location.report_exception ppf x; Btype.backtrack snap
   done
 
-(* Execute a script.  If [name] is "", read the script from stdin. *)
+external caml_sys_modify_argv : string array -> unit =
+  "caml_sys_modify_argv"
 
-let override_sys_argv args =
-  let len = Array.length args in
-  if Array.length Sys.argv < len then invalid_arg "Toploop.override_sys_argv";
-  Array.blit args 0 Sys.argv 0 len;
-  Obj.truncate (Obj.repr Sys.argv) len;
+let override_sys_argv new_argv =
+  caml_sys_modify_argv new_argv;
   Arg.current := 0
+
+(* Execute a script.  If [name] is "", read the script from stdin. *)
 
 let run_script ppf name args =
   override_sys_argv args;
-  Compmisc.init_path ~dir:(Filename.dirname name) true;
+  Compmisc.init_path ~dir:(Filename.dirname name) ();
                    (* Note: would use [Filename.abspath] here, if we had it. *)
   begin
     try toplevel_env := Compmisc.initial_env()

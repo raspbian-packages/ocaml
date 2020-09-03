@@ -101,9 +101,9 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
     let prefixname = Filename.remove_extension objtemp in
     if Config.flambda then begin
       let size, lam = Translmod.transl_package_flambda components coercion in
-      let lam = Simplif.simplify_lambda targetname lam in
+      let lam = Simplif.simplify_lambda lam in
       let flam =
-        Middle_end.middle_end ~ppf_dump
+        Flambda_middle_end.middle_end ~ppf_dump
           ~prefixname
           ~backend
           ~size
@@ -117,9 +117,9 @@ let make_package_object ~ppf_dump members targetobj targetname coercion
       let main_module_block_size, code =
         Translmod.transl_store_package
           components (Ident.create_persistent targetname) coercion in
-      let code = Simplif.simplify_lambda targetname code in
+      let code = Simplif.simplify_lambda code in
       Asmgen.compile_implementation_clambda
-        prefixname ~ppf_dump { Lambda.code; main_module_block_size;
+        prefixname ~backend ~ppf_dump { Lambda.code; main_module_block_size;
                          module_ident; required_globals = Ident.Set.empty }
     end;
     let objfiles =

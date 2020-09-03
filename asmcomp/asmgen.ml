@@ -102,6 +102,7 @@ let (++) x f = f x
 
 let compile_fundecl ~ppf_dump fd_cmm =
   Proc.init ();
+  Cmmgen.reset ();
   Reg.reset();
   fd_cmm
   ++ Profile.record ~accumulate:true "selection" Selection.fundecl
@@ -220,9 +221,11 @@ let flambda_gen_implementation ?toplevel ~backend ~ppf_dump
   end_gen_implementation ?toplevel ~ppf_dump
     (clambda, preallocated, constants)
 
-let lambda_gen_implementation ?toplevel ~ppf_dump
+let lambda_gen_implementation ?toplevel ~backend ~ppf_dump
     (lambda:Lambda.program) =
-  let clambda = Closure.intro lambda.main_module_block_size lambda.code in
+  let clambda =
+    Closure.intro ~backend ~size:lambda.main_module_block_size lambda.code
+  in
   let provenance : Clambda.usymbol_provenance =
     { original_idents = [];
       module_path =
@@ -239,8 +242,9 @@ let lambda_gen_implementation ?toplevel ~ppf_dump
     }
   in
   let clambda_and_constants =
-    clambda, [preallocated_block], []
+    clambda, [preallocated_block], Compilenv.structured_constants ()
   in
+  Compilenv.clear_structured_constants ();
   raw_clambda_dump_if ppf_dump clambda_and_constants;
   end_gen_implementation ?toplevel ~ppf_dump clambda_and_constants
 
@@ -257,10 +261,10 @@ let compile_implementation_gen ?toplevel prefixname
         gen_implementation ?toplevel ~ppf_dump program)
 
 let compile_implementation_clambda ?toplevel prefixname
-    ~ppf_dump (program:Lambda.program) =
+    ~backend ~ppf_dump (program:Lambda.program) =
   compile_implementation_gen ?toplevel prefixname
     ~required_globals:program.Lambda.required_globals
-    ~ppf_dump lambda_gen_implementation program
+    ~ppf_dump (lambda_gen_implementation ~backend) program
 
 let compile_implementation_flambda ?toplevel prefixname
     ~required_globals ~backend ~ppf_dump (program:Flambda.program) =

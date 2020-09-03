@@ -31,16 +31,16 @@ let _dummy = (Ok (Obj.magic 0), Err "")
 
 external ndl_run_toplevel: string -> string -> res
   = "caml_natdynlink_run_toplevel"
-external ndl_loadsym: string -> Obj.t = "caml_natdynlink_loadsym"
 
 let global_symbol id =
   let sym = Compilenv.symbol_for_global id in
-  try ndl_loadsym sym
-  with _ -> fatal_error ("Opttoploop.global_symbol " ^ (Ident.unique_name id))
+  match Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym with
+  | None ->
+    fatal_error ("Opttoploop.global_symbol " ^ (Ident.unique_name id))
+  | Some obj -> obj
 
 let need_symbol sym =
-  try ignore (ndl_loadsym sym); false
-  with _ -> true
+  Option.is_none (Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym)
 
 let dll_run dll entry =
   match (try Result (Obj.magic (ndl_run_toplevel dll entry))
@@ -241,7 +241,7 @@ let backend = (module Backend : Backend_intf.S)
 
 let load_lambda ppf ~module_ident ~required_globals lam size =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
-  let slam = Simplif.simplify_lambda "//toplevel//" lam in
+  let slam = Simplif.simplify_lambda lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
 
   let dll =
@@ -251,13 +251,13 @@ let load_lambda ppf ~module_ident ~required_globals lam size =
   let fn = Filename.chop_extension dll in
   if not Config.flambda then
     Asmgen.compile_implementation_clambda
-      ~toplevel:need_symbol fn ~ppf_dump:ppf
+      ~toplevel:need_symbol fn ~backend ~ppf_dump:ppf
       { Lambda.code=slam ; main_module_block_size=size;
         module_ident; required_globals }
   else
     Asmgen.compile_implementation_flambda
       ~required_globals ~backend ~toplevel:need_symbol fn ~ppf_dump:ppf
-      (Middle_end.middle_end ~ppf_dump:ppf ~prefixname:"" ~backend ~size
+      (Flambda_middle_end.middle_end ~ppf_dump:ppf ~prefixname:"" ~backend ~size
          ~module_ident ~module_initializer:slam ~filename:"toplevel");
   Asmlink.call_linker_shared [fn ^ ext_obj] dll;
   Sys.remove (fn ^ ext_obj);
@@ -437,9 +437,6 @@ let preprocess_phrase ppf phr =
         let str =
           Pparse.apply_rewriters_str ~restore:true ~tool_name:"ocaml" str
         in
-        let str =
-          Pparse.ImplementationHooks.apply_hooks
-            { Misc.sourcefile = "//toplevel//" } str in
         Ptop_def str
     | phr -> phr
   in
@@ -538,7 +535,7 @@ let refill_lexbuf buffer len =
 
 let _ =
   Sys.interactive := true;
-  Compmisc.init_path true;
+  Compmisc.init_path ();
   Clflags.dlcode := true;
   ()
 
@@ -610,22 +607,18 @@ let loop ppf =
     | x -> Location.report_exception ppf x; Btype.backtrack snap
   done
 
-(* Execute a script.  If [name] is "", read the script from stdin. *)
+external caml_sys_modify_argv : string array -> unit =
+  "caml_sys_modify_argv"
 
-let override_sys_argv args =
-  let len = Array.length args in
-  if Array.length Sys.argv < len then invalid_arg "Toploop.override_sys_argv";
-  Array.blit args 0 Sys.argv 0 len;
-  Obj.truncate (Obj.repr Sys.argv) len;
+let override_sys_argv new_argv =
+  caml_sys_modify_argv new_argv;
   Arg.current := 0
 
+(* Execute a script.  If [name] is "", read the script from stdin. *)
+
 let run_script ppf name args =
-  let len = Array.length args in
-  if Array.length Sys.argv < len then invalid_arg "Toploop.run_script";
-  Array.blit args 0 Sys.argv 0 len;
-  Obj.truncate (Obj.repr Sys.argv) len;
-  Arg.current := 0;
-  Compmisc.init_path ~dir:(Filename.dirname name) true;
+  override_sys_argv args;
+  Compmisc.init_path ~dir:(Filename.dirname name) ();
                    (* Note: would use [Filename.abspath] here, if we had it. *)
   toplevel_env := Compmisc.initial_env();
   Sys.interactive := false;

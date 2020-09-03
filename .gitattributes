@@ -27,6 +27,10 @@
 *.png binary
 *.tfm binary
 
+# configure is declared as binary so that it doesn't get included in diffs.
+# This also means it will have the correct Unix line-endings, even on Windows.
+/configure binary
+
 # 'union' merge driver just unions textual content in case of conflict
 #   http://krlmlr.github.io/using-gitattributes-to-avoid-merge-conflicts/
 /.mailmap                merge=union
@@ -41,6 +45,7 @@
 README*                  typo.missing-header
 *.adoc                   typo.missing-header
 stdlib/*.mld             typo.missing-header
+tools/mantis2gh_stripped.csv typo.missing-header
 
 *.adoc                   typo.long-line=may
 
@@ -55,7 +60,7 @@ stdlib/*.mld             typo.missing-header
 /tools/ci/appveyor/appveyor_build.cmd       typo.very-long-line typo.missing-header typo.non-ascii
 /tools/ci/appveyor/appveyor_build.sh        typo.non-ascii
 /tools/ci/inria/remove-sinh-primitive.patch typo.white-at-eol typo.missing-header typo.long-line
-/tools/release-checklist                    typo.missing-header
+/tools/release-checklist                    typo.missing-header typo.very-long-line
 
 # ignore auto-generated .depend files
 .depend                  typo.prune
@@ -68,9 +73,6 @@ asmcomp/*/emit.mlp       typo.tab=may typo.long-line=may
 
 # The build-aux directory contains bundled files so do not check it
 build-aux                typo.prune
-
-/config/gnu              typo.prune
-/config/gnu/**           typo.prune
 
 /manual                  typo.prune
 /manual/**               typo.prune
@@ -93,8 +95,6 @@ ocamldoc/odoc_index.html typo.missing-header
 otherlibs/win32unix/readlink.c    typo.long-line
 otherlibs/win32unix/stat.c        typo.long-line
 otherlibs/win32unix/symlink.c     typo.long-line
-
-runtime/i386.S      typo.long-line
 
 stdlib/hashbang     typo.white-at-eol typo.missing-lf
 
@@ -139,7 +139,6 @@ menhir-bench.bash typo.missing-header typo.utf8
 
 /tools/ci/appveyor/appveyor_build.cmd text eol=crlf
 
-configure text eol=lf
 configure.ac text eol=lf
 autogen text eol=lf
 build-aux/compile text eol=lf
@@ -147,15 +146,6 @@ build-aux/config.guess text eol=lf
 build-aux/config.sub text eol=lf
 build-aux/install text eol=lf
 build-aux/missing text eol=lf
-config/auto-aux/hasgot text eol=lf
-config/auto-aux/hasgot2 text eol=lf
-config/auto-aux/runtest text eol=lf
-config/auto-aux/searchpath text eol=lf
-config/auto-aux/solaris-ld text eol=lf
-config/auto-aux/tryassemble text eol=lf
-config/auto-aux/trycompile text eol=lf
-config/gnu/config.guess text eol=lf
-config/gnu/config.sub text eol=lf
 ocamldoc/remove_DEBUG text eol=lf
 ocamltest/getocamloptdefaultflags text eol=lf
 stdlib/Compflags text eol=lf
@@ -176,11 +166,7 @@ tools/markdown-add-pr-links.sh text eol=lf
 runtime/caml/m.h.in text eol=lf
 runtime/caml/s.h.in text eol=lf
 
-# These two are cat scripts, so may not actually require this
-config/auto-aux/sharpbang text eol=lf
-config/auto-aux/sharpbang2 text eol=lf
-
-# Similarly, these are all Perl scripts, so may not actually require this
+# These are all Perl scripts, so may not actually require this
 manual/tools/caml-tex text eol=lf
 manual/tools/format-intf text eol=lf
 manual/tools/htmlcut text eol=lf

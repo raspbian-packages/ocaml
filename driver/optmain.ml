@@ -118,8 +118,9 @@ module Options = Main_args.Make_optcomp_options (struct
     Float_arg_helper.parse spec
       "Syntax: -inline-branch-factor <n> | <round>=<n>[,...]"
        inline_branch_factor
-  let _intf = intf
   let _intf_suffix s = Config.interface_suffix := s
+  let _insn_sched = set insn_sched
+  let _intf = intf
   let _keep_docs = set keep_docs
   let _no_keep_docs = clear keep_docs
   let _keep_locs = set keep_locs
@@ -139,6 +140,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _noassert = set noassert
   let _noautolink = set no_auto_link
   let _nodynlink = clear dlcode
+  let _no_insn_sched = clear insn_sched
   let _nolabels = set classic
   let _nostdlib = set no_std_include
   let _no_unbox_free_vars_of_closures = clear unbox_free_vars_of_closures
@@ -166,9 +168,11 @@ module Options = Main_args.Make_optcomp_options (struct
   let _output_obj = set output_c_object
   let _output_complete_obj () =
     set output_c_object (); set output_complete_object ()
-  let _p = set gprofile
+  let _p () =
+    fatal "Profiling with \"gprof\" (option `-p') is only supported up \
+      to OCaml 4.08.0"
   let _pack = set make_package
-  let _plugin p = Compplugin.load p
+  let _plugin _p = plugin := true
   let _pp s = preprocessor := Some s
   let _ppx s = first_ppx := s :: !first_ppx
   let _principal = set principal
@@ -177,6 +181,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _no_rectypes = clear recursive_types
   let _remove_unused_arguments = set remove_unused_arguments
   let _runtime_variant s = runtime_variant := s
+  let _with_runtime = set with_runtime
+  let _without_runtime = clear with_runtime
   let _safe_string = clear unsafe_string
   let _short_paths = clear real_paths
   let _strict_sequence = set strict_sequence
@@ -261,8 +267,8 @@ let main () =
         (use 'ocamlopt -depend -help' for details)"];
     Clflags.parse_arguments anonymous usage;
     Compmisc.read_clflags_from_env ();
-    if !gprofile && not Config.profiling then
-      fatal "Profiling with \"gprof\" is not supported on this platform.";
+    if !Clflags.plugin then
+      fatal "-plugin is only supported up to OCaml 4.08.0";
     begin try
       Compenv.process_deferred_actions
         (ppf,
@@ -286,14 +292,14 @@ let main () =
       fatal "Please specify at most one of -pack, -a, -shared, -c, \
              -output-obj";
     if !make_archive then begin
-      Compmisc.init_path true;
+      Compmisc.init_path ();
       let target = extract_output !output_name in
       Asmlibrarian.create_archive
         (get_objfiles ~with_ocamlparam:false) target;
       Warnings.check_fatal ();
     end
     else if !make_package then begin
-      Compmisc.init_path true;
+      Compmisc.init_path ();
       let target = extract_output !output_name in
       Compmisc.with_ppf_dump ~file_prefix:target (fun ppf_dump ->
         Asmpackager.package_files ~ppf_dump (Compmisc.initial_env ())
@@ -301,7 +307,7 @@ let main () =
       Warnings.check_fatal ();
     end
     else if !shared then begin
-      Compmisc.init_path true;
+      Compmisc.init_path ();
       let target = extract_output !output_name in
       Compmisc.with_ppf_dump ~file_prefix:target (fun ppf_dump ->
         Asmlink.link_shared ~ppf_dump
@@ -324,7 +330,7 @@ let main () =
         else
           default_output !output_name
       in
-      Compmisc.init_path true;
+      Compmisc.init_path ();
       Compmisc.with_ppf_dump ~file_prefix:target (fun ppf_dump ->
         Asmlink.link ~ppf_dump (get_objfiles ~with_ocamlparam:true) target);
       Warnings.check_fatal ();

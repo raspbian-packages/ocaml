@@ -47,7 +47,7 @@ match px with
 | {pv=true::_} -> "bool"
 ;;
 [%%expect {|
-Line 1, characters 0-77:
+Lines 1-4, characters 0-24:
 1 | match px with
 2 | | {pv=[]} -> "OK"
 3 | | {pv=5::_} -> "int"
@@ -64,7 +64,7 @@ match px with
 | {pv=5::_} -> "int"
 ;;
 [%%expect {|
-Line 1, characters 0-77:
+Lines 1-4, characters 0-20:
 1 | match px with
 2 | | {pv=[]} -> "OK"
 3 | | {pv=true::_} -> "bool"
@@ -555,7 +555,7 @@ class id4 () = object
 end
 ;;
 [%%expect {|
-Line 4, characters 12-79:
+Lines 4-7, characters 12-17:
 4 | ............x =
 5 |     match r with
 6 |       None -> r <- Some x; x
@@ -845,7 +845,7 @@ val f :
   (< p : int * 'c > as 'c) -> unit = <fun>
 |}];;
 
-(* PR#1374 *)
+(* PR#3643 *)
 
 type 'a t= [`A of 'a];;
 class c = object (self)
@@ -893,7 +893,7 @@ type ('a, 'b) list_visitor = < caseCons : 'b -> 'b list -> 'a; caseNil : 'a >
 type 'b alist = < visit : 'a. ('a, 'b) list_visitor -> 'a >
 |}];;
 
-(* PR#1607 *)
+(* PR#8074 *)
 class type ct = object ('s)
   method fold : ('b -> 's -> 'b) -> 'b -> 'b
 end
@@ -903,7 +903,7 @@ class type ct = object ('a) method fold : ('b -> 'a -> 'b) -> 'b -> 'b end
 type t = { f : 'a 'b. ('b -> (#ct as 'a) -> 'b) -> 'b; }
 |}];;
 
-(* PR#1663 *)
+(* PR#8124 *)
 type t = u and u = t;;
 [%%expect {|
 Line 1, characters 0-10:
@@ -913,7 +913,7 @@ Error: The definition of t contains a cycle:
        u
 |}];;
 
-(* PR#1731 *)
+(* PR#8188 *)
 class ['t] a = object constraint 't = [> `A of 't a] end
 type t = [ `A of t a ];;
 [%%expect {|
@@ -975,7 +975,7 @@ Line 1, characters 0-24:
 Error: In the definition of v, type 'a list u should be 'a u
 |}];;
 
-(* PR#1744: Ctype.matches *)
+(* PR#8198: Ctype.matches *)
 type 'a t = 'a
 type 'a u = A of 'a t;;
 [%%expect {|
@@ -1008,7 +1008,7 @@ Error: The definition of a contains a cycle:
        [> `B of ('a, 'b) b as 'b ] as 'a
 |}];;
 
-(* PR#1917: expanding may change original in Ctype.unify2 *)
+(* PR#8359: expanding may change original in Ctype.unify2 *)
 (* Note: since 3.11, the abbreviations are not used when printing
    a type where they occur recursively inside. *)
 class type ['a, 'b] a = object
@@ -1222,7 +1222,7 @@ let f5 x =
 let f6 x =
   (x : <m:'a. [< `A of < > ] as 'a> :> <m:'a. [< `A of <p:int> ] as 'a>);;
 [%%expect {|
-Line 2, characters 2-88:
+Lines 2-3, characters 2-47:
 2 | ..(x : <m:'a. (<p:int;..> as 'a) -> int>
 3 |     :> <m:'b. (<p:int;q:int;..> as 'b) -> int>)..
 Error: Type < m : 'a. (< p : int; .. > as 'a) -> int > is not a subtype of
@@ -1733,4 +1733,23 @@ Error: The type of this class,
        class ['a] r :
          object constraint 'a = '_weak2 list ref method get : 'a end,
        contains type variables that cannot be generalized
+|}]
+
+(* #8701 *)
+type 'a t = 'a constraint 'a = 'b list;;
+type 'a s = 'a list;;
+let id x = x;;
+[%%expect{|
+type 'a t = 'a constraint 'a = 'b list
+type 'a s = 'a list
+val id : 'a -> 'a = <fun>
+|}]
+
+let x : [ `Foo of _ s | `Foo of 'a t ] = id (`Foo []);;
+[%%expect{|
+val x : [ `Foo of 'a s ] = `Foo []
+|}]
+let x : [ `Foo of 'a t | `Foo of _ s ] = id (`Foo []);;
+[%%expect{|
+val x : [ `Foo of 'a list t ] = `Foo []
 |}]

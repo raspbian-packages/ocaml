@@ -146,24 +146,13 @@ ASPP=@ASPP@
 ### Set to "true" to install ".byte" executables (ocamlc.byte, etc.)
 INSTALL_BYTECODE_PROGRAMS=@install_bytecode_programs@
 
-### Extra flags to use for assembling .S files in profiling mode
-ASPPPROFFLAGS=@asppprofflags@
-
-### true if profiling with gprof is supported, false otherwise
-PROFILING=@profiling@
-
-### Option to give to the C compiler for profiling
-CC_PROFILE=@cc_profile@
-
 ############# Configuration for the contributed libraries
 
 ### Which libraries to compile and install
 # Currently available:
 #       unix            Unix system calls
 #       str             Regular expressions and high-level string processing
-#       threads         Lightweight concurrent processes
 #       systhreads      Same as threads, requires POSIX threads
-#       graph           Portable drawing primitives for X11
 #       dynlink         Dynamic linking of bytecode
 #       bigarray        Large, multidimensional numerical arrays
 OTHERLIBRARIES=@otherlibraries@
@@ -173,18 +162,8 @@ OTHERLIBRARIES=@otherlibraries@
 PTHREAD_LINK=@pthread_link@
 PTHREAD_CAML_LINK=$(addprefix -cclib ,$(PTHREAD_LINK))
 
-### -I options for finding the X11/*.h includes
-# Needed for the "graph" package
-X11_INCDDIR=@x_includes@
-X11_INCLUDES=$(addprefix -I,$(X11_INCDDIR))
-
-### Link-time options to ocamlc or ocamlopt for linking with X11 libraries
-# Needed for the "graph" package
-X11_LINK=@x_libraries@
-
 UNIX_OR_WIN32=@unix_or_win32@
 UNIXLIB=@unixlib@
-GRAPHLIB=@graphlib@
 LIBBFD_LINK=@libbfd_link@
 LIBBFD_INCLUDE=@libbfd_include@
 INSTALL_SOURCE_ARTIFACTS=@install_source_artifacts@
@@ -251,7 +230,20 @@ MAX_TESTSUITE_DIR_RETRIES=@max_testsuite_dir_retries@
 FLAT_FLOAT_ARRAY=@flat_float_array@
 AWK=@AWK@
 
-# The following variables were defined only in the config/Makefile.* files.
+
+### Native command to build ocamlrun.exe
+
+ifeq "$(TOOLCHAIN)" "msvc"
+  MERGEMANIFESTEXE=test ! -f $(1).manifest \
+          || mt -nologo -outputresource:$(1) -manifest $(1).manifest \
+          && rm -f $(1).manifest
+  MKEXE_BOOT=$(CC) $(OC_CFLAGS) $(OUTPUTEXE)$(1) $(2) \
+    /link /subsystem:console $(OC_LDFLAGS) && ($(MERGEMANIFESTEXE))
+else
+  MKEXE_BOOT=$(CC) $(OC_CFLAGS) $(OC_LDFLAGS) $(OUTPUTEXE)$(1) $(2)
+endif # ifeq "$(TOOLCHAIN)" "msvc"
+
+# The following variables were defined only in the Windows-specific makefiles.
 # They were not defined by the configure script used on Unix systems,
 # so we also make sure to provide them only under Windows
 # User code should absolutely not rely on their presence because
@@ -273,18 +265,4 @@ ifeq "$(UNIX_OR_WIN32)" "win32"
   #   (see ocamlmklibconfig.ml in tools/Makefile)
   FLEXLINK_FLAGS=@flexlink_flags@
   FLEXLINK=$(FLEXLINK_CMD) $(FLEXLINK_FLAGS)
-
-  ### Native command to build ocamlrun.exe
-
-  ifeq "$(TOOLCHAIN)" "mingw"
-    MKEXE_BOOT=$(CC) $(OC_CFLAGS) $(OC_LDFLAGS) $(OUTPUTEXE)$(1) $(2)
-  endif # ifeq "$(TOOLCHAIN)" "mingw"
-
-  ifeq "$(TOOLCHAIN)" "msvc"
-    MERGEMANIFESTEXE=test ! -f $(1).manifest \
-	           || mt -nologo -outputresource:$(1) -manifest $(1).manifest \
-	           && rm -f $(1).manifest
-    MKEXE_BOOT=$(CC) $(OC_CFLAGS) $(OUTPUTEXE)$(1) $(2) \
-      /link /subsystem:console $(OC_LDFLAGS) && ($(MERGEMANIFESTEXE))
-  endif # ifeq "$(TOOLCHAIN)" "msvc"
 endif # ifeq "$(UNIX_OR_WIN32)" "win32"

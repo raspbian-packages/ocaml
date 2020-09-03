@@ -124,7 +124,7 @@ link:driver/pparse.ml[].
 ==== Typing -- link:typing/[]
 
 Type-checks the AST and produces a typed representation of the program
-(link:parsing/typedtree.mli[] has some helpful comments). See
+(link:typing/typedtree.mli[] has some helpful comments). See
 link:typing/HACKING.adoc[].
 
 ==== The bytecode compiler -- link:bytecomp/[]
@@ -179,13 +179,13 @@ has excellent documentation.
   VERSION::               version string
   asmcomp/::              native-code compiler and linker
   boot/::                 bootstrap compiler
+  build-aux/:             autotools support scripts
   bytecomp/::             bytecode compiler and linker
   compilerlibs/::         the OCaml compiler as a library
-  config/::               configuration files
   configure::             configure script
+  configure.ac:           autoconf input file
   debugger/::             source-level replay debugger
   driver/::               driver code for the compilers
-  emacs/::                editing mode and debugger interface for GNU Emacs
   flexdll/::              git submodule -- see link:README.win32.adoc[]
   lex/::                  lexer generator
   man/::                  man pages
@@ -242,6 +242,19 @@ link:boot/[] directory. These bytecode images are used once the
 bytecode runtime (which is written in C) has been built to compile the
 standard library and then to build a fresh compiler. Details can be
 found in link:BOOTSTRAP.adoc[].
+
+=== Speeding up builds
+
+Once you've built a natively-compiled `ocamlc.opt`, you can use it to
+speed up future builds by copying it to `boot`:
+
+----
+cp ocamlc.opt boot/
+----
+
+If `boot/ocamlc` changes (e.g. because you ran `make bootstrap`), then
+the build will revert to the slower bytecode-compiled `ocamlc` until
+you do the above step again.
 
 === Continuous integration
 

@@ -43,10 +43,6 @@
 #define CFI_OFFSET(r,n)
 #endif
 
-/* Support for profiling with gprof */
-
-#define PROFILE
-
 /* Macros to load and store global variables.  Destroy TMP2 */
 
 #if defined(__PIC__)
@@ -96,7 +92,6 @@ caml_system__code_begin:
         .globl  caml_call_gc
 caml_call_gc:
         CFI_STARTPROC
-        PROFILE
     /* Record return address */
         STOREGLOBAL(x30, caml_last_return_address)
     /* Record lowest stack address */
@@ -186,7 +181,6 @@ caml_call_gc:
         .globl  caml_alloc1
 caml_alloc1:
         CFI_STARTPROC
-        PROFILE
 1:      sub     ALLOC_PTR, ALLOC_PTR, #16
         cmp     ALLOC_PTR, ALLOC_LIMIT
         b.lo    2f
@@ -219,7 +213,6 @@ caml_alloc1:
         .globl  caml_alloc2
 caml_alloc2:
         CFI_STARTPROC
-        PROFILE
 1:      sub     ALLOC_PTR, ALLOC_PTR, #24
         cmp     ALLOC_PTR, ALLOC_LIMIT
         b.lo    2f
@@ -248,7 +241,6 @@ caml_alloc2:
         .globl  caml_alloc3
 caml_alloc3:
         CFI_STARTPROC
-        PROFILE
 1:      sub     ALLOC_PTR, ALLOC_PTR, #32
         cmp     ALLOC_PTR, ALLOC_LIMIT
         b.lo    2f
@@ -277,7 +269,6 @@ caml_alloc3:
         .globl  caml_allocN
 caml_allocN:
         CFI_STARTPROC
-        PROFILE
 1:      sub     ALLOC_PTR, ALLOC_PTR, ARG
         cmp     ALLOC_PTR, ALLOC_LIMIT
         b.lo    2f
@@ -309,7 +300,6 @@ caml_allocN:
         .globl  caml_c_call
 caml_c_call:
         CFI_STARTPROC
-        PROFILE
     /* Preserve return address in callee-save register x19 */
         mov     x19, x30
         CFI_REGISTER(30, 19)
@@ -337,7 +327,6 @@ caml_c_call:
         .globl  caml_start_program
 caml_start_program:
         CFI_STARTPROC
-        PROFILE
         ADDRGLOBAL(ARG, caml_program)
 
 /* Code shared with caml_callback* */
@@ -434,7 +423,6 @@ caml_start_program:
         .globl  caml_raise_exn
 caml_raise_exn:
         CFI_STARTPROC
-        PROFILE
     /* Test if backtrace is active */
         LOADGLOBAL32(TMP, caml_backtrace_active)
         cbnz     TMP, 2f
@@ -465,7 +453,6 @@ caml_raise_exn:
         .globl  caml_raise_exception
 caml_raise_exception:
         CFI_STARTPROC
-        PROFILE
     /* Reload trap ptr, alloc ptr and alloc limit */
         LOADGLOBAL(TRAP_PTR, caml_exception_pointer)
         LOADGLOBAL(ALLOC_PTR, caml_young_ptr)
@@ -500,7 +487,6 @@ caml_raise_exception:
         .globl  caml_callback_exn
 caml_callback_exn:
         CFI_STARTPROC
-        PROFILE
     /* Initial shuffling of arguments (x0 = closure, x1 = first arg) */
         mov     TMP, x0
         mov     x0, x1          /* x0 = first arg */
@@ -515,7 +501,6 @@ caml_callback_exn:
         .globl  caml_callback2_exn
 caml_callback2_exn:
         CFI_STARTPROC
-        PROFILE
     /* Initial shuffling of arguments (x0 = closure, x1 = arg1, x2 = arg2) */
         mov     TMP, x0
         mov     x0, x1          /* x0 = first arg */
@@ -531,7 +516,6 @@ caml_callback2_exn:
         .globl  caml_callback3_exn
 caml_callback3_exn:
         CFI_STARTPROC
-        PROFILE
     /* Initial shuffling of arguments */
     /* (x0 = closure, x1 = arg1, x2 = arg2, x3 = arg3) */
         mov     TMP, x0
@@ -549,7 +533,6 @@ caml_callback3_exn:
         .globl  caml_ml_array_bound_error
 caml_ml_array_bound_error:
         CFI_STARTPROC
-        PROFILE
     /* Load address of [caml_array_bound_error] in ARG */
         ADDRGLOBAL(ARG, caml_array_bound_error)
     /* Call that function */

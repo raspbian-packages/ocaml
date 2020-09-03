@@ -168,7 +168,7 @@ bytecode_modules := $(o_files) $(cmo_files)
 native_modules := $(o_files) $(cmx_files)
 
 directories := $(addprefix $(ROOTDIR)/,utils bytecomp parsing stdlib \
-                                       compilerlibs)
+                                       compilerlibs file_formats)
 
 include_directories := $(addprefix -I , $(directories))
 
@@ -191,6 +191,8 @@ ocamlyacc := $(ROOTDIR)/yacc/ocamlyacc
 ocamlcdefaultflags :=
 
 ocamloptdefaultflags := $(shell ./getocamloptdefaultflags $(TARGET))
+
+.SECONDARY: $(lexers:.mll=.ml) $(parsers:.mly=.mli) $(parsers:.mly=.ml)
 
 .PHONY: all allopt opt.opt # allopt and opt.opt are synonyms
 all: ocamltest$(EXE)

@@ -49,6 +49,14 @@
         .align FUNCTION_ALIGN; \
         G(name):
 
+#if defined(SYS_linux_elf) || defined(SYS_bsd_elf) || defined(SYS_gnu)
+#define ENDFUNCTION(name) \
+        .type name,@function; \
+        .size name, . - name
+#else
+#define ENDFUNCTION(name)
+#endif
+
 #ifdef ASM_CFI_SUPPORTED
 #define CFI_STARTPROC .cfi_startproc
 #define CFI_ENDPROC .cfi_endproc
@@ -59,62 +67,8 @@
 #define CFI_ADJUST(n)
 #endif
 
-#if defined(PROFILING)
-#if defined(SYS_linux_elf) || defined(SYS_gnu)
-#define PROFILE_CAML \
-        pushl %ebp; CFI_ADJUST(4); \
-        movl %esp, %ebp; \
-        pushl %eax; CFI_ADJUST(4); \
-        pushl %ecx; CFI_ADJUST(4); \
-        pushl %edx; CFI_ADJUST(4); \
-        call mcount; \
-        popl %edx; CFI_ADJUST(-4); \
-        popl %ecx; CFI_ADJUST(-4); \
-        popl %eax; CFI_ADJUST(-4); \
-        popl %ebp; CFI_ADJUST(-4)
-#define PROFILE_C \
-        pushl %ebp; CFI_ADJUST(4); \
-        movl %esp, %ebp; \
-        call mcount; \
-        popl %ebp; CFI_ADJUST(-4)
-#elif defined(SYS_bsd_elf)
-#define PROFILE_CAML \
-        pushl %ebp; CFI_ADJUST(4); \
-        movl %esp, %ebp; \
-        pushl %eax; CFI_ADJUST(4); \
-        pushl %ecx; CFI_ADJUST(4); \
-        pushl %edx; CFI_ADJUST(4); \
-        call .mcount; \
-        popl %edx; CFI_ADJUST(-4); \
-        popl %ecx; CFI_ADJUST(-4); \
-        popl %eax; CFI_ADJUST(-4); \
-        popl %ebp; CFI_ADJUST(-4)
-#define PROFILE_C \
-        pushl %ebp; CFI_ADJUST(4); \
-        movl %esp, %ebp; \
-        call .mcount; \
-        popl %ebp; CFI_ADJUST(-4)
-#elif defined(SYS_macosx)
-#define PROFILE_CAML \
-        pushl %ebp; CFI_ADJUST(4); \
-        movl %esp, %ebp; \
-        pushl %eax; CFI_ADJUST(4); \
-        pushl %ecx; CFI_ADJUST(4); \
-        pushl %edx; CFI_ADJUST(4); \
-        call Lmcount$stub;  \
-        popl %edx; CFI_ADJUST(-4); \
-        popl %ecx; CFI_ADJUST(-4); \
-        popl %eax; CFI_ADJUST(-4); \
-        popl %ebp; CFI_ADJUST(-4)
-#define PROFILE_C \
-        pushl %ebp; CFI_ADJUST(4); \
-        movl %esp, %ebp; \
-        call Lmcount$stub; \
-        popl %ebp; CFI_ADJUST(-4)
-#endif
-#else
-#define PROFILE_CAML
-#define PROFILE_C
+#if !defined(SYS_mingw) && !defined(SYS_cygwin)
+#define STACK_PROBE_SIZE 16384
 #endif
 
 /* PR#6038: GCC and Clang seem to require 16-byte alignment nowadays,
@@ -130,7 +84,6 @@ G(caml_system__code_begin):
 
 FUNCTION(caml_call_gc)
         CFI_STARTPROC
-        PROFILE_CAML
     /* Record lowest stack address and return address */
         movl    0(%esp), %eax
         movl    %eax, G(caml_last_return_address)
@@ -140,9 +93,9 @@ LBL(105):
 #if !defined(SYS_mingw) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
        if insufficient space remains */
-        subl    $16384, %esp
+        subl    $(STACK_PROBE_SIZE), %esp; CFI_ADJUST(STACK_PROBE_SIZE);
         movl    %eax, 0(%esp)
-        addl    $16384, %esp
+        addl    $(STACK_PROBE_SIZE), %esp; CFI_ADJUST(-STACK_PROBE_SIZE);
 #endif
     /* Build array of registers, save it into caml_gc_regs */
         pushl   %ebp; CFI_ADJUST(4)
@@ -167,10 +120,10 @@ LBL(105):
     /* Return to caller */
         ret
         CFI_ENDPROC
+        ENDFUNCTION(caml_call_gc)
 
 FUNCTION(caml_alloc1)
         CFI_STARTPROC
-        PROFILE_CAML
         movl    G(caml_young_ptr), %eax
         subl    $8, %eax
         movl    %eax, G(caml_young_ptr)
@@ -187,10 +140,10 @@ LBL(100):
         UNDO_ALIGN_STACK(12)
         jmp     G(caml_alloc1)
         CFI_ENDPROC
+        ENDFUNCTION(caml_alloc1)
 
 FUNCTION(caml_alloc2)
         CFI_STARTPROC
-        PROFILE_CAML
         movl    G(caml_young_ptr), %eax
         subl    $12, %eax
         movl    %eax, G(caml_young_ptr)
@@ -207,10 +160,10 @@ LBL(101):
         UNDO_ALIGN_STACK(12)
         jmp     G(caml_alloc2)
         CFI_ENDPROC
+        ENDFUNCTION(caml_alloc2)
 
 FUNCTION(caml_alloc3)
         CFI_STARTPROC
-        PROFILE_CAML
         movl    G(caml_young_ptr), %eax
         subl    $16, %eax
         movl    %eax, G(caml_young_ptr)
@@ -227,10 +180,10 @@ LBL(102):
         UNDO_ALIGN_STACK(12)
         jmp     G(caml_alloc3)
         CFI_ENDPROC
+        ENDFUNCTION(caml_alloc3)
 
 FUNCTION(caml_allocN)
         CFI_STARTPROC
-        PROFILE_CAML
         subl    G(caml_young_ptr), %eax /* eax = size - caml_young_ptr */
         negl    %eax                    /* eax = caml_young_ptr - size */
         cmpl    G(caml_young_limit), %eax
@@ -252,12 +205,12 @@ LBL(103):
         popl    %eax; CFI_ADJUST(-4)    /* recover desired size */
         jmp     G(caml_allocN)
         CFI_ENDPROC
+        ENDFUNCTION(caml_allocN)
 
 /* Call a C function from OCaml */
 
 FUNCTION(caml_c_call)
         CFI_STARTPROC
-        PROFILE_CAML
     /* Record lowest stack address and return address */
         movl    (%esp), %edx
         movl    %edx, G(caml_last_return_address)
@@ -266,19 +219,19 @@ FUNCTION(caml_c_call)
 #if !defined(SYS_mingw) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
        if insufficient space remains */
-        subl    $16384, %esp
+        subl    $(STACK_PROBE_SIZE), %esp; CFI_ADJUST(STACK_PROBE_SIZE);
         movl    %eax, 0(%esp)
-        addl    $16384, %esp
+        addl    $(STACK_PROBE_SIZE), %esp; CFI_ADJUST(-STACK_PROBE_SIZE);
 #endif
     /* Call the function (address in %eax) */
         jmp     *%eax
         CFI_ENDPROC
+        ENDFUNCTION(caml_c_call)
 
 /* Start the OCaml program */
 
 FUNCTION(caml_start_program)
         CFI_STARTPROC
-        PROFILE_C
     /* Save callee-save registers */
         pushl   %ebx; CFI_ADJUST(4)
         pushl   %esi; CFI_ADJUST(4)
@@ -322,6 +275,7 @@ LBL(108):
         orl     $2, %eax
         jmp     LBL(109)
         CFI_ENDPROC
+        ENDFUNCTION(caml_start_program)
 
 /* Raise an exception from OCaml */
 
@@ -350,12 +304,12 @@ LBL(110):
         UNDO_ALIGN_STACK(8)
         ret
         CFI_ENDPROC
+        ENDFUNCTION(caml_raise_exn)
 
 /* Raise an exception from C */
 
 FUNCTION(caml_raise_exception)
         CFI_STARTPROC
-        PROFILE_C
         testl   $1, G(caml_backtrace_active)
         jne     LBL(112)
         movl    4(%esp), %eax
@@ -377,12 +331,12 @@ LBL(112):
         UNDO_ALIGN_STACK(8)
         ret
         CFI_ENDPROC
+        ENDFUNCTION(caml_raise_exception)
 
 /* Callback from C to OCaml */
 
 FUNCTION(caml_callback_exn)
         CFI_STARTPROC
-        PROFILE_C
     /* Save callee-save registers */
         pushl   %ebx; CFI_ADJUST(4)
         pushl   %esi; CFI_ADJUST(4)
@@ -394,10 +348,10 @@ FUNCTION(caml_callback_exn)
         movl    0(%ebx), %esi    /* code pointer */
         jmp     LBL(106)
         CFI_ENDPROC
+        ENDFUNCTION(caml_callback_exn)
 
 FUNCTION(caml_callback2_exn)
         CFI_STARTPROC
-        PROFILE_C
     /* Save callee-save registers */
         pushl   %ebx; CFI_ADJUST(4)
         pushl   %esi; CFI_ADJUST(4)
@@ -410,10 +364,10 @@ FUNCTION(caml_callback2_exn)
         movl    $ G(caml_apply2), %esi   /* code pointer */
         jmp     LBL(106)
         CFI_ENDPROC
+        ENDFUNCTION(caml_callback2_exn)
 
 FUNCTION(caml_callback3_exn)
         CFI_STARTPROC
-        PROFILE_C
     /* Save callee-save registers */
         pushl   %ebx; CFI_ADJUST(4)
         pushl   %esi; CFI_ADJUST(4)
@@ -427,6 +381,7 @@ FUNCTION(caml_callback3_exn)
         movl    $ G(caml_apply3), %esi   /* code pointer */
         jmp     LBL(106)
         CFI_ENDPROC
+        ENDFUNCTION(caml_callback3_exn)
 
 FUNCTION(caml_ml_array_bound_error)
         CFI_STARTPROC
@@ -449,6 +404,7 @@ FUNCTION(caml_ml_array_bound_error)
     /* Branch to [caml_array_bound_error] (never returns) */
         call    G(caml_array_bound_error)
         CFI_ENDPROC
+        ENDFUNCTION(caml_ml_array_bound_error)
 
         .globl  G(caml_system__code_end)
 G(caml_system__code_end):
@@ -472,14 +428,6 @@ G(caml_extra_params):
         .space  64
 #else
         .zero   64
-#endif
-
-#if defined(PROFILING) && defined(SYS_macosx)
-        .section __IMPORT,__jump_table,symbol_stubs,self_modifying_code+pure_instructions,5
-Lmcount$stub:
-        .indirect_symbol mcount
-        hlt ; hlt ; hlt ; hlt ; hlt
-        .subsections_via_symbols
 #endif
 
 #if defined(SYS_linux_elf)
