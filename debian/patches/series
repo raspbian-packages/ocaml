@@ -4,3 +4,4 @@
 0004-Check-for-definition-of-AT_SECURE-before-using-it.patch
 0005-read_main_debug_info-do-not-die-in-custom-executable.patch
 0006-Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
+0007-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
