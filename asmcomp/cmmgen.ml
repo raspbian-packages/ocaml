@@ -247,6 +247,11 @@ let box_int dbg bi arg =
 
 (* Boxed numbers *)
 
+let typ_of_boxed_number = function
+  | Boxed_float _ -> Cmm.typ_float
+  | Boxed_integer (Pint64, _) when size_int = 4 -> [|Int;Int|]
+  | Boxed_integer _ -> Cmm.typ_int
+
 let equal_unboxed_integer ui1 ui2 =
   match ui1, ui2 with
   | Pnativeint, Pnativeint -> true
@@ -276,7 +281,6 @@ let unbox_number dbg bn arg =
     low_32 dbg (unbox_int dbg Pint32 arg)
   | Boxed_integer (bi, _) ->
     unbox_int dbg bi arg
-
 
 (* Auxiliary functions for optimizing "let" of boxed numbers (floats and
    boxed integers *)
@@ -543,6 +547,7 @@ let rec transl env e =
          | Psetfield (_, _, _) | Psetfield_computed (_, _)
          | Pfloatfield _ | Psetfloatfield (_, _) | Pduprecord (_, _)
          | Praise _ | Pdivint _ | Pmodint _ | Pintcomp _ | Poffsetint _
+         | Pcompare_ints | Pcompare_floats | Pcompare_bints _
          | Poffsetref _ | Pfloatcomp _ | Parraylength _
          | Parrayrefu _ | Parraysetu _ | Parrayrefs _ | Parraysets _
          | Pbintofint _ | Pintofbint _ | Pcvtbint (_, _) | Pnegbint _
@@ -557,7 +562,6 @@ let rec transl env e =
 
   (* Control structures *)
   | Uswitch(arg, s, dbg) ->
-      let loc = Debuginfo.to_location dbg in
       (* As in the bytecode interpreter, only matching against constants
          can be checked *)
       if Array.length s.us_index_blocks = 0 then
@@ -568,17 +572,17 @@ let rec transl env e =
           dbg
       else if Array.length s.us_index_consts = 0 then
         bind "switch" (transl env arg) (fun arg ->
-          transl_switch loc env (get_tag arg dbg)
+          transl_switch dbg env (get_tag arg dbg)
             s.us_index_blocks s.us_actions_blocks)
       else
         bind "switch" (transl env arg) (fun arg ->
           Cifthenelse(
           Cop(Cand, [arg; Cconst_int (1, dbg)], dbg),
           dbg,
-          transl_switch loc env
+          transl_switch dbg env
             (untag_int arg dbg) s.us_index_consts s.us_actions_consts,
           dbg,
-          transl_switch loc env
+          transl_switch dbg env
             (get_tag arg dbg) s.us_index_blocks s.us_actions_blocks,
           dbg))
   | Ustringswitch(arg,sw,d) ->
@@ -627,8 +631,8 @@ let rec transl env e =
       let raise_num = next_raise_count () in
       let id_prev = VP.create (V.create_local "*id_prev*") in
       return_unit dbg
-        (Clet
-           (id, transl env low,
+        (Clet_mut
+           (id, typ_int, transl env low,
             bind_nonvar "bound" (transl env high) (fun high ->
               ccatch
                 (raise_num, [],
@@ -687,11 +691,6 @@ and transl_catch env nfail ids body handler dbg =
   in
   let env_body = add_notify_catch nfail report env in
   let body = transl env_body body in
-  let typ_of_bn = function
-    | Boxed_float _ -> Cmm.typ_float
-    | Boxed_integer (Pint64, _) when size_int = 4 -> [|Int;Int|]
-    | Boxed_integer _ -> Cmm.typ_int
-  in
   let new_env, rewrite, ids =
     List.fold_right
       (fun (id, _kind, u) (env, rewrite, ids) ->
@@ -704,7 +703,7 @@ and transl_catch env nfail ids body handler dbg =
              let unboxed_id = V.create_local (VP.name id) in
              add_unboxed_id (VP.var id) unboxed_id bn env,
              (unbox_number Debuginfo.none bn) :: rewrite,
-             (VP.create unboxed_id, typ_of_bn bn) :: ids
+             (VP.create unboxed_id, typ_of_boxed_number bn) :: ids
       )
       ids (env, [], [])
   in
@@ -841,6 +840,7 @@ and transl_prim_1 env p arg dbg =
     | Pmakeblock (_, _, _) | Psetfield (_, _, _) | Psetfield_computed (_, _)
     | Psetfloatfield (_, _) | Pduprecord (_, _) | Pccall _ | Pdivint _
     | Pmodint _ | Pintcomp _ | Pfloatcomp _ | Pmakearray (_, _)
+    | Pcompare_ints | Pcompare_floats | Pcompare_bints _
     | Pduparray (_, _) | Parrayrefu _ | Parraysetu _
     | Parrayrefs _ | Parraysets _ | Paddbint _ | Psubbint _ | Pmulbint _
     | Pdivbint _ | Pmodbint _ | Pandbint _ | Porbint _ | Pxorbint _
@@ -907,6 +907,17 @@ and transl_prim_2 env p arg1 arg2 dbg =
       asr_int_caml (transl env arg1) (transl env arg2) dbg
   | Pintcomp cmp ->
       int_comp_caml cmp (transl env arg1) (transl env arg2) dbg
+  | Pcompare_ints ->
+      (* Compare directly on tagged ints *)
+      mk_compare_ints dbg (transl env arg1) (transl env arg2)
+  | Pcompare_bints bi ->
+      let a1 = transl_unbox_int dbg env bi arg1 in
+      let a2 = transl_unbox_int dbg env bi arg2 in
+      mk_compare_ints dbg a1 a2
+  | Pcompare_floats ->
+      let a1 = transl_unbox_float dbg env arg1 in
+      let a2 = transl_unbox_float dbg env arg2 in
+      mk_compare_floats dbg a1 a2
   | Pisout ->
       transl_isout (transl env arg1) (transl env arg2) dbg
   (* Float operations *)
@@ -1063,6 +1074,7 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
   | Pbswap16 | Pint_as_pointer | Popaque | Pread_symbol _ | Pmakeblock (_, _, _)
   | Pfield _ | Psetfield (_, _, _) | Pfloatfield _ | Psetfloatfield (_, _)
   | Pduprecord (_, _) | Pccall _ | Praise _ | Pdivint _ | Pmodint _ | Pintcomp _
+  | Pcompare_ints | Pcompare_floats | Pcompare_bints _
   | Poffsetint _ | Poffsetref _ | Pfloatcomp _ | Pmakearray (_, _)
   | Pduparray (_, _) | Parraylength _ | Parrayrefu _ | Parrayrefs _
   | Pbintofint _ | Pintofbint _ | Pcvtbint (_, _) | Pnegbint _ | Paddbint _
@@ -1125,11 +1137,21 @@ and transl_let env str kind id exp body =
   | No_unboxing | Boxed (_, true) | No_result ->
       (* N.B. [body] must still be traversed even if [exp] will never return:
          there may be constant closures inside that need lifting out. *)
-      Clet(id, cexp, transl env body)
-  | Boxed (boxed_number, _false) ->
+      begin match str, kind with
+      | Immutable, _ -> Clet(id, cexp, transl env body)
+      | Mutable, Pintval -> Clet_mut(id, typ_int, cexp, transl env body)
+      | Mutable, _ -> Clet_mut(id, typ_val, cexp, transl env body)
+      end
+  | Boxed (boxed_number, false) ->
       let unboxed_id = V.create_local (VP.name id) in
-      Clet(VP.create unboxed_id, unbox_number dbg boxed_number cexp,
-           transl (add_unboxed_id (VP.var id) unboxed_id boxed_number env) body)
+      let v = VP.create unboxed_id in
+      let cexp = unbox_number dbg boxed_number cexp in
+      let body =
+        transl (add_unboxed_id (VP.var id) unboxed_id boxed_number env) body in
+      begin match str, boxed_number with
+      | Immutable, _ -> Clet (v, cexp, body)
+      | Mutable, bn -> Clet_mut (v, typ_of_boxed_number bn, cexp, body)
+      end
 
 and make_catch ncatch body handler dbg = match body with
 | Cexit (nexit,[]) when nexit=ncatch -> handler
@@ -1270,12 +1292,12 @@ and transl_sequor env (approx : then_else)
     then_
 
 (* This assumes that [arg] can be safely discarded if it is not used. *)
-and transl_switch loc env arg index cases = match Array.length cases with
+and transl_switch dbg env arg index cases = match Array.length cases with
 | 0 -> fatal_error "Cmmgen.transl_switch"
 | 1 -> transl env cases.(0)
 | _ ->
     let cases = Array.map (transl env) cases in
-    transl_switch_clambda loc arg index cases
+    transl_switch_clambda dbg arg index cases
 
 and transl_letrec env bindings cont =
   let dbg = Debuginfo.none in
@@ -1298,7 +1320,7 @@ and transl_letrec env bindings cont =
         Clet(id, op_alloc "caml_alloc_dummy_float" [int_const dbg sz],
           init_blocks rem)
     | (id, _exp, RHS_nonrec) :: rem ->
-        Clet (id, Cconst_int (0, dbg), init_blocks rem)
+        Clet (id, Cconst_int (1, dbg), init_blocks rem)
   and fill_nonrec = function
     | [] -> fill_blocks bsz
     | (_id, _exp,

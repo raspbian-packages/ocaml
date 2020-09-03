@@ -52,24 +52,24 @@ val cons : 'a -> 'a list -> 'a list
 *)
 
 val hd : 'a list -> 'a
-(** Return the first element of the given list. Raise
-   [Failure "hd"] if the list is empty. *)
+(** Return the first element of the given list.
+    @raise Failure if the list is empty. *)
 
 val tl : 'a list -> 'a list
-(** Return the given list without its first element. Raise
-    [Failure "tl"] if the list is empty. *)
+(** Return the given list without its first element.
+    @raise Failure if the list is empty. *)
 
 val nth: 'a list -> int -> 'a
 (** Return the [n]-th element of the given list.
    The first element (head of the list) is at position 0.
-   Raise [Failure "nth"] if the list is too short.
-   Raise [Invalid_argument "List.nth"] if [n] is negative. *)
+   @raise Failure if the list is too short.
+   @raise Invalid_argument if [n] is negative. *)
 
 val nth_opt: 'a list -> int -> 'a option
 (** Return the [n]-th element of the given list.
     The first element (head of the list) is at position 0.
     Return [None] if the list is too short.
-    Raise [Invalid_argument "List.nth"] if [n] is negative.
+    @raise Invalid_argument if [n] is negative.
     @since 4.05
 *)
 
@@ -148,6 +148,12 @@ val concat_map : ('a -> 'b list) -> 'a list -> 'b list
     @since 4.10.0
 *)
 
+val fold_left_map : ('a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
+(** [fold_left_map] is  a combination of [fold_left] and [map] that threads an
+    accumulator through calls to [f]
+    @since 4.11.0
+*)
+
 val fold_left : ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
 (** [List.fold_left f a [b1; ...; bn]] is
    [f (... (f (f a b1) b2) ...) bn]. *)
@@ -163,13 +169,13 @@ val fold_right : ('a -> 'b -> 'b) -> 'a list -> 'b -> 'b
 val iter2 : ('a -> 'b -> unit) -> 'a list -> 'b list -> unit
 (** [List.iter2 f [a1; ...; an] [b1; ...; bn]] calls in turn
    [f a1 b1; ...; f an bn].
-   Raise [Invalid_argument] if the two lists are determined
+   @raise Invalid_argument if the two lists are determined
    to have different lengths. *)
 
 val map2 : ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
 (** [List.map2 f [a1; ...; an] [b1; ...; bn]] is
    [[f a1 b1; ...; f an bn]].
-   Raise [Invalid_argument] if the two lists are determined
+   @raise Invalid_argument if the two lists are determined
    to have different lengths.  Not tail-recursive. *)
 
 val rev_map2 : ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
@@ -180,13 +186,13 @@ val rev_map2 : ('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
 val fold_left2 : ('a -> 'b -> 'c -> 'a) -> 'a -> 'b list -> 'c list -> 'a
 (** [List.fold_left2 f a [b1; ...; bn] [c1; ...; cn]] is
    [f (... (f (f a b1 c1) b2 c2) ...) bn cn].
-   Raise [Invalid_argument] if the two lists are determined
+   @raise Invalid_argument if the two lists are determined
    to have different lengths. *)
 
 val fold_right2 : ('a -> 'b -> 'c -> 'c) -> 'a list -> 'b list -> 'c -> 'c
 (** [List.fold_right2 f [a1; ...; an] [b1; ...; bn] c] is
    [f a1 b1 (f a2 b2 (... (f an bn c) ...))].
-   Raise [Invalid_argument] if the two lists are determined
+   @raise Invalid_argument if the two lists are determined
    to have different lengths.  Not tail-recursive. *)
 
 
@@ -196,21 +202,23 @@ val fold_right2 : ('a -> 'b -> 'c -> 'c) -> 'a list -> 'b list -> 'c -> 'c
 val for_all : ('a -> bool) -> 'a list -> bool
 (** [for_all p [a1; ...; an]] checks if all elements of the list
    satisfy the predicate [p]. That is, it returns
-   [(p a1) && (p a2) && ... && (p an)]. *)
+   [(p a1) && (p a2) && ... && (p an)] for a non-empty list and
+   [true] if the list is empty. *)
 
 val exists : ('a -> bool) -> 'a list -> bool
 (** [exists p [a1; ...; an]] checks if at least one element of
    the list satisfies the predicate [p]. That is, it returns
-   [(p a1) || (p a2) || ... || (p an)]. *)
+   [(p a1) || (p a2) || ... || (p an)] for a non-empty list and
+   [false] if the list is empty. *)
 
 val for_all2 : ('a -> 'b -> bool) -> 'a list -> 'b list -> bool
 (** Same as {!List.for_all}, but for a two-argument predicate.
-   Raise [Invalid_argument] if the two lists are determined
+   @raise Invalid_argument if the two lists are determined
    to have different lengths. *)
 
 val exists2 : ('a -> 'b -> bool) -> 'a list -> 'b list -> bool
 (** Same as {!List.exists}, but for a two-argument predicate.
-   Raise [Invalid_argument] if the two lists are determined
+   @raise Invalid_argument if the two lists are determined
    to have different lengths. *)
 
 val mem : 'a -> 'a list -> bool
@@ -228,7 +236,7 @@ val memq : 'a -> 'a list -> bool
 val find : ('a -> bool) -> 'a list -> 'a
 (** [find p l] returns the first element of the list [l]
    that satisfies the predicate [p].
-   Raise [Not_found] if there is no value that satisfies [p] in the
+   @raise Not_found if there is no value that satisfies [p] in the
    list [l]. *)
 
 val find_opt: ('a -> bool) -> 'a list -> 'a option
@@ -252,6 +260,13 @@ val filter : ('a -> bool) -> 'a list -> 'a list
 val find_all : ('a -> bool) -> 'a list -> 'a list
 (** [find_all] is another name for {!List.filter}. *)
 
+val filteri : (int -> 'a -> bool) -> 'a list -> 'a list
+(** Same as {!List.filter}, but the predicate is applied to the index of
+   the element as first argument (counting from 0), and the element
+   itself as second argument.
+   @since 4.11.0
+*)
+
 val partition : ('a -> bool) -> 'a list -> 'a list * 'a list
 (** [partition p l] returns a pair of lists [(l1, l2)], where
    [l1] is the list of all the elements of [l] that
@@ -268,7 +283,7 @@ val assoc : 'a -> ('a * 'b) list -> 'b
    pairs [l]. That is,
    [assoc a [ ...; (a,b); ...] = b]
    if [(a,b)] is the leftmost binding of [a] in list [l].
-   Raise [Not_found] if there is no value associated with [a] in the
+   @raise Not_found if there is no value associated with [a] in the
    list [l]. *)
 
 val assoc_opt: 'a -> ('a * 'b) list -> 'b option
@@ -320,7 +335,7 @@ val combine : 'a list -> 'b list -> ('a * 'b) list
 (** Transform a pair of lists into a list of pairs:
    [combine [a1; ...; an] [b1; ...; bn]] is
    [[(a1,b1); ...; (an,bn)]].
-   Raise [Invalid_argument] if the two lists
+   @raise Invalid_argument if the two lists
    have different lengths.  Not tail-recursive. *)
 
 

@@ -27,6 +27,7 @@
 #include "caml/weak.h"
 #include "caml/minor_gc.h"
 #include "caml/signals.h"
+#include "caml/eventlog.h"
 
 value caml_ephe_list_head = 0;
 
@@ -61,7 +62,7 @@ CAMLexport mlsize_t caml_ephemeron_num_keys(value eph)
 /** The minor heap is considered alive. */
 #if defined (NATIVE_CODE) && defined (NO_NAKED_POINTERS)
 /** Outside minor and major heap, x must be black. */
-static inline int Is_Dead_during_clean(value x)
+Caml_inline int Is_Dead_during_clean(value x)
 {
   CAMLassert (x != caml_ephe_none);
   CAMLassert (caml_gc_phase == Phase_clean);
@@ -70,20 +71,20 @@ static inline int Is_Dead_during_clean(value x)
 /** The minor heap doesn't have to be marked, outside they should
     already be black
 */
-static inline int Must_be_Marked_during_mark(value x)
+Caml_inline int Must_be_Marked_during_mark(value x)
 {
   CAMLassert (x != caml_ephe_none);
   CAMLassert (caml_gc_phase == Phase_mark);
   return Is_block (x) && !Is_young (x);
 }
 #else
-static inline int Is_Dead_during_clean(value x)
+Caml_inline int Is_Dead_during_clean(value x)
 {
   CAMLassert (x != caml_ephe_none);
   CAMLassert (caml_gc_phase == Phase_clean);
   return Is_block (x) && Is_in_heap (x) && Is_white_val(x);
 }
-static inline int Must_be_Marked_during_mark(value x)
+Caml_inline int Must_be_Marked_during_mark(value x)
 {
   CAMLassert (x != caml_ephe_none);
   CAMLassert (caml_gc_phase == Phase_mark);
@@ -170,7 +171,7 @@ static void do_check_key_clean(value ar, mlsize_t offset)
 
 /* If we are in Phase_clean we need to do as if the key is empty when
    it will be cleaned during this phase */
-static inline int is_ephe_key_none(value ar, mlsize_t offset)
+Caml_inline int is_ephe_key_none(value ar, mlsize_t offset)
 {
   value elt = Field (ar, offset);
   if (elt == caml_ephe_none){
@@ -355,7 +356,7 @@ CAMLprim value caml_ephe_get_data (value ar)
 }
 
 
-static inline void copy_value(value src, value dst)
+Caml_inline void copy_value(value src, value dst)
 {
   if (Tag_val (src) < No_scan_tag){
     mlsize_t i;
@@ -408,7 +409,7 @@ CAMLexport int caml_ephemeron_get_key_copy(value ar, mlsize_t offset,
     CAMLassert(loop < 10);
     if(8 == loop){ /** One minor gc must be enough */
       elt = Val_unit;
-      CAML_INSTR_INT ("force_minor/weak@", 1);
+      CAML_EV_COUNTER (EV_C_FORCE_MINOR_WEAK, 1);
       caml_minor_collection ();
     } else {
       /* cases where loop is between 0 to 7 and where loop is equal to 9 */
@@ -463,7 +464,7 @@ CAMLexport int caml_ephemeron_get_data_copy (value ar, value *data)
     CAMLassert(loop < 10);
     if(8 == loop){ /** One minor gc must be enough */
       elt = Val_unit;
-      CAML_INSTR_INT ("force_minor/weak@", 1);
+      CAML_EV_COUNTER (EV_C_FORCE_MINOR_WEAK, 1);
       caml_minor_collection ();
     } else {
       /* cases where loop is between 0 to 7 and where loop is equal to 9 */
@@ -530,8 +531,12 @@ CAMLexport void caml_ephemeron_blit_key(value ars, mlsize_t offset_s,
   offset_d += CAML_EPHE_FIRST_KEY;
 
   if (caml_gc_phase == Phase_clean){
-    caml_ephe_clean(ars);
-    caml_ephe_clean(ard);
+    caml_ephe_clean_partial(ars, offset_s, offset_s + length);
+    /* We don't need to clean the keys that are about to be overwritten,
+       except where cleaning them could result in releasing the data,
+       which can't happen if data is already released. */
+    if (Field (ard, CAML_EPHE_DATA_OFFSET) != caml_ephe_none)
+      caml_ephe_clean_partial(ard, offset_d, offset_d + length);
   }
   if (offset_d < offset_s){
     for (i = 0; i < length; i++){

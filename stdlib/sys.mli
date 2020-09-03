@@ -38,7 +38,7 @@ external file_exists : string -> bool = "caml_sys_file_exists"
 external is_directory : string -> bool = "caml_sys_is_directory"
 (** Returns [true] if the given name refers to a directory,
     [false] if it refers to another kind of file.
-    Raise [Sys_error] if no file exists with the given name.
+    @raise Sys_error if no file exists with the given name.
     @since 3.10.0
 *)
 
@@ -57,7 +57,8 @@ external rename : string -> string -> unit = "caml_sys_rename"
 
 external getenv : string -> string = "caml_sys_getenv"
 (** Return the value associated to a variable in the process
-   environment. Raise [Not_found] if the variable is unbound. *)
+   environment.
+   @raise Not_found if the variable is unbound. *)
 
 val getenv_opt: string -> string option
 (** Return the value associated to a variable in the process
@@ -77,7 +78,7 @@ external command : string -> int = "caml_sys_system_command"
   such as file redirections [>] and [<], which will be honored by the
   shell.
 
-  Conversely, whitespace or special shell characters occuring in
+  Conversely, whitespace or special shell characters occurring in
   command names or in their arguments must be quoted or escaped
   so that the shell does not interpret them.  The quoting rules vary
   between the POSIX shell and the Windows shell.
@@ -320,10 +321,12 @@ val catch_break : bool -> unit
 
 val ocaml_version : string
 (** [ocaml_version] is the version of OCaml.
-    It is a string of the form ["major.minor[.patchlevel][+additional-info]"],
+    It is a string of the form
+      ["major.minor[.patchlevel][(+|~)additional-info]"],
     where [major], [minor], and [patchlevel] are integers, and
-    [additional-info] is an arbitrary string. The [[.patchlevel]] and
-    [[+additional-info]] parts may be absent. *)
+    [additional-info] is an arbitrary string.
+    The [[.patchlevel]] part is absent for versions anterior to 3.08.0.
+    The [[(+|~)additional-info]] part may be absent. *)
 
 
 val enable_runtime_warnings: bool -> unit

@@ -90,6 +90,9 @@ request can be merged.
 ------------------------------------------------------------------------
 EOF
 
+  # Ensure that make distclean can be run from an empty tree
+  $MAKE distclean
+
   if [ "$MIN_BUILD" = "1" ] ; then
     configure_flags="\
       --prefix=$PREFIX \
@@ -102,11 +105,13 @@ EOF
       --disable-bigarray-lib \
       --disable-ocamldoc \
       --disable-native-compiler \
+      --enable-ocamltest \
       $CONFIG_ARG"
   else
     configure_flags="\
       --prefix=$PREFIX \
       --enable-flambda-invariants \
+      --enable-ocamltest \
       $CONFIG_ARG"
   fi
   case $XARCH in
@@ -136,6 +141,8 @@ EOF
     $MAKE world.opt
     $MAKE ocamlnat
   fi
+  echo Ensuring that all names are prefixed in the runtime
+  ./tools/check-symbol-names runtime/*.a
   cd testsuite
   echo Running the testsuite with the normal runtime
   $MAKE all
@@ -157,8 +164,18 @@ EOF
   # we would need to redo (small parts of) world.opt afterwards to
   # use the compiler again
   $MAKE check_all_arches
+  # Ensure that .gitignore is up-to-date - this will fail if any untreacked or
+  # altered files exist.
+  test -z "$(git status --porcelain)"
   # check that the 'clean' target also works
   $MAKE clean
+  $MAKE -C manual clean
+  # check that the `distclean` target definitely cleans the tree
+  $MAKE distclean
+  # Check the working tree is clean
+  test -z "$(git status --porcelain)"
+  # Check that there are no ignored files
+  test -z "$(git ls-files --others -i --exclude-standard)"
 }
 
 CheckChangesModified () {
@@ -277,10 +294,10 @@ CheckTypoTree () {
     echo 'Verifying that configure.ac generates configure'
     git checkout "$1"
     mv configure configure.ref
-    ./autogen
+    make configure
     if ! diff -q configure configure.ref >/dev/null ; then
       echo "configure.ac no longer generates configure, \
-please run ./autogen and commit"
+please run rm configure ; make configure and commit"
       exit 1
     fi
   fi

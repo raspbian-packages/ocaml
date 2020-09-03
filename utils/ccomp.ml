@@ -27,8 +27,17 @@ let command cmdline =
 
 let run_command cmdline = ignore(command cmdline)
 
-(* Build @responsefile to work around Windows limitations on
-   command-line length *)
+(* Build @responsefile to work around OS limitations on
+   command-line length.
+   Under Windows, the max length is 8187 minus the length of the
+   COMSPEC variable (or 7 if it's not set).  To be on the safe side,
+   we'll use a response file if we need to pass 4096 or more bytes of
+   arguments.
+   For Unix-like systems, the threshold is 2^16 (64 KiB), which is
+   within the lowest observed limits (2^17 per argument under Linux;
+   between 70000 and 80000 for macOS).
+*)
+
 let build_diversion lst =
   let (responsefile, oc) = Filename.open_temp_file "camlresp" "" in
   List.iter (fun f -> Printf.fprintf oc "%s\n" f) lst;
@@ -40,7 +49,8 @@ let quote_files lst =
   let lst = List.filter (fun f -> f <> "") lst in
   let quoted = List.map Filename.quote lst in
   let s = String.concat " " quoted in
-  if String.length s >= 4096 && Sys.os_type = "Win32"
+  if String.length s >= 65536
+  || (String.length s >= 4096 && Sys.os_type = "Win32")
   then build_diversion quoted
   else s
 
@@ -89,11 +99,12 @@ let compile_file ?output ?(opt="") ?stable_name name =
          (match !Clflags.c_compiler with
           | Some cc -> cc
           | None ->
-              let (cflags, cppflags) =
-                  if !Clflags.native_code
-                  then (Config.ocamlopt_cflags, Config.ocamlopt_cppflags)
-                  else (Config.ocamlc_cflags, Config.ocamlc_cppflags) in
-              (String.concat " " [Config.c_compiler; cflags; cppflags]))
+              (* #7678: ocamlopt only calls the C compiler to process .c files
+                 from the command line, and the behaviour between
+                 ocamlc/ocamlopt should be identical. *)
+              (String.concat " " [Config.c_compiler;
+                                  Config.ocamlc_cflags;
+                                  Config.ocamlc_cppflags]))
          debug_prefix_map
          (match output with
           | None -> ""
@@ -211,5 +222,5 @@ let call_linker mode output_name files extra =
           (quote_files files)
           extra
     in
-    command cmd = 0
+    command cmd
   )

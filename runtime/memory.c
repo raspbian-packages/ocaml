@@ -33,6 +33,7 @@
 #include "caml/mlvalues.h"
 #include "caml/signals.h"
 #include "caml/memprof.h"
+#include "caml/eventlog.h"
 
 int caml_huge_fallback_count = 0;
 /* Number of times that mmapping big pages fails and we fell back to small
@@ -467,8 +468,8 @@ color_t caml_allocation_color (void *hp)
   }
 }
 
-static inline value caml_alloc_shr_aux (mlsize_t wosize, tag_t tag, int track,
-                                        int raise_oom, uintnat profinfo)
+Caml_inline value caml_alloc_shr_aux (mlsize_t wosize, tag_t tag, int track,
+                                      int raise_oom, uintnat profinfo)
 {
   header_t *hp;
   value *new_block;
@@ -479,6 +480,7 @@ static inline value caml_alloc_shr_aux (mlsize_t wosize, tag_t tag, int track,
     else
       return 0;
   }
+  CAML_EV_ALLOC(wosize);
   hp = caml_fl_allocate (wosize);
   if (hp == NULL){
     new_block = expand_heap (wosize);
@@ -511,7 +513,7 @@ static inline value caml_alloc_shr_aux (mlsize_t wosize, tag_t tag, int track,
                                   profinfo));
   caml_allocated_words += Whsize_wosize (wosize);
   if (caml_allocated_words > Caml_state->minor_heap_wsz){
-    CAML_INSTR_INT ("request_major/alloc_shr@", 1);
+    CAML_EV_COUNTER (EV_C_REQUEST_MAJOR_ALLOC_SHR, 1);
     caml_request_major_slice ();
   }
 #ifdef DEBUG
@@ -618,7 +620,7 @@ CAMLexport void caml_adjust_gc_speed (mlsize_t res, mlsize_t max)
   if (res > max) res = max;
   caml_extra_heap_resources += (double) res / (double) max;
   if (caml_extra_heap_resources > 1.0){
-    CAML_INSTR_INT ("request_major/adjust_gc_speed_1@", 1);
+    CAML_EV_COUNTER (EV_C_REQUEST_MAJOR_ADJUST_GC_SPEED, 1);
     caml_extra_heap_resources = 1.0;
     caml_request_major_slice ();
   }
@@ -664,7 +666,7 @@ CAMLexport CAMLweakdef void caml_modify (value *fp, value val)
             major GC treats it as an additional root.
 
      The logic implemented below is duplicated in caml_array_fill to
-     avoid repated calls to caml_modify and repeated tests on the
+     avoid repeated calls to caml_modify and repeated tests on the
      values.  Don't forget to update caml_array_fill if the logic
      below changes!
   */
@@ -883,6 +885,8 @@ CAMLexport void caml_stat_free(caml_stat_block b)
 /* [sz] is a number of bytes */
 CAMLexport caml_stat_block caml_stat_resize_noexc(caml_stat_block b, asize_t sz)
 {
+  if(b == NULL)
+    return caml_stat_alloc_noexc(sz);
   /* Backward compatibility mode */
   if (pool == NULL)
     return realloc(b, sz);

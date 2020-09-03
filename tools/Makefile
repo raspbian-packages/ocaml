@@ -16,8 +16,8 @@
 MAKEFLAGS := -r -R
 ROOTDIR = ..
 
-include $(ROOTDIR)/Makefile.config
-include $(ROOTDIR)/Makefile.common
+-include $(ROOTDIR)/Makefile.config
+-include $(ROOTDIR)/Makefile.common
 
 ifeq ($(SYSTEM),unix)
 override define shellquote
@@ -229,7 +229,7 @@ READ_CMT= \
           $(ROOTDIR)/compilerlibs/ocamlcommon.cma \
           $(ROOTDIR)/compilerlibs/ocamlbytecomp.cma \
           \
-          cmt2annot.cmo read_cmt.cmo
+          read_cmt.cmo
 
 # Reading cmt files
 $(call byte_and_opt,read_cmt,$(READ_CMT),)
@@ -311,12 +311,19 @@ lintapidiff.opt: INCLUDES+= -I $(ROOTDIR)/otherlibs/str
 lintapidiff.opt: $(LINTAPIDIFF)
 	$(CAMLOPT_CMD) $(LINKFLAGS) -I $(ROOTDIR) -o $@ $(LINTAPIDIFF)
 clean::
-	rm -f -- lintapidiff.opt lintapidiff.cm? lintapidiff.o
+	rm -f -- lintapidiff.opt lintapidiff.cm? lintapidiff.o lintapidiff.obj
 
 
 clean::
-	rm -f "objinfo_helper$(EXE)" "objinfo_helper$(EXE).manifest"
+	rm -f "objinfo_helper" "objinfo_helper.manifest"
+	rm -f "objinfo_helper.exe" "objinfo_helper.exe.manifest"
 
+# Eventlog metadata file
+
+install::
+	$(INSTALL_DATA) \
+	  eventlog_metadata \
+	  "$(INSTALL_LIBDIR)"
 
 # Copy a bytecode executable, stripping debug info
 
@@ -333,13 +340,6 @@ CMPBYT=$(ROOTDIR)/compilerlibs/ocamlcommon.cma \
        cmpbyt.cmo
 
 $(call byte_and_opt,cmpbyt,$(CMPBYT),)
-
-ifeq "$(RUNTIMEI)" "true"
-install::
-	$(INSTALL_PROG) \
-	  ocaml-instr-graph ocaml-instr-report \
-	  "$(INSTALL_BINDIR)/"
-endif
 
 CAMLTEX= $(ROOTDIR)/compilerlibs/ocamlcommon.cma \
 	$(ROOTDIR)/compilerlibs/ocamlbytecomp.cma \

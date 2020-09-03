@@ -27,6 +27,7 @@
 #include "caml/stack.h"
 #include "caml/roots.h"
 #include "caml/memprof.h"
+#include "caml/eventlog.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -78,14 +79,24 @@ static link* frametables_list_tail(link *list) {
 }
 
 static frame_descr * next_frame_descr(frame_descr * d) {
-  uintnat nextd;
-  nextd =
-    ((uintnat)d +
-     sizeof(char *) + sizeof(short) + sizeof(short) +
-     sizeof(short) * d->num_live + sizeof(frame_descr *) - 1)
-    & -sizeof(frame_descr *);
-  if (d->frame_size & 1) nextd += sizeof(void *); /* pointer to debuginfo */
-  return((frame_descr *) nextd);
+  unsigned char num_allocs = 0, *p;
+  CAMLassert(d->retaddr >= 4096);
+  /* Skip to end of live_ofs */
+  p = (unsigned char*)&d->live_ofs[d->num_live];
+  /* Skip alloc_lengths if present */
+  if (d->frame_size & 2) {
+    num_allocs = *p;
+    p += num_allocs + 1;
+  }
+  /* Skip debug info if present */
+  if (d->frame_size & 1) {
+    /* Align to 32 bits */
+    p = Align_to(p, uint32_t);
+    p += sizeof(uint32_t) * (d->frame_size & 2 ? num_allocs : 1);
+  }
+  /* Align to word size */
+  p = Align_to(p, void*);
+  return ((frame_descr*) p);
 }
 
 static void fill_hashtable(link *frametables) {
@@ -324,7 +335,7 @@ void caml_oldify_local_roots (void)
   /* Finalised values */
   caml_final_oldify_young_roots ();
   /* Memprof */
-  caml_memprof_scan_roots (&caml_oldify_one);
+  caml_memprof_oldify_young_roots ();
   /* Hook */
   if (caml_scan_roots_hook != NULL) (*caml_scan_roots_hook)(&caml_oldify_one);
 }
@@ -351,7 +362,7 @@ intnat caml_darken_all_roots_slice (intnat work)
   static int do_resume = 0;
   static mlsize_t roots_count = 0;
   intnat remaining_work = work;
-  CAML_INSTR_SETUP (tmr, "");
+  CAML_EV_BEGIN(EV_MAJOR_MARK_GLOBAL_ROOTS_SLICE);
 
   /* If the loop was started in a previous call, resume it. */
   if (do_resume) goto resume;
@@ -381,7 +392,7 @@ intnat caml_darken_all_roots_slice (intnat work)
 
  suspend:
   /* Do this in both cases. */
-  CAML_INSTR_TIME (tmr, "major/mark/global_roots_slice");
+  CAML_EV_END(EV_MAJOR_MARK_GLOBAL_ROOTS_SLICE);
   return remaining_work;
 }
 
@@ -390,8 +401,8 @@ void caml_do_roots (scanning_action f, int do_globals)
   int i, j;
   value * glob;
   link *lnk;
-  CAML_INSTR_SETUP (tmr, "major_roots");
 
+  CAML_EV_BEGIN(EV_MAJOR_ROOTS_DYNAMIC_GLOBAL);
   if (do_globals){
     /* The global roots */
     for (i = 0; caml_globals[i] != 0; i++) {
@@ -409,24 +420,29 @@ void caml_do_roots (scanning_action f, int do_globals)
       }
     }
   }
-  CAML_INSTR_TIME (tmr, "major_roots/dynamic_global");
+  CAML_EV_END(EV_MAJOR_ROOTS_DYNAMIC_GLOBAL);
   /* The stack and local roots */
+  CAML_EV_BEGIN(EV_MAJOR_ROOTS_LOCAL);
   caml_do_local_roots(f, Caml_state->bottom_of_stack,
                       Caml_state->last_return_address, Caml_state->gc_regs,
                       Caml_state->local_roots);
-  CAML_INSTR_TIME (tmr, "major_roots/local");
+  CAML_EV_END(EV_MAJOR_ROOTS_LOCAL);
   /* Global C roots */
+  CAML_EV_BEGIN(EV_MAJOR_ROOTS_C);
   caml_scan_global_roots(f);
-  CAML_INSTR_TIME (tmr, "major_roots/C");
+  CAML_EV_END(EV_MAJOR_ROOTS_C);
   /* Finalised values */
+  CAML_EV_BEGIN(EV_MAJOR_ROOTS_FINALISED);
   caml_final_do_roots (f);
-  CAML_INSTR_TIME (tmr, "major_roots/finalised");
+  CAML_EV_END(EV_MAJOR_ROOTS_FINALISED);
   /* Memprof */
-  caml_memprof_scan_roots (f);
-  CAML_INSTR_TIME (tmr, "major_roots/memprof");
+  CAML_EV_BEGIN(EV_MAJOR_ROOTS_MEMPROF);
+  caml_memprof_do_roots (f);
+  CAML_EV_END(EV_MAJOR_ROOTS_MEMPROF);
   /* Hook */
+  CAML_EV_BEGIN(EV_MAJOR_ROOTS_HOOK);
   if (caml_scan_roots_hook != NULL) (*caml_scan_roots_hook)(f);
-  CAML_INSTR_TIME (tmr, "major_roots/hook");
+  CAML_EV_END(EV_MAJOR_ROOTS_HOOK);
 }
 
 void caml_do_local_roots(scanning_action f, char * bottom_of_stack,

@@ -129,6 +129,9 @@ ARCH=@arch@
 # Whether the architecture has 64 bits
 ARCH64=@arch64@
 
+# Endianess for this architecture
+ENDIANNESS=@endianness@
+
 ### Name of architecture model for the native-code compiler.
 ### Some architectures come in several slightly different flavors
 ### that share a common code generator. This variable tailors the
@@ -156,11 +159,14 @@ INSTALL_BYTECODE_PROGRAMS=@install_bytecode_programs@
 
 ### Which libraries to compile and install
 # Currently available:
-#       unix            Unix system calls
-#       str             Regular expressions and high-level string processing
-#       systhreads      Same as threads, requires POSIX threads
-#       dynlink         Dynamic linking of bytecode
-#       bigarray        Large, multidimensional numerical arrays
+#       bigarray          Large, multidimensional numerical arrays
+#                           (legacy support: this library is now part of the
+#                            Standard Library)
+#       dynlink           Dynamic linking (bytecode and native)
+#       (win32)unix       Unix system calls
+#       str               Regular expressions and high-level string processing
+#       raw_spacetime_lib Parsing of spacetime traces
+#       systhreads        Same as threads, requires POSIX threads
 OTHERLIBRARIES=@otherlibraries@
 
 ### Link-time options to ocamlc or ocamlopt for linking with POSIX threads
@@ -190,8 +196,10 @@ NATDYNLINK=@natdynlink@
 NATDYNLINKOPTS=@natdynlinkopts@
 SYSLIB=@syslib@
 MKLIB=@mklib@
-OCAMLOPT_CFLAGS=@ocamlopt_cflags@
-OCAMLOPT_CPPFLAGS=@ocamlopt_cppflags@
+# #7678: ocamlopt uses these only to compile .c files, and the behaviour for the
+#        two drivers should be identical.
+OCAMLOPT_CFLAGS=@ocamlc_cflags@
+OCAMLOPT_CPPFLAGS=@ocamlc_cppflags@
 NATIVECCLIBS=@nativecclibs@
 SYSTHREAD_SUPPORT=@systhread_support@
 PACKLD=@PACKLD@
@@ -215,6 +223,7 @@ RUNTIMEI=@instrumented_runtime@
 WITH_DEBUGGER=@with_debugger@
 WITH_CAMLTEX=@with_camltex@
 WITH_OCAMLDOC=@ocamldoc@
+WITH_OCAMLTEST=@ocamltest@
 ASM_CFI_SUPPORTED=@asm_cfi_supported@
 WITH_FRAME_POINTERS=@frame_pointers@
 WITH_SPACETIME=@spacetime@

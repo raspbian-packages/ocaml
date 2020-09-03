@@ -29,6 +29,8 @@
 #include "caml/roots.h"
 #include "caml/weak.h"
 #include "caml/compact.h"
+#include "caml/memprof.h"
+#include "caml/eventlog.h"
 
 extern uintnat caml_percent_free;                   /* major_gc.c */
 extern void caml_shrink_heap (char *);              /* memory.c */
@@ -211,6 +213,8 @@ static void do_compaction (intnat new_allocation_policy)
     caml_do_roots (caml_invert_root, 1);
     /* The values to be finalised are not roots but should still be inverted */
     caml_final_invert_finalisable_values ();
+    /* Idem for memprof tracked blocks */
+    caml_memprof_invert_tracked ();
 
     ch = caml_heap_start;
     while (ch != NULL){
@@ -436,7 +440,6 @@ uintnat caml_percent_max;  /* used in gc_ctrl.c and memory.c */
 void caml_compact_heap (intnat new_allocation_policy)
 {
   uintnat target_wsz, live;
-  CAML_INSTR_SETUP(tmr, "compact");
 
   CAMLassert (Caml_state->young_ptr == Caml_state->young_alloc_end);
   CAMLassert (Caml_state->ref_table->ptr ==
@@ -446,8 +449,9 @@ void caml_compact_heap (intnat new_allocation_policy)
   CAMLassert (Caml_state->custom_table->ptr ==
               Caml_state->custom_table->base);
 
+  CAML_EV_BEGIN(EV_COMPACT_MAIN);
   do_compaction (new_allocation_policy);
-  CAML_INSTR_TIME (tmr, "compact/main");
+  CAML_EV_END(EV_COMPACT_MAIN);
   /* Compaction may fail to shrink the heap to a reasonable size
      because it deals in complete chunks: if a very large chunk
      is at the beginning of the heap, everything gets moved to
@@ -509,11 +513,12 @@ void caml_compact_heap (intnat new_allocation_policy)
     if (Caml_state->stat_heap_wsz > Caml_state->stat_top_heap_wsz){
       Caml_state->stat_top_heap_wsz = Caml_state->stat_heap_wsz;
     }
+    CAML_EV_BEGIN(EV_COMPACT_RECOMPACT);
     do_compaction (-1);
     CAMLassert (Caml_state->stat_heap_chunks == 1);
     CAMLassert (Chunk_next (caml_heap_start) == NULL);
     CAMLassert (Caml_state->stat_heap_wsz == Wsize_bsize (Chunk_size (chunk)));
-    CAML_INSTR_TIME (tmr, "compact/recompact");
+    CAML_EV_END(EV_COMPACT_RECOMPACT);
   }
 }
 

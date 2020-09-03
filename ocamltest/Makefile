@@ -17,8 +17,8 @@
 
 ROOTDIR = ..
 
-include $(ROOTDIR)/Makefile.config
-include $(ROOTDIR)/Makefile.common
+-include $(ROOTDIR)/Makefile.config
+-include $(ROOTDIR)/Makefile.common
 include $(ROOTDIR)/Makefile.best_binaries
 
 ifeq "$(filter str,$(OTHERLIBRARIES))" ""
@@ -202,19 +202,24 @@ all: ocamltest$(EXE)
 allopt: ocamltest.opt$(EXE)
 opt.opt: allopt
 
-ocamltest$(EXE): $(bytecode_modules)
-	$(ocamlc_cmd) -custom ocamlcommon.cma ocamlbytecomp.cma -o $@ $^
+compdeps_names=ocamlcommon ocamlbytecomp
+compdeps_paths=$(addprefix $(ROOTDIR)/compilerlibs/,$(compdeps_names))
+compdeps_byte=$(addsuffix .cma,$(compdeps_paths))
+compdeps_opt=$(addsuffix .cmxa,$(compdeps_paths))
 
-%.cmo: %.ml
+ocamltest$(EXE): $(compdeps_byte) $(bytecode_modules)
+	$(ocamlc_cmd) -custom -o $@ $^
+
+%.cmo: %.ml $(compdeps_byte)
 	$(ocamlc) -c $<
 
-ocamltest.opt$(EXE): $(native_modules)
-	$(ocamlopt_cmd) ocamlcommon.cmxa ocamlbytecomp.cmxa -o $@ $^
+ocamltest.opt$(EXE): $(compdeps_opt) $(native_modules)
+	$(ocamlopt_cmd) -o $@ $^
 
-%.cmx: %.ml
+%.cmx: %.ml $(compdeps_opt)
 	$(ocamlopt) -c $<
 
-%.cmi: %.mli
+%.cmi: %.mli $(compdeps_byte)
 	$(ocamlc) -c $<
 
 %.ml %.mli: %.mly
@@ -226,6 +231,7 @@ ocamltest.opt$(EXE): $(native_modules)
 ocamltest_config.ml: ocamltest_config.ml.in Makefile ../Makefile.config
 	sed \
 	  -e 's|@@AFL_INSTRUMENT@@|$(AFL_INSTRUMENT)|' \
+	  -e 's|@@RUNTIMEI@@|$(RUNTIMEI)|' \
 	  -e 's|@@ARCH@@|$(ARCH)|' \
 	  -e 's|@@SHARED_LIBRARIES@@|$(SUPPORTS_SHARED_LIBRARIES)|' \
 	  -e 's|@@UNIX@@|$(unix)|' \
@@ -243,6 +249,7 @@ ocamltest_config.ml: ocamltest_config.ml.in Makefile ../Makefile.config
 	  -e 's|@@OCAMLDOC@@|$(WITH_OCAMLDOC)|' \
 	  -e 's|@@OCAMLDEBUG@@|$(WITH_OCAMLDEBUG)|' \
 	  -e 's|@@OBJEXT@@|$(O)|' \
+	  -e 's|@@ASMEXT@@|$(S)|' \
 	  -e 's|@@NATIVE_DYNLINK@@|$(NATDYNLINK)|' \
 	  -e 's|@@SHARED_LIBRARY_CFLAGS@@|$(SHAREDLIB_CFLAGS)|' \
 	  -e 's|@@SHAREDOBJEXT@@|$(SO)|' \
@@ -260,14 +267,26 @@ ocamltest_config.ml: ocamltest_config.ml.in Makefile ../Makefile.config
 	  -e 's|@@FUNCTION_SECTIONS@@|$(FUNCTION_SECTIONS)|' \
 	  $< > $@
 
+# Manual
+
+.PHONY: doc
+
+doc: ocamltest.html
+
+ocamltest.html: ocamltest.org
+	pandoc -s --toc -N -f org -t html -o $@ $<
+
 .PHONY: clean
 clean:
-	rm -rf ocamltest$(EXE) ocamltest.opt$(EXE)
-	rm -rf $(o_files) $(ocaml_objects)
+	rm -rf ocamltest ocamltest.exe ocamltest.opt ocamltest.opt.exe
+	rm -rf $(c_files:.c=.o) $(c_files:.c=.obj)
+	rm -rf run_unix.o run_win32.o run_win32.obj
+	rm -rf $(ml_files:.ml=.o) $(ml_files:.ml=.obj)
 	rm -rf $(cmi_files)
 	rm -rf $(cmo_files)
 	rm -rf $(cmx_files)
 	rm -rf $(generated)
+	rm -f ocamltest.html
 
 ifneq "$(TOOLCHAIN)" "msvc"
 .PHONY: depend

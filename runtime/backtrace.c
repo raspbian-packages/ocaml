@@ -93,8 +93,8 @@ static void print_location(struct caml_loc_info * li, int index)
   if (! li->loc_valid) {
     fprintf(stderr, "%s unknown location%s\n", info, inlined);
   } else {
-    fprintf (stderr, "%s file \"%s\"%s, line %d, characters %d-%d\n",
-             info, li->loc_filename, inlined, li->loc_lnum,
+    fprintf (stderr, "%s %s in file \"%s\"%s, line %d, characters %d-%d\n",
+             info, li->loc_defname, li->loc_filename, inlined, li->loc_lnum,
              li->loc_startchr, li->loc_endchr);
   }
 }
@@ -188,20 +188,22 @@ CAMLprim value caml_restore_raw_backtrace(value exn, value backtrace)
 static value caml_convert_debuginfo(debuginfo dbg)
 {
   CAMLparam0();
-  CAMLlocal2(p, fname);
+  CAMLlocal3(p, fname, dname);
   struct caml_loc_info li;
 
   caml_debuginfo_location(dbg, &li);
 
   if (li.loc_valid) {
     fname = caml_copy_string(li.loc_filename);
-    p = caml_alloc_small(6, 0);
+    dname = caml_copy_string(li.loc_defname);
+    p = caml_alloc_small(7, 0);
     Field(p, 0) = Val_bool(li.loc_is_raise);
     Field(p, 1) = fname;
     Field(p, 2) = Val_int(li.loc_lnum);
     Field(p, 3) = Val_int(li.loc_startchr);
     Field(p, 4) = Val_int(li.loc_endchr);
     Field(p, 5) = Val_bool(li.loc_is_inlined);
+    Field(p, 6) = dname;
   } else {
     p = caml_alloc_small(1, 1);
     Field(p, 0) = Val_bool(li.loc_is_raise);
@@ -325,12 +327,17 @@ CAMLprim value caml_get_exception_backtrace(value unit)
   CAMLreturn(res);
 }
 
-CAMLprim value caml_get_current_callstack(value max_frames_value) {
+CAMLprim value caml_get_current_callstack(value max_frames_value)
+{
   CAMLparam1(max_frames_value);
   CAMLlocal1(res);
-
-  res = caml_alloc(caml_current_callstack_size(Long_val(max_frames_value)), 0);
-  caml_current_callstack_write(res);
-
+  value* callstack = NULL;
+  intnat callstack_alloc_len = 0;
+  intnat callstack_len =
+    caml_collect_current_callstack(&callstack, &callstack_alloc_len,
+                                   Long_val(max_frames_value), -1);
+  res = caml_alloc(callstack_len, 0);
+  memcpy(Op_val(res), callstack, sizeof(value) * callstack_len);
+  caml_stat_free(callstack);
   CAMLreturn(res);
 }

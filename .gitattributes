@@ -116,7 +116,8 @@ testsuite/tests/**/*.reference               typo.prune
 # Expect tests with overly long lines of expected output
 testsuite/tests/parsing/docstrings.ml        typo.very-long-line
 
-tools/magic         typo.missing-header
+tools/magic                       typo.missing-header
+tools/eventlog_metadata.in        typo.missing-header
 
 # TODO we should fix the long-line errors in yacc/*.c
 /yacc/*.[ch]         typo.very-long-line=may
@@ -142,7 +143,6 @@ menhir-bench.bash typo.missing-header typo.utf8
 /tools/ci/appveyor/appveyor_build.cmd text eol=crlf
 
 configure.ac text eol=lf
-autogen text eol=lf
 build-aux/compile text eol=lf
 build-aux/config.guess text eol=lf
 build-aux/config.sub text eol=lf
@@ -150,8 +150,10 @@ build-aux/install text eol=lf
 build-aux/missing text eol=lf
 ocamldoc/remove_DEBUG text eol=lf
 ocamltest/getocamloptdefaultflags text eol=lf
+ocamltest/ocamltest.org typo.long-line=may typo.missing-header
 stdlib/Compflags text eol=lf
 stdlib/sharpbang text eol=lf
+tools/autogen text eol=lf
 tools/ci/inria/remove-sinh-primitive.patch text eol=lf
 tools/check-typo text eol=lf
 tools/ci-build text eol=lf

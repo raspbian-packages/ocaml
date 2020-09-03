@@ -46,15 +46,14 @@ caml_system__code_begin:
         ALIGN   16
 caml_call_gc:
     ; Record lowest stack address and return address
-        mov     rax, [rsp]
-        Store_last_return_address rax
-        lea     rax, [rsp+8]
-        Store_bottom_of_stack rax
-L105:
+        mov     r11, [rsp]
+        Store_last_return_address r11
+        lea     r11, [rsp+8]
+        Store_bottom_of_stack r11
     ; Touch the stack to trigger a recoverable segfault
     ; if insufficient space remains
         sub     rsp, 01000h
-        mov     [rsp], rax
+        mov     [rsp], r11
         add     rsp, 01000h
     ; Save young_ptr
         Store_young_ptr r15
@@ -139,92 +138,31 @@ ENDIF
 caml_alloc1:
         sub     r15, 16
         Cmp_young_limit r15
-        jb      L100
+        jb      caml_call_gc
         ret
-L100:
-        add     r15, 16
-        mov     rax, [rsp + 0]
-        Store_last_return_address rax
-        lea     rax, [rsp + 8]
-        Store_bottom_of_stack rax
-        sub     rsp, 8
-        call    L105
-        add     rsp, 8
-        jmp     caml_alloc1
 
         PUBLIC  caml_alloc2
         ALIGN   16
 caml_alloc2:
         sub     r15, 24
         Cmp_young_limit r15
-        jb      L101
+        jb      caml_call_gc
         ret
-L101:
-        add     r15, 24
-        mov     rax, [rsp + 0]
-        Store_last_return_address rax
-        lea     rax, [rsp + 8]
-        Store_bottom_of_stack rax
-        sub     rsp, 8
-        call    L105
-        add     rsp, 8
-        jmp     caml_alloc2
 
         PUBLIC  caml_alloc3
         ALIGN   16
 caml_alloc3:
         sub     r15, 32
         Cmp_young_limit r15
-        jb      L102
+        jb      caml_call_gc
         ret
-L102:
-        add     r15, 32
-        mov     rax, [rsp + 0]
-        Store_last_return_address rax
-        lea     rax, [rsp + 8]
-        Store_bottom_of_stack rax
-        sub     rsp, 8
-        call    L105
-        add     rsp, 8
-        jmp     caml_alloc3
 
         PUBLIC  caml_allocN
         ALIGN   16
 caml_allocN:
-        sub     r15, rax
         Cmp_young_limit r15
-        jb      L103
+        jb      caml_call_gc
         ret
-L103:
-        add     r15, rax
-        push    rax                       ; save desired size
-        mov     rax, [rsp + 8]
-        Store_last_return_address rax
-        lea     rax, [rsp + 16]
-        Store_bottom_of_stack rax
-        call    L105
-        pop     rax                      ; recover desired size
-        jmp     caml_allocN
-
-; Reset the allocation pointer and invoke the GC
-
-        PUBLIC  caml_call_gc1
-        ALIGN   16
-caml_call_gc1:
-        add     r15, 16
-        jmp     caml_call_gc
-
-        PUBLIC  caml_call_gc2
-        ALIGN   16
-caml_call_gc2:
-        add     r15, 24
-        jmp     caml_call_gc
-
-        PUBLIC  caml_call_gc3
-        ALIGN 16
-caml_call_gc3:
-        add     r15, 32
-        jmp     caml_call_gc
 
 ; Call a C function from OCaml
 

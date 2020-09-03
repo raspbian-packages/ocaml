@@ -273,6 +273,42 @@ let mk_not dbg cmm =
       (* 1 -> 3, 3 -> 1 *)
       Cop(Csubi, [Cconst_int (4, dbg); c], dbg)
 
+let mk_compare_ints dbg a1 a2 =
+  match (a1,a2) with
+  | Cconst_int (c1, _), Cconst_int (c2, _) ->
+     int_const dbg (Int.compare c1 c2)
+  | Cconst_natint (c1, _), Cconst_natint (c2, _) ->
+     int_const dbg (Nativeint.compare c1 c2)
+  | Cconst_int (c1, _), Cconst_natint (c2, _) ->
+     int_const dbg Nativeint.(compare (of_int c1) c2)
+  | Cconst_natint (c1, _), Cconst_int (c2, _) ->
+     int_const dbg Nativeint.(compare c1 (of_int c2))
+  | a1, a2 -> begin
+      bind "int_cmp" a1 (fun a1 ->
+        bind "int_cmp" a2 (fun a2 ->
+          let op1 = Cop(Ccmpi(Cgt), [a1; a2], dbg) in
+          let op2 = Cop(Ccmpi(Clt), [a1; a2], dbg) in
+          tag_int(sub_int op1 op2 dbg) dbg))
+    end
+
+let mk_compare_floats dbg a1 a2 =
+  bind "float_cmp" a1 (fun a1 ->
+    bind "float_cmp" a2 (fun a2 ->
+      let op1 = Cop(Ccmpf(CFgt), [a1; a2], dbg) in
+      let op2 = Cop(Ccmpf(CFlt), [a1; a2], dbg) in
+      let op3 = Cop(Ccmpf(CFeq), [a1; a1], dbg) in
+      let op4 = Cop(Ccmpf(CFeq), [a2; a2], dbg) in
+      (* If both operands a1 and a2 are not NaN, then op3 = op4 = 1,
+         and the result is op1 - op2.
+         If at least one of the operands is NaN,
+         then op1 = op2 = 0, and the result is op3 - op4,
+         which orders NaN before other values.
+         To detect if the operand is NaN, we use the property:
+         for all x, NaN is not equal to x, even if x is NaN.
+         Therefore, op3 is 0 if and only if a1 is NaN,
+         and op4 is 0 if and only if a2 is NaN.
+         See also caml_float_compare_unboxed in runtime/floats.c  *)
+      tag_int (add_int (sub_int op1 op2 dbg) (sub_int op3 op4 dbg) dbg) dbg))
 
 let create_loop body dbg =
   let cont = Lambda.next_raise_count () in
@@ -1353,6 +1389,7 @@ let simplif_primitive_32bits :
   | Pbintcomp(Pint64, Lambda.Cgt) -> Pccall (default_prim "caml_greaterthan")
   | Pbintcomp(Pint64, Lambda.Cle) -> Pccall (default_prim "caml_lessequal")
   | Pbintcomp(Pint64, Lambda.Cge) -> Pccall (default_prim "caml_greaterequal")
+  | Pcompare_bints Pint64 -> Pccall (default_prim "caml_int64_compare")
   | Pbigarrayref(_unsafe, n, Pbigarray_int64, _layout) ->
       Pccall (default_prim ("caml_ba_get_" ^ Int.to_string n))
   | Pbigarrayset(_unsafe, n, Pbigarray_int64, _layout) ->
@@ -1458,6 +1495,7 @@ struct
   let gtint = Ccmpi Cgt
 
   type act = expression
+  type loc = Debuginfo.t
 
   (* CR mshinwell: GPR#2294 will fix the Debuginfo here *)
 
@@ -1469,8 +1507,7 @@ struct
   let make_if cond ifso ifnot =
     Cifthenelse (cond, Debuginfo.none, ifso, Debuginfo.none, ifnot,
       Debuginfo.none)
-  let make_switch loc arg cases actions =
-    let dbg = Debuginfo.from_location loc in
+  let make_switch dbg arg cases actions =
     let actions = Array.map (fun expr -> expr, dbg) actions in
     make_switch arg cases actions dbg
   let bind arg body = bind "switcher" arg body
@@ -1538,7 +1575,7 @@ module SwitcherBlocks = Switch.Make(SArgBlocks)
 (* Int switcher, arg in [low..high],
    cases is list of individual cases, and is sorted by first component *)
 
-let transl_int_switch loc arg low high cases default = match cases with
+let transl_int_switch dbg arg low high cases default = match cases with
 | [] -> assert false
 | _::_ ->
     let store = StoreExp.mk_store () in
@@ -1578,7 +1615,7 @@ let transl_int_switch loc arg low high cases default = match cases with
     bind "switcher" arg
       (fun a ->
         SwitcherBlocks.zyva
-          loc
+          dbg
           (low,high)
           a
           (Array.of_list inters) store)
@@ -1684,10 +1721,10 @@ let cache_public_method meths tag cache dbg =
   let cconst_int i = Cconst_int (i, dbg) in
   let li = V.create_local "*li*" and hi = V.create_local "*hi*"
   and mi = V.create_local "*mi*" and tagged = V.create_local "*tagged*" in
-  Clet (
-  VP.create li, cconst_int 3,
-  Clet (
-  VP.create hi, Cop(Cload (Word_int, Mutable), [meths], dbg),
+  Clet_mut (
+  VP.create li, typ_int, cconst_int 3,
+  Clet_mut (
+  VP.create hi, typ_int, Cop(Cload (Word_int, Mutable), [meths], dbg),
   Csequence(
   ccatch
     (raise_num, [],
@@ -1721,7 +1758,7 @@ let cache_public_method meths tag cache dbg =
      dbg),
   Clet (
     VP.create tagged,
-      Cop(Cadda, [lsl_const (Cvar li) log2_size_addr dbg;
+      Cop(Caddi, [lsl_const (Cvar li) log2_size_addr dbg;
         cconst_int(1 - 3 * size_addr)], dbg),
     Csequence(Cop (Cstore (Word_int, Assignment), [cache; Cvar tagged], dbg),
               Cvar tagged)))))

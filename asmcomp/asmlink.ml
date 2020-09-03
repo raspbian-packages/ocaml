@@ -29,7 +29,7 @@ type error =
   | Inconsistent_interface of modname * filepath * filepath
   | Inconsistent_implementation of modname * filepath * filepath
   | Assembler_error of filepath
-  | Linking_error
+  | Linking_error of int
   | Multiple_definition of modname * filepath * filepath
   | Missing_cmx of filepath * modname
 
@@ -59,7 +59,11 @@ let check_consistency file_name unit crc =
             then Cmi_consistbl.set crc_interfaces name crc file_name
             else Cmi_consistbl.check crc_interfaces name crc file_name)
       unit.ui_imports_cmi
-  with Cmi_consistbl.Inconsistency(name, user, auth) ->
+  with Cmi_consistbl.Inconsistency {
+      unit_name = name;
+      inconsistent_source = user;
+      original_source = auth;
+    } ->
     raise(Error(Inconsistent_interface(name, user, auth)))
   end;
   begin try
@@ -73,7 +77,11 @@ let check_consistency file_name unit crc =
           | Some crc ->
               Cmx_consistbl.check crc_implementations name crc file_name)
       unit.ui_imports_cmx
-  with Cmx_consistbl.Inconsistency(name, user, auth) ->
+  with Cmx_consistbl.Inconsistency {
+      unit_name = name;
+      inconsistent_source = user;
+      original_source = auth;
+    } ->
     raise(Error(Inconsistent_implementation(name, user, auth)))
   end;
   begin try
@@ -178,30 +186,43 @@ let read_file obj_name =
   end
   else raise(Error(Not_an_object_file file_name))
 
-let scan_file obj_name tolink = match read_file obj_name with
+let scan_file obj_name (tolink, objfiles) = match read_file obj_name with
   | Unit (file_name,info,crc) ->
       (* This is a .cmx file. It must be linked in any case. *)
       remove_required info.ui_name;
       List.iter (add_required file_name) info.ui_imports_cmx;
-      (info, file_name, crc) :: tolink
+      ((info, file_name, crc) :: tolink, obj_name :: objfiles)
   | Library (file_name,infos) ->
       (* This is an archive file. Each unit contained in it will be linked
          in only if needed. *)
       add_ccobjs (Filename.dirname file_name) infos;
-      List.fold_right
-        (fun (info, crc) reqd ->
-           if info.ui_force_link
-             || !Clflags.link_everything
-             || is_required info.ui_name
-           then begin
-             remove_required info.ui_name;
-             List.iter (add_required (Printf.sprintf "%s(%s)"
-                                        file_name info.ui_name))
-               info.ui_imports_cmx;
-             (info, file_name, crc) :: reqd
-           end else
-             reqd)
-        infos.lib_units tolink
+      let tolink =
+        List.fold_right
+          (fun (info, crc) reqd ->
+             if info.ui_force_link
+               || !Clflags.link_everything
+               || is_required info.ui_name
+             then begin
+               remove_required info.ui_name;
+               List.iter (add_required (Printf.sprintf "%s(%s)"
+                                          file_name info.ui_name))
+                 info.ui_imports_cmx;
+               (info, file_name, crc) :: reqd
+             end else
+               reqd)
+          infos.lib_units tolink
+      and objfiles =
+        if Config.ccomp_type = "msvc"
+        && infos.lib_units = []
+        && not (Sys.file_exists (object_file_name obj_name)) then
+          (* MSVC doesn't support empty .lib files, so there shouldn't be one
+             if the .cmxa contains no units. The file_exists check is added to
+             be ultra-defensive for the case where a user has manually added
+             things to the .lib file *)
+          objfiles
+        else
+          obj_name :: objfiles
+      in (tolink, objfiles)
 
 (* Second pass: generate the startup file and link it with everything else *)
 
@@ -272,18 +293,21 @@ let make_shared_startup_file ~ppf_dump units =
   Emit.end_assembly ()
 
 let call_linker_shared file_list output_name =
-  if not (Ccomp.call_linker Ccomp.Dll output_name file_list "")
-  then raise(Error Linking_error)
+  let exitcode = Ccomp.call_linker Ccomp.Dll output_name file_list "" in
+  if not (exitcode = 0)
+  then raise(Error(Linking_error exitcode))
 
 let link_shared ~ppf_dump objfiles output_name =
   Profile.record_call output_name (fun () ->
-    let units_tolink = List.fold_right scan_file objfiles [] in
+    let units_tolink, objfiles =
+      List.fold_right scan_file objfiles ([], [])
+    in
     List.iter
       (fun (info, file_name, crc) -> check_consistency file_name info crc)
       units_tolink;
     Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
     Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
-    let objfiles = List.rev (List.map object_file_name objfiles) @
+    let objfiles = List.rev_map object_file_name objfiles @
       (List.rev !Clflags.ccobjs) in
 
     let startup =
@@ -315,7 +339,7 @@ let call_linker file_list startup_file output_name =
   let files, c_lib =
     if (not !Clflags.output_c_object) || main_dll || main_obj_runtime then
       files @ (List.rev !Clflags.ccobjs) @ runtime_lib () @ libunwind,
-      (if !Clflags.nopervasives || main_obj_runtime
+      (if !Clflags.nopervasives || (main_obj_runtime && not main_dll)
        then "" else Config.native_c_libraries)
     else
       files, ""
@@ -325,8 +349,9 @@ let call_linker file_list startup_file output_name =
     else if !Clflags.output_c_object then Ccomp.Partial
     else Ccomp.Exe
   in
-  if not (Ccomp.call_linker mode output_name files c_lib)
-  then raise(Error Linking_error)
+  let exitcode = Ccomp.call_linker mode output_name files c_lib in
+  if not (exitcode = 0)
+  then raise(Error(Linking_error exitcode))
 
 (* Main entry point *)
 
@@ -338,7 +363,9 @@ let link ~ppf_dump objfiles output_name =
       if !Clflags.nopervasives then objfiles
       else if !Clflags.output_c_object then stdlib :: objfiles
       else stdlib :: (objfiles @ [stdexit]) in
-    let units_tolink = List.fold_right scan_file objfiles [] in
+    let units_tolink, objfiles =
+      List.fold_right scan_file objfiles ([], [])
+    in
     Array.iter remove_required Runtimedef.builtin_exceptions;
     begin match extract_missing_globals() with
       [] -> ()
@@ -406,8 +433,8 @@ let report_error ppf = function
        intf
   | Assembler_error file ->
       fprintf ppf "Error while assembling %a" Location.print_filename file
-  | Linking_error ->
-      fprintf ppf "Error during linking"
+  | Linking_error exitcode ->
+      fprintf ppf "Error during linking (exit code %d)" exitcode
   | Multiple_definition(modname, file1, file2) ->
       fprintf ppf
         "@[<hov>Files %a@ and %a@ both define a module named %s@]"

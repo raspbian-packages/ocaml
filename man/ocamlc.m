@@ -204,17 +204,9 @@ excluding the filename.
 Show absolute filenames in error messages.
 .TP
 .B \-annot
-Dump detailed information about the compilation (types, bindings,
-tail-calls, etc).  The information for file
-.IR src .ml
-is put into file
-.IR src .annot.
-In case of a type error, dump all the information inferred by the
-type-checker before the error. The
-.IR src .annot
-file can be used with the emacs commands given in
-.B emacs/caml\-types.el
-to display types and other annotations interactively.
+Deprecated since 4.11. Please use
+.BR \-bin-annot
+instead.
 .TP
 .B \-bin\-annot
 Dump detailed information about the compilation (types, bindings,
@@ -705,7 +697,7 @@ Enable, disable, or mark as fatal the warnings specified by the argument
 Each warning can be
 .IR enabled \ or\  disabled ,
 and each warning can be
-.IR fatal or
+.IR fatal \ or
 .IR non-fatal .
 If a warning is disabled, it isn't displayed and doesn't affect
 compilation in any way (even if it is fatal).  If a warning is enabled,
@@ -798,7 +790,7 @@ function type and is ignored.
 \ \ \ Label omitted in function application.
 
 7
-\ \ \ Method overridden without using the "method!" keyword
+\ \ \ Method overridden without using the "method!" keyword.
 
 8
 \ \ \ Partial match: missing cases in pattern-matching.
@@ -951,19 +943,22 @@ mutually recursive types.
 \ \ Unannotated unboxable type in primitive declaration.
 
 62
-\ \ Type constraint on GADT type declaration
+\ \ Type constraint on GADT type declaration.
 
 63
-\ \ Erroneous printed signature
+\ \ Erroneous printed signature.
 
 64
-\ \ -unsafe used with a preprocessor returning a syntax tree
+\ \ -unsafe used with a preprocessor returning a syntax tree.
 
 65
-\ \ Type declaration defining a new '()' constructor
+\ \ Type declaration defining a new '()' constructor.
 
 66
 \ \ Unused open! statement.
+
+67
+\ \ Unused functor parameter.
 
 The letters stand for the following sets of warnings.  Any letter not
 mentioned here corresponds to the empty set.

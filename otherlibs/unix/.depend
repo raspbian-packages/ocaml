@@ -170,7 +170,7 @@ fork.o: fork.c ../../runtime/caml/mlvalues.h ../../runtime/caml/config.h \
  ../../runtime/caml/m.h ../../runtime/caml/s.h ../../runtime/caml/misc.h \
  ../../runtime/caml/domain_state.h ../../runtime/caml/mlvalues.h \
  ../../runtime/caml/domain_state.tbl ../../runtime/caml/debugger.h \
- unixsupport.h
+ ../../runtime/caml/eventlog.h unixsupport.h
 fsync.o: fsync.c ../../runtime/caml/mlvalues.h \
  ../../runtime/caml/config.h ../../runtime/caml/m.h \
  ../../runtime/caml/s.h ../../runtime/caml/misc.h \

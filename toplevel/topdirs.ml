@@ -119,7 +119,11 @@ exception Load_failed
 
 let check_consistency ppf filename cu =
   try Env.import_crcs ~source:filename cu.cu_imports
-  with Persistent_env.Consistbl.Inconsistency(name, user, auth) ->
+  with Persistent_env.Consistbl.Inconsistency {
+      unit_name = name;
+      inconsistent_source = user;
+      original_source = auth;
+    } ->
     fprintf ppf "@[<hv 0>The files %s@ and %s@ \
                  disagree over interface %s@]@."
             user auth name;
@@ -236,6 +240,7 @@ let load_file = load_file false
 (* Load commands from a file *)
 
 let dir_use ppf name = ignore(Toploop.use_file ppf name)
+let dir_use_output ppf name = ignore(Toploop.use_output ppf name)
 let dir_mod_use ppf name = ignore(Toploop.mod_use_file ppf name)
 
 let _ = add_directive "use" (Directive_string (dir_use std_out))
@@ -244,13 +249,19 @@ let _ = add_directive "use" (Directive_string (dir_use std_out))
       doc = "Read, compile and execute source phrases from the given file.";
     }
 
+let _ = add_directive "use_output" (Directive_string (dir_use_output std_out))
+    {
+      section = section_run;
+      doc = "Execute a command and read, compile and execute source phrases \
+             from its output.";
+    }
+
 let _ = add_directive "mod_use" (Directive_string (dir_mod_use std_out))
     {
       section = section_run;
       doc = "Usage is identical to #use but #mod_use \
              wraps the contents in a module.";
     }
-
 
 (* Install, remove a printer *)
 
@@ -549,11 +560,63 @@ let () =
     )
     "Print the signature of the corresponding type constructor."
 
+(* Each registered show_prim function is called in turn
+ * and any output produced is sent to std_out.
+ * Two show_prim functions are needed for constructors,
+ * one for exception constructors and another for
+ * non-exception constructors (normal and extensible variants). *)
+let is_exception_constructor env type_expr =
+  Ctype.equal env true [type_expr] [Predef.type_exn]
+
+let is_extension_constructor = function
+  | Cstr_extension _ -> true
+  | _ -> false
+
+let () =
+  (* This show_prim function will only show constructor types
+   * that are not also exception types. *)
+  reg_show_prim "show_constructor"
+    (fun env loc id lid ->
+       let desc = Env.lookup_constructor ~loc Env.Positive lid env in
+       if is_exception_constructor env desc.cstr_res then
+         raise Not_found;
+       let path =
+         match Ctype.repr desc.cstr_res with
+         | {desc=Tconstr(path, _, _)} -> path
+         | _ -> raise Not_found
+       in
+       let type_decl = Env.find_type path env in
+       if is_extension_constructor desc.cstr_tag then
+         let ret_type =
+           if desc.cstr_generalized then Some desc.cstr_res
+           else None
+         in
+         let ext =
+           { ext_type_path = path;
+             ext_type_params = type_decl.type_params;
+             ext_args = Cstr_tuple desc.cstr_args;
+             ext_ret_type = ret_type;
+             ext_private = Asttypes.Public;
+             ext_loc = desc.cstr_loc;
+             ext_attributes = desc.cstr_attributes;
+             ext_uid = desc.cstr_uid; }
+           in
+             [Sig_typext (id, ext, Text_first, Exported)]
+       else
+         (* make up a fake Ident.t as type_decl : Types.type_declaration
+          * does not have an Ident.t yet. Ident.create_presistent is a
+          * good choice because it has no side-effects.
+          * *)
+         let type_id = Ident.create_persistent (Path.name path) in
+         [ Sig_type (type_id, type_decl, Trec_first, Exported) ]
+    )
+    "Print the signature of the corresponding value constructor."
+
 let () =
   reg_show_prim "show_exception"
     (fun env loc id lid ->
        let desc = Env.lookup_constructor ~loc Env.Positive lid env in
-       if not (Ctype.equal env true [desc.cstr_res] [Predef.type_exn]) then
+       if not (is_exception_constructor env desc.cstr_res) then
          raise Not_found;
        let ret_type =
          if desc.cstr_generalized then Some Predef.type_exn
@@ -565,8 +628,10 @@ let () =
            ext_args = Cstr_tuple desc.cstr_args;
            ext_ret_type = ret_type;
            ext_private = Asttypes.Public;
-           Types.ext_loc = desc.cstr_loc;
-           Types.ext_attributes = desc.cstr_attributes; }
+           ext_loc = desc.cstr_loc;
+           ext_attributes = desc.cstr_attributes;
+           ext_uid = desc.cstr_uid;
+         }
        in
          [Sig_typext (id, ext, Text_exception, Exported)]
     )

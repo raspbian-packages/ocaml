@@ -27,16 +27,11 @@
 
 #include <stddef.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdarg.h>
 
 /* Basic types and constants */
 
 typedef size_t asize_t;
-
-#ifndef NULL
-#define NULL 0
-#endif
 
 #if defined(__GNUC__) || defined(__clang__)
   /* Supported since at least GCC 3.1 */
@@ -101,7 +96,7 @@ CAMLdeprecated_typedef(addr, char *);
 /* we need to be able to compute the exact offset of each member. */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 #define CAMLalign(n) _Alignas(n)
-#elif defined(__cplusplus) && _MSC_VER >= 1900
+#elif defined(__cplusplus) && (__cplusplus >= 201103L || _MSC_VER >= 1900)
 #define CAMLalign(n) alignas(n)
 #elif defined(SUPPORTS_ALIGNED_ATTRIBUTE)
 #define CAMLalign(n) __attribute__((aligned(n)))
@@ -216,7 +211,7 @@ CAMLnoreturn_end;
    If overflow is reported, this is the exact result modulo 2 to the word size.
 */
 
-static inline int caml_uadd_overflow(uintnat a, uintnat b, uintnat * res)
+Caml_inline int caml_uadd_overflow(uintnat a, uintnat b, uintnat * res)
 {
 #if __GNUC__ >= 5 || Caml_has_builtin(__builtin_add_overflow)
   return __builtin_add_overflow(a, b, res);
@@ -227,7 +222,7 @@ static inline int caml_uadd_overflow(uintnat a, uintnat b, uintnat * res)
 #endif
 }
 
-static inline int caml_usub_overflow(uintnat a, uintnat b, uintnat * res)
+Caml_inline int caml_usub_overflow(uintnat a, uintnat b, uintnat * res)
 {
 #if __GNUC__ >= 5 || Caml_has_builtin(__builtin_sub_overflow)
   return __builtin_sub_overflow(a, b, res);
@@ -239,7 +234,7 @@ static inline int caml_usub_overflow(uintnat a, uintnat b, uintnat * res)
 }
 
 #if __GNUC__ >= 5 || Caml_has_builtin(__builtin_mul_overflow)
-static inline int caml_umul_overflow(uintnat a, uintnat b, uintnat * res)
+Caml_inline int caml_umul_overflow(uintnat a, uintnat b, uintnat * res)
 {
   return __builtin_mul_overflow(a, b, res);
 }
@@ -408,107 +403,19 @@ extern void caml_set_fields (intnat v, uintnat, uintnat);
 
 /* snprintf emulation for Win32 */
 
-#if defined(_WIN32) && !defined(_UCRT)
+#ifdef _WIN32
+#ifndef _UCRT
 extern int caml_snprintf(char * buf, size_t size, const char * format, ...);
 #define snprintf caml_snprintf
 #endif
 
-#ifdef CAML_INSTR
-/* Timers and counters for GC latency profiling (Linux-only) */
-
-#include <time.h>
-#include <stdio.h>
-
-extern intnat caml_instr_starttime, caml_instr_stoptime;
-
-struct caml_instr_block {
-  struct timespec ts[10];
-  char *tag[10];
-  int index;
-  struct caml_instr_block *next;
-};
-
-extern struct caml_instr_block *caml_instr_log;
-
-/* Declare a timer/counter name. [t] must be a new variable name. */
-#define CAML_INSTR_DECLARE(t)                                       \
-  struct caml_instr_block *t = NULL
-
-/* Allocate the data block for a given name.
-   [t] must have been declared with [CAML_INSTR_DECLARE]. */
-#define CAML_INSTR_ALLOC(t) do{                                             \
-    if (Caml_state_field(stat_minor_collections) >= caml_instr_starttime    \
-        && Caml_state_field(stat_minor_collections) < caml_instr_stoptime){ \
-      t = caml_stat_alloc_noexc (sizeof (struct caml_instr_block));         \
-      t->index = 0;                                                         \
-      t->tag[0] = "";                                                       \
-      t->next = caml_instr_log;                                             \
-      caml_instr_log = t;                                                   \
-    }                                                                       \
-  }while(0)
-
-/* Allocate the data block and start the timer.
-   [t] must have been declared with [CAML_INSTR_DECLARE]
-   and allocated with [CAML_INSTR_ALLOC]. */
-#define CAML_INSTR_START(t, msg) do{                                \
-    if (t != NULL){                                                 \
-      t->tag[0] = msg;                                              \
-      clock_gettime (CLOCK_REALTIME, &(t->ts[0]));                  \
-    }                                                               \
-  }while(0)
-
-/* Declare a timer, allocate its data, and start it.
-   [t] must be a new variable name. */
-#define CAML_INSTR_SETUP(t, msg)                                    \
-  CAML_INSTR_DECLARE (t);                                           \
-  CAML_INSTR_ALLOC (t);                                             \
-  CAML_INSTR_START (t, msg)
-
-/* Record an intermediate time within a given timer.
-   [t] must have been declared, allocated, and started. */
-#define CAML_INSTR_TIME(t, msg) do{                                 \
-    if (t != NULL){                                                 \
-      ++ t->index;                                                  \
-      t->tag[t->index] = (msg);                                     \
-      clock_gettime (CLOCK_REALTIME, &(t->ts[t->index]));           \
-    }                                                               \
-  }while(0)
-
-/* Record an integer data point.
-   If [msg] ends with # it will be interpreted as an integer-valued event.
-   If it ends with @ it will be interpreted as an event counter.
-*/
-#define CAML_INSTR_INT(msg, data) do{                               \
-    CAML_INSTR_SETUP (__caml_tmp, "");                              \
-    if (__caml_tmp != NULL){                                        \
-      __caml_tmp->index = 1;                                        \
-      __caml_tmp->tag[1] = msg;                                     \
-      __caml_tmp->ts[1].tv_sec = 0;                                 \
-      __caml_tmp->ts[1].tv_nsec = (data);                           \
-    }                                                               \
-  }while(0)
-
-/* This function is called at the start of the program to set up
-   the data for the above macros.
-*/
-extern void caml_instr_init (void);
-
-/* This function is automatically called by the runtime to output
-   the collected data to the dump file. */
-extern void caml_instr_atexit (void);
-
-#else /* CAML_INSTR */
-
-#define CAML_INSTR_DECLARE(t) /**/
-#define CAML_INSTR_ALLOC(t) /**/
-#define CAML_INSTR_START(t, name) /**/
-#define CAML_INSTR_SETUP(t, name) /**/
-#define CAML_INSTR_TIME(t, msg) /**/
-#define CAML_INSTR_INT(msg, c) /**/
-#define caml_instr_init() /**/
-#define caml_instr_atexit() /**/
-
-#endif /* CAML_INSTR */
+extern int caml_snwprintf(wchar_t * buf,
+                          size_t size,
+                          const wchar_t * format, ...);
+#define snprintf_os caml_snwprintf
+#else
+#define snprintf_os snprintf
+#endif
 
 /* Macro used to deactivate thread and address sanitizers on some
    functions. */
@@ -541,8 +448,10 @@ int caml_find_code_fragment(char *pc, int *index, struct code_fragment **cf);
 
 /* The [backtrace_slot] type represents values stored in
  * [Caml_state->backtrace_buffer].  In bytecode, it is the same as a
- * [code_t], in native code it as a [frame_descr *].  The difference
- * doesn't matter for code outside [backtrace_{byt,nat}.c],
+ * [code_t], in native code it is either a [frame_descr *] or a [debuginfo],
+ * depending on the second-lowest bit.  In any case, the lowest bit must
+ * be 0.
+ * The representation doesn't matter for code outside [backtrace_{byt,nat}.c],
  * so it is just exposed as a [void *].
  */
 typedef void * backtrace_slot;

@@ -81,6 +81,12 @@ extern void caml_alloc_custom_table (struct caml_custom_table *,
                                      asize_t, asize_t);
 void caml_alloc_minor_tables (void);
 
+/* Asserts that a word is a valid header for a young object */
+#define CAMLassert_young_header(hd)                \
+  CAMLassert(Wosize_hd(hd) > 0 &&                  \
+             Wosize_hd(hd) <= Max_young_wosize &&  \
+             Color_hd(hd) == 0)
+
 #define Oldify(p) do{ \
     value __oldify__v__ = *p; \
     if (Is_block (__oldify__v__) && Is_young (__oldify__v__)){ \
@@ -88,7 +94,7 @@ void caml_alloc_minor_tables (void);
     } \
   }while(0)
 
-static inline void add_to_ref_table (struct caml_ref_table *tbl, value *p)
+Caml_inline void add_to_ref_table (struct caml_ref_table *tbl, value *p)
 {
   if (tbl->ptr >= tbl->limit){
     CAMLassert (tbl->ptr == tbl->limit);
@@ -97,7 +103,7 @@ static inline void add_to_ref_table (struct caml_ref_table *tbl, value *p)
   *tbl->ptr++ = p;
 }
 
-static inline void add_to_ephe_ref_table (struct caml_ephe_ref_table *tbl,
+Caml_inline void add_to_ephe_ref_table (struct caml_ephe_ref_table *tbl,
                                           value ar, mlsize_t offset)
 {
   struct caml_ephe_ref_elt *ephe_ref;
@@ -111,7 +117,7 @@ static inline void add_to_ephe_ref_table (struct caml_ephe_ref_table *tbl,
   CAMLassert(ephe_ref->offset < Wosize_val(ephe_ref->ephe));
 }
 
-static inline void add_to_custom_table (struct caml_custom_table *tbl, value v,
+Caml_inline void add_to_custom_table (struct caml_custom_table *tbl, value v,
                                         mlsize_t mem, mlsize_t max)
 {
   struct caml_custom_elt *elt;

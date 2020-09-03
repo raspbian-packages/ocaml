@@ -153,6 +153,10 @@ val mk_if_then_else :
 (** Boolean negation *)
 val mk_not : Debuginfo.t -> expression -> expression
 
+(** Integer and float comparison that returns int not bool *)
+val mk_compare_ints : Debuginfo.t -> expression -> expression -> expression
+val mk_compare_floats : Debuginfo.t -> expression -> expression -> expression
+
 (** Loop construction (while true do expr done).
     Used to be represented as Cloop. *)
 val create_loop : expression -> Debuginfo.t -> expression
@@ -526,12 +530,12 @@ val make_switch :
 
 (** [transl_int_switch loc arg low high cases default] *)
 val transl_int_switch :
-  Location.t -> expression -> int -> int ->
+  Debuginfo.t -> expression -> int -> int ->
   (int * expression) list -> expression -> expression
 
 (** [transl_switch_clambda loc arg index cases] *)
 val transl_switch_clambda :
-  Location.t -> expression -> int array -> expression array -> expression
+  Debuginfo.t -> expression -> int array -> expression array -> expression
 
 (** [strmatch_compile dbg arg default cases] *)
 val strmatch_compile :

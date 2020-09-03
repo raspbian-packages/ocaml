@@ -178,7 +178,11 @@ let check_consistency file_name cu =
             then Consistbl.set crc_interfaces name crc file_name
             else Consistbl.check crc_interfaces name crc file_name)
       cu.cu_imports
-  with Consistbl.Inconsistency(name, user, auth) ->
+  with Consistbl.Inconsistency {
+      unit_name = name;
+      inconsistent_source = user;
+      original_source = auth;
+    } ->
     raise(Error(Inconsistent_import(name, user, auth)))
   end;
   begin try
@@ -572,9 +576,12 @@ let build_custom_runtime prim_name exec_name =
       [Printf.sprintf "-fdebug-prefix-map=%s=camlprim.c" prim_name]
     else
       [] in
+  let exitcode =
+    (Clflags.std_include_flag "-I" ^ " " ^ Config.bytecomp_c_libraries)
+  in
   Ccomp.call_linker Ccomp.Exe exec_name
     (debug_prefix_map @ [prim_name] @ List.rev !Clflags.ccobjs @ [runtime_lib])
-    (Clflags.std_include_flag "-I" ^ " " ^ Config.bytecomp_c_libraries)
+    exitcode = 0
 
 let append_bytecode bytecode_name exec_name =
   let oc = open_out_gen [Open_wronly; Open_append; Open_binary] 0 exec_name in
@@ -706,7 +713,7 @@ let link objfiles output_name =
                    else "-lcamlrun" ^ !Clflags.runtime_variant in
                  Ccomp.call_linker mode output_name
                    ([obj_file] @ List.rev !Clflags.ccobjs @ [runtime_lib])
-                   c_libs
+                   c_libs = 0
                ) then raise (Error Custom_runtime);
            end
          end;

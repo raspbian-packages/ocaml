@@ -31,6 +31,7 @@
 #include "caml/major_gc.h"
 #include "caml/misc.h"
 #include "caml/mlvalues.h"
+#include "caml/eventlog.h"
 
 /*************** declarations common to all policies ******************/
 
@@ -50,45 +51,19 @@ value caml_fl_merge = Val_NULL;  /* Current insertion pointer.  Managed
 #define Next_small(v) Field ((v), 0)
 
 /* Next in memory order */
-static inline value Next_in_mem (value v) {
+Caml_inline value Next_in_mem (value v) {
   return (value) &Field ((v), Whsize_val (v));
 }
 
 #ifdef CAML_INSTR
-static uintnat instr_size [20] =
-  {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-static char *instr_name [20] = {
-  NULL,
-  "alloc01@",
-  "alloc02@",
-  "alloc03@",
-  "alloc04@",
-  "alloc05@",
-  "alloc06@",
-  "alloc07@",
-  "alloc08@",
-  "alloc09@",
-  "alloc10-19@",
-  "alloc20-29@",
-  "alloc30-39@",
-  "alloc40-49@",
-  "alloc50-59@",
-  "alloc60-69@",
-  "alloc70-79@",
-  "alloc80-89@",
-  "alloc90-99@",
-  "alloc_large@",
-};
-uintnat caml_instr_alloc_jump = 0;
+
 /* number of pointers followed to allocate from the free set */
+uintnat caml_instr_alloc_jump = 0;
 
-#define INSTR_alloc_jump(n) (caml_instr_alloc_jump += (n))
-
-#else
-
-#define INSTR_alloc_jump(n) ((void)0)
+#define EV_ALLOC_JUMP(n) (caml_instr_alloc_jump += (n))
 
 #endif /*CAML_INSTR*/
+
 
 
 /********************* next-fit allocation policy *********************/
@@ -179,15 +154,6 @@ static header_t *nf_allocate (mlsize_t wo_sz)
   value cur = Val_NULL, prev;
   CAMLassert (sizeof (char *) == sizeof (value));
   CAMLassert (wo_sz >= 1);
-#ifdef CAML_INSTR
-  if (wo_sz < 10){
-    ++instr_size[wo_sz];
-  }else if (wo_sz < 100){
-    ++instr_size[wo_sz/10 + 9];
-  }else{
-    ++instr_size[19];
-  }
-#endif /* CAML_INSTR */
 
     CAMLassert (nf_prev != Val_NULL);
     /* Search from [nf_prev] to the end of the list. */
@@ -200,9 +166,7 @@ static header_t *nf_allocate (mlsize_t wo_sz)
       }
       prev = cur;
       cur = Next_small (prev);
-#ifdef CAML_INSTR
-      ++ caml_instr_alloc_jump;
-#endif
+      CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
     }
     nf_last = prev;
     /* Search from the start of the list to [nf_prev]. */
@@ -214,9 +178,7 @@ static header_t *nf_allocate (mlsize_t wo_sz)
       }
       prev = cur;
       cur = Next_small (prev);
-#ifdef CAML_INSTR
-      ++ caml_instr_alloc_jump;
-#endif
+      CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
     }
     /* No suitable block was found. */
     return NULL;
@@ -232,13 +194,7 @@ static header_t *nf_last_fragment;
 
 static void nf_init_merge (void)
 {
-#ifdef CAML_INSTR
-  int i;
-  for (i = 1; i < 20; i++){
-    CAML_INSTR_INT (instr_name[i], instr_size[i]);
-    instr_size[i] = 0;
-  }
-#endif /* CAML_INSTR */
+  CAML_EV_ALLOC_FLUSH();
   nf_last_fragment = NULL;
   caml_fl_merge = Nf_head;
 #ifdef DEBUG
@@ -510,15 +466,6 @@ static header_t *ff_allocate (mlsize_t wo_sz)
   mlsize_t sz, prevsz;
   CAMLassert (sizeof (char *) == sizeof (value));
   CAMLassert (wo_sz >= 1);
-#ifdef CAML_INSTR
-  if (wo_sz < 10){
-    ++instr_size[wo_sz];
-  }else if (wo_sz < 100){
-    ++instr_size[wo_sz/10 + 9];
-  }else{
-    ++instr_size[19];
-  }
-#endif /* CAML_INSTR */
 
     /* Search in the flp array. */
     for (i = 0; i < flp_size; i++){
@@ -670,13 +617,7 @@ static header_t *ff_last_fragment;
 
 static void ff_init_merge (void)
 {
-#ifdef CAML_INSTR
-  int i;
-  for (i = 1; i < 20; i++){
-    CAML_INSTR_INT (instr_name[i], instr_size[i]);
-    instr_size[i] = 0;
-  }
-#endif /* CAML_INSTR */
+  CAML_EV_ALLOC_FLUSH();
   ff_last_fragment = NULL;
   caml_fl_merge = Ff_head;
 #ifdef DEBUG
@@ -887,9 +828,9 @@ static int bf_small_map = 0;
 /* Small free blocks have only one pointer to the next block.
    Large free blocks have 5 fields:
    tree fields:
-     - node flag
-     - left son
-     - right son
+     - isnode flag
+     - left child
+     - right child
    list fields:
      - next
      - prev
@@ -902,7 +843,7 @@ typedef struct large_free_block {
   struct large_free_block *next;
 } large_free_block;
 
-static inline mlsize_t bf_large_wosize (struct large_free_block *n) {
+Caml_inline mlsize_t bf_large_wosize (struct large_free_block *n) {
   return Wosize_val((value)(n));
 }
 
@@ -921,7 +862,7 @@ static struct large_free_block *bf_large_least;
 #include <strings.h>
 #elif defined(HAS_BITSCANFORWARD)
 #include <intrin.h>
-static inline int ffs (int x)
+Caml_inline int ffs (int x)
 {
   unsigned long index;
   unsigned char result;
@@ -929,7 +870,7 @@ static inline int ffs (int x)
   return result ? (int) index + 1 : 0;
 }
 #else
-static inline int ffs (int x)
+Caml_inline int ffs (int x)
 {
   /* adapted from Hacker's Delight */
   int bnz, b0, b1, b2, b3, b4;
@@ -946,11 +887,11 @@ static inline int ffs (int x)
 #endif /* HAS_FFS or HAS_BITSCANFORWARD */
 
 /* Indexing starts at 1 because that's the minimum block size. */
-static inline void set_map (int index)
+Caml_inline void set_map (int index)
 {
   bf_small_map |= (1 << (index - 1));
 }
-static inline void unset_map (int index)
+Caml_inline void unset_map (int index)
 {
   bf_small_map &= ~(1 << (index - 1));
 }
@@ -1008,7 +949,7 @@ static void bf_check (void)
     }else{
       CAMLassert (caml_gc_phase != Phase_sweep
                   || caml_fl_merge == Val_NULL
-                  || Val_bp (bf_small_fl[i].merge) < caml_fl_merge);
+                  || bf_small_fl[i].merge < &Next_small(caml_fl_merge));
     }
     CAMLassert (*bf_small_fl[i].merge == Val_NULL
                 || Color_val (*bf_small_fl[i].merge) == Caml_blue);
@@ -1076,7 +1017,7 @@ static large_free_block **bf_search (mlsize_t wosz)
 
   while (1){
     cur = *p;
-    INSTR_alloc_jump (1);
+    CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
     if (cur == NULL) break;
     cursz = bf_large_wosize (cur);
     if (cursz == wosz){
@@ -1091,7 +1032,7 @@ static large_free_block **bf_search (mlsize_t wosz)
   return p;
 }
 
-/* Search for the least node that is large enough to accomodate the given
+/* Search for the least node that is large enough to accommodate the given
    size. Return in [next_lower] an upper bound on either the size of the
    next-lower node in the tree, or BF_NUM_SMALL if there is no such node.
 */
@@ -1105,7 +1046,7 @@ static large_free_block **bf_search_best (mlsize_t wosz, mlsize_t *next_lower)
 
   while (1){
     cur = *p;
-    INSTR_alloc_jump (1);
+    CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
     if (cur == NULL){
       *next_lower = lowsz;
       break;
@@ -1150,7 +1091,7 @@ static void bf_splay (mlsize_t wosz)
     if (xsz > wosz){
       /* zig */
       y = x->left;
-      INSTR_alloc_jump (1);
+      CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
       if (y == NULL) break;
       if (bf_large_wosize (y) > wosz){
         /* zig-zig: rotate right */
@@ -1158,7 +1099,7 @@ static void bf_splay (mlsize_t wosz)
         y->right = x;
         x = y;
         y = x->left;
-        INSTR_alloc_jump (2);
+        CAML_EVENTLOG_DO(EV_ALLOC_JUMP (2));
         if (y == NULL) break;
       }
       /* link right */
@@ -1169,7 +1110,7 @@ static void bf_splay (mlsize_t wosz)
       CAMLassert (xsz < wosz);
       /* zag */
       y = x->right;
-      INSTR_alloc_jump (1);
+      CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
       if (y == NULL) break;
       if (bf_large_wosize (y) < wosz){
         /* zag-zag : rotate left */
@@ -1177,7 +1118,7 @@ static void bf_splay (mlsize_t wosz)
         y->left = x;
         x = y;
         y = x->right;
-        INSTR_alloc_jump (2);
+        CAML_EVENTLOG_DO(EV_ALLOC_JUMP (2));
         if (y == NULL) break;
       }
       /* link left */
@@ -1191,7 +1132,7 @@ static void bf_splay (mlsize_t wosz)
   *right_bottom = x->right;
   x->left = left_top;
   x->right = right_top;
-  INSTR_alloc_jump (2);
+  CAML_EVENTLOG_DO(EV_ALLOC_JUMP (2));
   bf_large_tree = x;
 }
 
@@ -1207,19 +1148,19 @@ static void bf_splay_least (large_free_block **p)
   large_free_block **right_bottom = &right_top;
 
   x = *p;
-  INSTR_alloc_jump (1);
+  CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
   CAMLassert (x != NULL);
   while (1){
     /* We are always in the zig case. */
     y = x->left;
-    INSTR_alloc_jump (1);
+    CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
     if (y == NULL) break;
     /* And in the zig-zig case. rotate right */
     x->left = y->right;
     y->right = x;
     x = y;
     y = x->left;
-    INSTR_alloc_jump (2);
+    CAML_EVENTLOG_DO(EV_ALLOC_JUMP (2));
     if (y == NULL) break;
     /* link right */
     *right_bottom = x;
@@ -1229,7 +1170,7 @@ static void bf_splay_least (large_free_block **p)
   /* reassemble the tree */
   CAMLassert (x->left == NULL);
   *right_bottom = x->right;
-  INSTR_alloc_jump (1);
+  CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
   x->right = right_top;
   *p = x;
 }
@@ -1241,12 +1182,12 @@ static void bf_remove_node (large_free_block **p)
   large_free_block *l, *r;
 
   x = *p;
-  INSTR_alloc_jump (1);
+  CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
   if (x == NULL) return;
   if (x == bf_large_least) bf_large_least = NULL;
   l = x->left;
   r = x->right;
-  INSTR_alloc_jump (2);
+  CAML_EVENTLOG_DO(EV_ALLOC_JUMP (2));
   if (l == NULL){
     *p = r;
   }else if (r == NULL){
@@ -1267,7 +1208,7 @@ static void bf_insert_block (large_free_block *n)
   mlsize_t sz = bf_large_wosize (n);
   large_free_block **p = bf_search (sz);
   large_free_block *x = *p;
-  INSTR_alloc_jump (1);
+  CAML_EVENTLOG_DO(EV_ALLOC_JUMP (1));
 
   if (bf_large_least != NULL){
     mlsize_t least_sz = bf_large_wosize (bf_large_least);
@@ -1299,7 +1240,7 @@ static void bf_insert_block (large_free_block *n)
     n->next = x;
     x->prev->next = n;
     x->prev = n;
-    INSTR_alloc_jump (2);
+    CAML_EVENTLOG_DO(EV_ALLOC_JUMP (2));
     bf_splay (sz);
   }
 }
@@ -1568,16 +1509,6 @@ static header_t *bf_allocate (mlsize_t wosz)
   CAMLassert (sizeof (char *) == sizeof (value));
   CAMLassert (wosz >= 1);
 
-#ifdef CAML_INSTR
-  if (wosz < 10){
-    ++instr_size[wosz];
-  }else if (wosz < 100){
-    ++instr_size[wosz/10 + 9];
-  }else{
-    ++instr_size[19];
-  }
-#endif /* CAML_INSTR */
-
   if (wosz <= BF_NUM_SMALL){
     if (bf_small_fl[wosz].free != Val_NULL){
       /* fast path: allocate from the corresponding free list */
@@ -1635,12 +1566,7 @@ static void bf_init_merge (void)
 {
   mlsize_t i;
 
-#ifdef CAML_INSTR
-  for (i = 1; i < 20; i++){
-    CAML_INSTR_INT (instr_name[i], instr_size[i]);
-    instr_size[i] = 0;
-  }
-#endif /* CAML_INSTR */
+  CAML_EV_ALLOC_FLUSH();
 
   caml_fl_merge = Val_NULL;
 

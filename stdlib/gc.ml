@@ -63,6 +63,8 @@ external get_minor_free : unit -> int = "caml_get_minor_free"
 external get_bucket : int -> int = "caml_get_major_bucket" [@@noalloc]
 external get_credit : unit -> int = "caml_get_major_credit" [@@noalloc]
 external huge_fallback_count : unit -> int = "caml_gc_huge_fallback_count"
+external eventlog_pause : unit -> unit = "caml_eventlog_pause"
+external eventlog_resume : unit -> unit = "caml_eventlog_resume"
 
 open Printf
 
@@ -118,3 +120,40 @@ let create_alarm f =
 
 
 let delete_alarm a = a := false
+
+module Memprof =
+  struct
+    type allocation =
+      { n_samples : int;
+        size : int;
+        unmarshalled : bool;
+        callstack : Printexc.raw_backtrace }
+
+    type ('minor, 'major) tracker = {
+      alloc_minor: allocation -> 'minor option;
+      alloc_major: allocation -> 'major option;
+      promote: 'minor -> 'major option;
+      dealloc_minor: 'minor -> unit;
+      dealloc_major: 'major -> unit;
+    }
+
+    let null_tracker = {
+      alloc_minor = (fun _ -> None);
+      alloc_major = (fun _ -> None);
+      promote = (fun _ -> None);
+      dealloc_minor = (fun _ -> ());
+      dealloc_major = (fun _ -> ());
+    }
+
+    external c_start :
+      float -> int -> ('minor, 'major) tracker -> unit
+      = "caml_memprof_start"
+
+    let start
+      ~sampling_rate
+      ?(callstack_size = max_int)
+      tracker =
+      c_start sampling_rate callstack_size tracker
+
+    external stop : unit -> unit = "caml_memprof_stop"
+  end

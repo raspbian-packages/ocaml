@@ -189,7 +189,7 @@ let rec typexp copy_scope s ty =
          | exception Not_found -> Tconstr(type_path s p, args, ref Mnil)
          | Path _ -> Tconstr(type_path s p, args, ref Mnil)
          | Type_function { params; body } ->
-            (!ctype_apply_env_empty params body args).desc
+            Tlink (!ctype_apply_env_empty params body args)
          end
       | Tpackage(p, n, tl) ->
           Tpackage(modtype_path s p, n, List.map (typexp copy_scope s) tl)
@@ -263,6 +263,7 @@ let label_declaration copy_scope s l =
     ld_type = typexp copy_scope s l.ld_type;
     ld_loc = loc s l.ld_loc;
     ld_attributes = attrs s l.ld_attributes;
+    ld_uid = l.ld_uid;
   }
 
 let constructor_arguments copy_scope s = function
@@ -278,6 +279,7 @@ let constructor_declaration copy_scope s c =
     cd_res = Option.map (typexp copy_scope s) c.cd_res;
     cd_loc = loc s c.cd_loc;
     cd_attributes = attrs s c.cd_attributes;
+    cd_uid = c.cd_uid;
   }
 
 let type_declaration' copy_scope s decl =
@@ -300,12 +302,14 @@ let type_declaration' copy_scope s decl =
       end;
     type_private = decl.type_private;
     type_variance = decl.type_variance;
+    type_separability = decl.type_separability;
     type_is_newtype = false;
     type_expansion_scope = Btype.lowest_level;
     type_loc = loc s decl.type_loc;
     type_attributes = attrs s decl.type_attributes;
     type_immediate = decl.type_immediate;
     type_unboxed = decl.type_unboxed;
+    type_uid = decl.type_uid;
   }
 
 let type_declaration s decl =
@@ -346,6 +350,7 @@ let class_declaration' copy_scope s decl =
       end;
     cty_loc = loc s decl.cty_loc;
     cty_attributes = attrs s decl.cty_attributes;
+    cty_uid = decl.cty_uid;
   }
 
 let class_declaration s decl =
@@ -358,6 +363,7 @@ let cltype_declaration' copy_scope s decl =
     clty_path = type_path s decl.clty_path;
     clty_loc = loc s decl.clty_loc;
     clty_attributes = attrs s decl.clty_attributes;
+    clty_uid = decl.clty_uid;
   }
 
 let cltype_declaration s decl =
@@ -371,6 +377,7 @@ let value_description' copy_scope s descr =
     val_kind = descr.val_kind;
     val_loc = loc s descr.val_loc;
     val_attributes = attrs s descr.val_attributes;
+    val_uid = descr.val_uid;
    }
 
 let value_description s descr =
@@ -383,7 +390,9 @@ let extension_constructor' copy_scope s ext =
     ext_ret_type = Option.map (typexp copy_scope s) ext.ext_ret_type;
     ext_private = ext.ext_private;
     ext_attributes = attrs s ext.ext_attributes;
-    ext_loc = if s.for_saving then Location.none else ext.ext_loc; }
+    ext_loc = if s.for_saving then Location.none else ext.ext_loc;
+    ext_uid = ext.ext_uid;
+  }
 
 let extension_constructor s ext =
   For_copy.with_scope
@@ -497,14 +506,16 @@ and signature_item' copy_scope scoping s comp =
   | Sig_class_type(id, d, rs, vis) ->
       Sig_class_type(id, cltype_declaration' copy_scope s d, rs, vis)
 
-and signature_item s comp =
-  For_copy.with_scope (fun copy_scope -> signature_item' copy_scope s comp)
+and signature_item scoping s comp =
+  For_copy.with_scope
+    (fun copy_scope -> signature_item' copy_scope scoping s comp)
 
 and module_declaration scoping s decl =
   {
     md_type = modtype scoping s decl.md_type;
     md_attributes = attrs s decl.md_attributes;
     md_loc = loc s decl.md_loc;
+    md_uid = decl.md_uid;
   }
 
 and modtype_declaration scoping s decl  =
@@ -512,6 +523,7 @@ and modtype_declaration scoping s decl  =
     mtd_type = Option.map (modtype scoping s) decl.mtd_type;
     mtd_attributes = attrs s decl.mtd_attributes;
     mtd_loc = loc s decl.mtd_loc;
+    mtd_uid = decl.mtd_uid;
   }
 
 
@@ -527,9 +539,10 @@ let merge_path_maps f m1 m2 =
 let type_replacement s = function
   | Path p -> Path (type_path s p)
   | Type_function { params; body } ->
-     let params = List.map (type_expr s) params in
-     let body = type_expr s body in
-     Type_function { params; body }
+    For_copy.with_scope (fun copy_scope ->
+     let params = List.map (typexp copy_scope s) params in
+     let body = typexp copy_scope s body in
+     Type_function { params; body })
 
 (* Composition of substitutions:
      apply (compose s1 s2) x = apply s2 (apply s1 x) *)

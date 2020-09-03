@@ -46,6 +46,12 @@ end
 
 (* printing environment for path shortening and naming *)
 let printing_env = ref Env.empty
+
+(* When printing, it is important to only observe the
+   current printing environment, without reading any new
+   cmi present on the file system *)
+let in_printing_env f = Env.without_cmis f !printing_env
+
 let human_unique n id = Printf.sprintf "%s/%d" (Ident.name id) n
 
 type namespace =
@@ -79,10 +85,11 @@ module Namespace = struct
 
   let pp ppf x = Format.pp_print_string ppf (show x)
 
+  (** The two functions below should never access the filesystem,
+      and thus use {!in_printing_env} rather than directly
+      accessing the printing environment *)
   let lookup =
-    let to_lookup f lid =
-      fst @@ f (Lident lid) !printing_env
-    in
+    let to_lookup f lid = fst @@ in_printing_env (f (Lident lid)) in
     function
     | Type -> to_lookup Env.find_type_by_name
     | Module -> to_lookup Env.find_module_by_name
@@ -92,15 +99,14 @@ module Namespace = struct
     | Other -> fun _ -> raise Not_found
 
   let location namespace id =
-    let env = !printing_env in
     let path = Path.Pident id in
     try Some (
         match namespace with
-        | Type -> (Env.find_type path env).type_loc
-        | Module -> (Env.find_module path env).md_loc
-        | Module_type -> (Env.find_modtype path env).mtd_loc
-        | Class -> (Env.find_class path env).cty_loc
-        | Class_type -> (Env.find_cltype path env).clty_loc
+        | Type -> (in_printing_env @@ Env.find_type path).type_loc
+        | Module -> (in_printing_env @@ Env.find_module path).md_loc
+        | Module_type -> (in_printing_env @@ Env.find_modtype path).mtd_loc
+        | Class -> (in_printing_env @@ Env.find_class path).cty_loc
+        | Class_type -> (in_printing_env @@ Env.find_cltype path).clty_loc
         | Other -> Location.none
       ) with Not_found -> None
 
@@ -330,7 +336,7 @@ let ident_stdlib = Ident.create_persistent "Stdlib"
 let non_shadowed_pervasive = function
   | Pdot(Pident id, s) as path ->
       Ident.same id ident_stdlib &&
-      (match Env.find_type_by_name (Lident s) !printing_env with
+      (match in_printing_env (Env.find_type_by_name (Lident s)) with
        | (path', _) -> Path.same path path'
        | exception Not_found -> true)
   | _ -> false
@@ -942,20 +948,18 @@ let rec tree_of_typexp sch ty =
         let name_gen = if non_gen then new_weak_name ty else new_name in
         Otyp_var (non_gen, name_of_type name_gen ty)
     | Tarrow(l, ty1, ty2, _) ->
-        let pr_arrow l ty1 ty2 =
-          let lab =
-            if !print_labels || is_optional l then string_of_label l else ""
-          in
-          let t1 =
-            if is_optional l then
-              match (repr ty1).desc with
-              | Tconstr(path, [ty], _)
-                when Path.same path Predef.path_option ->
-                  tree_of_typexp sch ty
-              | _ -> Otyp_stuff "<hidden>"
-            else tree_of_typexp sch ty1 in
-          Otyp_arrow (lab, t1, tree_of_typexp sch ty2) in
-        pr_arrow l ty1 ty2
+        let lab =
+          if !print_labels || is_optional l then string_of_label l else ""
+        in
+        let t1 =
+          if is_optional l then
+            match (repr ty1).desc with
+            | Tconstr(path, [ty], _)
+              when Path.same path Predef.path_option ->
+                tree_of_typexp sch ty
+            | _ -> Otyp_stuff "<hidden>"
+          else tree_of_typexp sch ty1 in
+        Otyp_arrow (lab, t1, tree_of_typexp sch ty2)
     | Ttuple tyl ->
         Otyp_tuple (tree_of_typlist sch tyl)
     | Tconstr(p, tyl, _abbrev) ->
@@ -1112,6 +1116,12 @@ let type_expr ppf ty =
 and type_sch ppf ty = typexp true ppf ty
 
 and type_scheme ppf ty = reset_and_mark_loops ty; typexp true ppf ty
+
+let type_path ppf p =
+  let (p', s) = best_type_path p in
+  let p = if (s = Id) then p' else p in
+  let t = tree_of_path Type p in
+  !Oprint.out_ident ppf t
 
 (* Maxence *)
 let type_scheme_max ?(b_reset_names=true) ppf ty =
@@ -1572,13 +1582,21 @@ let filter_rem_sig item rem =
       ([], rem)
 
 let dummy =
-  { type_params = []; type_arity = 0; type_kind = Type_abstract;
-    type_private = Public; type_manifest = None; type_variance = [];
-    type_is_newtype = false; type_expansion_scope = Btype.lowest_level;
+  {
+    type_params = [];
+    type_arity = 0;
+    type_kind = Type_abstract;
+    type_private = Public;
+    type_manifest = None;
+    type_variance = [];
+    type_separability = [];
+    type_is_newtype = false;
+    type_expansion_scope = Btype.lowest_level;
     type_loc = Location.none;
     type_attributes = [];
     type_immediate = Unknown;
     type_unboxed = unboxed_false_default_false;
+    type_uid = Uid.internal_not_actually_unique;
   }
 
 let hide ids env = List.fold_right
