@@ -285,15 +285,31 @@ try
   test (sprintf "%4F" 3. = "  3.");
   test (sprintf "%-4F" 3. = "3.  ");
   test (sprintf "%04F" 3. = "003.");
-(* plus-padding unsupported
   test (sprintf "%+4F" 3. = " +3.");
-*)
-(* no precision
-  test (sprintf "%.3F" 42.42 = "42.420");
-  test (sprintf "%12.3F" 42.42e42 = "   4.242e+43");
-  test (sprintf "%.3F" 42.00 = "42.000");
-  test (sprintf "%.3F" 0.0042 = "0.004");
-*)
+  test (sprintf "%.3F" 42.42 = "42.4");
+  test (sprintf "%12.3F" 42.42e42 =* "    4.24e+43");
+  test (sprintf "%.3F" 42.00 = "42.");
+  test (sprintf "%.3F" 0.0042 = "0.0042");
+  test (sprintf "%F" nan = "nan");
+  test (sprintf "%F" (-. nan) = "nan");
+  test (sprintf "%F" infinity = "infinity");
+  test (sprintf "%F" neg_infinity = "neg_infinity");
+
+  printf "\n#F\n%!";
+  test (sprintf "%+#F" (+0.) = "+0x0p+0");
+  test (sprintf "%+#F" (-0.) = "-0x0p+0");
+  test (sprintf "%+#F" (+1.) = "+0x1p+0");
+  test (sprintf "%+#F" (-1.) = "-0x1p+0");
+  test (sprintf "%+#F" (+1024.) = "+0x1p+10");
+  test (sprintf "% #F" (+1024.) = " 0x1p+10");
+  test (sprintf "%+#F" (-1024.) = "-0x1p+10");
+  test (sprintf "%#F" 0x123.456 = "0x1.23456p+8");
+  test (sprintf "%#F" 0x123456789ABCDE. = "0x1.23456789abcdep+52");
+  test (sprintf "%#F" epsilon_float = "0x1p-52");
+  test (sprintf "%#F" nan = "nan");
+  test (sprintf "%#F" (-. nan) = "nan");
+  test (sprintf "%#F" infinity = "infinity");
+  test (sprintf "%#F" neg_infinity = "neg_infinity");
 
   printf "\nh\n%!";
   test (sprintf "%+h" (+0.) = "+0x0p+0");
@@ -373,23 +389,27 @@ try
   (*test (sprintf "%-0+ #14.3E" 42.42 =* "+4.242E+01    ");*)
     (* >> '-' is incompatible with '0', '#' is incompatible with 'E' *)
 
-(* %g gives strange results that correspond to neither %f nor %e
   printf "\ng\n%!";
-  test (sprintf "%g" (-42.42) = "-42.42000");
-  test (sprintf "%-15g" (-42.42) = "-42.42000      ");
-  test (sprintf "%015g" (-42.42) = "-00000042.42000");
-  test (sprintf "%+g" 42.42 = "+42.42000");
-  test (sprintf "% g" 42.42 = " 42.42000");
-  test (sprintf "%#g" 42.42 = "42.42000");
-  test (sprintf "%15g" 42.42 = "       42.42000");
-  test (sprintf "%*g" 14 42.42 = "      42.42000");
-  test (sprintf "%-0+ #14g" 42.42 = "+42.42000     ");
-  test (sprintf "%.3g" (-42.42) = "-42.420");
-*)
+  test (sprintf "%g" (-42.42) = "-42.42");
+  test (sprintf "%.3g" (-4242.) =* "-4.24e+03");
+  test (sprintf "%-15g" (-42.42) = "-42.42         ");
+  test (sprintf "%015g" (-42.42) = "-00000000042.42");
+  test (sprintf "%+g" 42.42 = "+42.42");
+  test (sprintf "% g" 42.42 = " 42.42");
+  test (sprintf "%15g" 42.42 = "          42.42");
+  test (sprintf "%*g" 14 42.42 = "         42.42");
+  test (sprintf "%.3g" (-42.42) = "-42.4");
 
-(* Same for %G
   printf "\nG\n%!";
-*)
+  test (sprintf "%G" (-42.42) = "-42.42");
+  test (sprintf "%.3G" (-4242.) =* "-4.24E+03");
+  test (sprintf "%-15G" (-42.42) = "-42.42         ");
+  test (sprintf "%015G" (-42.42) = "-00000000042.42");
+  test (sprintf "%+G" 42.42 = "+42.42");
+  test (sprintf "% G" 42.42 = " 42.42");
+  test (sprintf "%15G" 42.42 = "          42.42");
+  test (sprintf "%*G" 14 42.42 = "         42.42");
+  test (sprintf "%.3G" (-42.42) = "-42.4");
 
   printf "\nB\n%!";
   test (sprintf "%B" true = "true");

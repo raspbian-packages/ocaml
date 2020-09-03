@@ -39,25 +39,15 @@ module type Sunderscore = sig type (_, 'a) t = int * 'a end
 |}]
 
 
-(* Valid substitutions in a recursive module may fail due to the ordering of
-   the modules. *)
-
+(* Valid substitutions in a recursive module used to fail
+   due to the ordering of the modules. This is fixed since #9623. *)
 module type S0 = sig
   module rec M : sig type t = M2.t end
   and M2 : sig type t = int end
 end with type M.t = int
 [%%expect {|
-Line 1, characters 17-115:
-1 | .................sig
-2 |   module rec M : sig type t = M2.t end
-3 |   and M2 : sig type t = int end
-4 | end with type M.t = int
-Error: In this `with' constraint, the new definition of M.t
-       does not match its original definition in the constrained signature:
-       Type declarations do not match:
-         type t = int
-       is not included in
-         type t = M2.t
+module type S0 =
+  sig module rec M : sig type t = int end and M2 : sig type t = int end end
 |}]
 
 
@@ -122,7 +112,7 @@ module type S' = sig val f : M.exp -> M.arg end
 
 module type S = sig type 'a t end with type 'a t := unit
 [%%expect {|
-module type S = sig  end
+module type S = sig end
 |}]
 
 module type S = sig
@@ -162,7 +152,7 @@ module type S = sig
 end with type 'a t2 := 'a t * bool
 [%%expect {|
 type 'a t constraint 'a = 'b list
-Line 2, characters 16-142:
+Lines 2-6, characters 16-34:
 2 | ................sig
 3 |   type 'a t2 constraint 'a = 'b list
 4 |   type 'a mylist = 'a list
@@ -267,7 +257,7 @@ module type S = sig
   module A = M
 end with type M.t := float
 [%%expect {|
-Line 1, characters 16-89:
+Lines 1-4, characters 16-26:
 1 | ................sig
 2 |   module M : sig type t end
 3 |   module A = M
@@ -329,14 +319,14 @@ module type S3 = sig
 end with type M2.t := int
 [%%expect {|
 module Id : functor (X : sig type t end) -> sig type t = X.t end
-Line 2, characters 17-120:
+Lines 2-5, characters 17-25:
 2 | .................sig
 3 |   module rec M : sig type t = A of Id(M2).t end
 4 |   and M2 : sig type t end
 5 | end with type M2.t := int
 Error: This `with' constraint on M2.t makes the applicative functor
        type Id(M2).t ill-typed in the constrained signature:
-       Modules do not match: sig  end is not included in sig type t end
+       Modules do not match: sig end is not included in sig type t end
        The type `t' is required but not provided
 |}]
 
@@ -356,7 +346,7 @@ module type S = sig
 end with module M.N := A
 [%%expect {|
 module A : sig module P : sig type t val x : int end end
-module type S = sig module M : sig  end type t = A.P.t end
+module type S = sig module M : sig end type t = A.P.t end
 |}]
 
 (* Same as for types, not all substitutions are accepted *)
@@ -372,7 +362,7 @@ module type S = sig
   module Alias = M
 end with module M.N := A
 [%%expect {|
-Line 1, characters 16-159:
+Lines 1-10, characters 16-24:
  1 | ................sig
  2 |   module M : sig
  3 |     module N : sig

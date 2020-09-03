@@ -166,16 +166,34 @@ let check_file ?(tool = default_comparison_tool) files =
 
 let diff files =
   let temporary_file = Filename.temp_file "ocamltest" "diff" in
-  let diff_commandline = String.concat " "
-  [
-    "diff -u";
-    files.reference_filename;
-    files.output_filename;
-    "> " ^ temporary_file
-  ] in
+  let diff_commandline =
+    Filename.quote_command "diff" ~stdout:temporary_file
+      [ "-u";
+        files.reference_filename;
+        files.output_filename ]
+  in
   let result =
     if (Sys.command diff_commandline) = 2 then Stdlib.Error "diff"
     else Ok (Sys.string_of_file temporary_file)
   in
   Sys.force_remove temporary_file;
   result
+
+let promote files ignore_conf =
+  match files.filetype, ignore_conf with
+    | Text, {lines = skip_lines; _} ->
+       let reference = open_out files.reference_filename in
+       let output = open_in files.output_filename in
+       for _ = 1 to skip_lines do
+         try ignore (input_line output) with End_of_file -> ()
+       done;
+       Sys.copy_chan output reference;
+       close_out reference;
+       close_in output
+    | Binary, {bytes = skip_bytes; _} ->
+       let reference = open_out_bin files.reference_filename in
+       let output = open_in_bin files.output_filename in
+       seek_in output skip_bytes;
+       Sys.copy_chan output reference;
+       close_out reference;
+       close_in output

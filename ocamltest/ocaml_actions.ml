@@ -81,7 +81,16 @@ let backend_flags env =
     Ocaml_variables.ocamlc_flags
     Ocaml_variables.ocamlopt_flags
 
-let dumb_term = [|"TERM=dumb"|]
+let env_setting env_reader default_setting =
+  Printf.sprintf "%s=%s"
+    env_reader.Clflags.env_var
+    (env_reader.Clflags.print default_setting)
+
+let default_ocaml_env = [|
+  "TERM=dumb";
+  env_setting Clflags.color_reader Misc.Color.default_setting;
+  env_setting Clflags.error_style_reader Misc.Error_style.default_setting;
+|]
 
 type module_generator = {
   description : string;
@@ -130,7 +139,7 @@ let generate_module generator ocamlsrcdir output_variable input log env =
   let expected_exit_status = 0 in
   let exit_status =
     Actions_helpers.run_cmd
-      ~environment:dumb_term
+      ~environment:default_ocaml_env
       ~stdin_variable: Ocaml_variables.compiler_stdin
       ~stdout_variable:output_variable
       ~stderr_variable:output_variable
@@ -259,7 +268,7 @@ let compile_program ocamlsrcdir (compiler : Ocaml_compilers.compiler) log env =
       ] in
       let exit_status =
         Actions_helpers.run_cmd
-          ~environment:dumb_term
+          ~environment:default_ocaml_env
           ~stdin_variable: Ocaml_variables.compiler_stdin
           ~stdout_variable:compiler#output_variable
           ~stderr_variable:compiler#output_variable
@@ -297,7 +306,7 @@ let compile_module ocamlsrcdir compiler module_ log env =
   ] in
   let exit_status =
     Actions_helpers.run_cmd
-      ~environment:dumb_term
+      ~environment:default_ocaml_env
       ~stdin_variable: Ocaml_variables.compiler_stdin
       ~stdout_variable:compiler#output_variable
       ~stderr_variable:compiler#output_variable
@@ -466,7 +475,7 @@ let compile (compiler : Ocaml_compilers.compiler) log env =
     let commandline = [compiler#name ocamlsrcdir; cmdline] in
     let exit_status =
       Actions_helpers.run_cmd
-        ~environment:dumb_term
+        ~environment:default_ocaml_env
         ~stdin_variable: Ocaml_variables.compiler_stdin
         ~stdout_variable:compiler#output_variable
         ~stderr_variable:compiler#output_variable
@@ -528,7 +537,7 @@ let debug log env =
   ] in
   let systemenv =
     Array.append
-      dumb_term
+      default_ocaml_env
       (Environments.to_system_env (env_with_lib_unix ocamlsrcdir env))
   in
   let expected_exit_status = 0 in
@@ -567,7 +576,7 @@ let objinfo log env =
   let systemenv =
     Array.concat
     [
-      dumb_term;
+      default_ocaml_env;
       ocamllib;
       (Environments.to_system_env (env_with_lib_unix ocamlsrcdir env))
     ]
@@ -612,7 +621,7 @@ let mklib log env =
   let expected_exit_status = 0 in
   let exit_status =
     Actions_helpers.run_cmd
-      ~environment:dumb_term
+      ~environment:default_ocaml_env
       ~stdout_variable:Ocaml_variables.compiler_output
       ~stderr_variable:Ocaml_variables.compiler_output
       ~append:true
@@ -651,7 +660,7 @@ let finalise_codegen_msvc ocamlsrcdir test_basename log env =
   let expected_exit_status = 0 in
   let exit_status =
     Actions_helpers.run_cmd
-      ~environment:dumb_term
+      ~environment:default_ocaml_env
       ~stdout_variable:Ocaml_variables.compiler_output
       ~stderr_variable:Ocaml_variables.compiler_output
       ~append:true
@@ -677,6 +686,7 @@ let finalise_codegen_msvc ocamlsrcdir test_basename log env =
 let run_codegen log env =
   let ocamlsrcdir = Ocaml_directories.srcdir () in
   let testfile = Actions_helpers.testfile env in
+  let testfile_basename = Filename.chop_extension testfile in
   let what = Printf.sprintf "Running codegen on %s" testfile in
   Printf.fprintf log "%s\n%!" what;
   let test_build_directory =
@@ -690,22 +700,25 @@ let run_codegen log env =
       compiler_output
       env
   in
+  let output_file = Filename.make_filename testfile_basename "output" in
+  let output = Filename.make_path [test_build_directory; output_file] in
+  let env = Environments.add Builtin_variables.output output env in
   let commandline =
   [
     Ocaml_commands.ocamlrun_codegen ocamlsrcdir;
+    flags env;
     "-S " ^ testfile
   ] in
   let expected_exit_status = 0 in
   let exit_status =
     Actions_helpers.run_cmd
-      ~environment:dumb_term
+      ~environment:default_ocaml_env
       ~stdout_variable:Ocaml_variables.compiler_output
       ~stderr_variable:Ocaml_variables.compiler_output
       ~append:true
       log env commandline in
   if exit_status=expected_exit_status
   then begin
-    let testfile_basename = Filename.chop_extension testfile in
     let finalise =
        if Ocamltest_config.ccomptype="msvc"
       then finalise_codegen_msvc
@@ -740,7 +753,7 @@ let run_cc log env =
   let expected_exit_status = 0 in
   let exit_status =
     Actions_helpers.run_cmd
-      ~environment:dumb_term
+      ~environment:default_ocaml_env
       ~stdout_variable:Ocaml_variables.compiler_output
       ~stderr_variable:Ocaml_variables.compiler_output
       ~append:true
@@ -770,7 +783,8 @@ let run_expect_once ocamlsrcdir input_file principal log env =
     input_file
   ] in
   let exit_status =
-    Actions_helpers.run_cmd ~environment:dumb_term log env commandline in
+    Actions_helpers.run_cmd ~environment:default_ocaml_env log env commandline
+  in
   if exit_status=0 then (Result.pass, env)
   else begin
     let reason = (Actions_helpers.mkreason
@@ -1052,12 +1066,12 @@ let run_test_program_in_toplevel (toplevel : Ocaml_toplevels.toplevel) log env =
           let exit_status =
             if ocaml_script_as_argument
             then Actions_helpers.run_cmd
-              ~environment:dumb_term
+              ~environment:default_ocaml_env
               ~stdout_variable:compiler_output_variable
               ~stderr_variable:compiler_output_variable
               log env commandline
             else Actions_helpers.run_cmd
-              ~environment:dumb_term
+              ~environment:default_ocaml_env
               ~stdin_variable:Builtin_variables.test_file
               ~stdout_variable:compiler_output_variable
               ~stderr_variable:compiler_output_variable
@@ -1095,6 +1109,7 @@ let config_variables _log env =
   let ocamlsrcdir = Ocaml_directories.srcdir () in
   Environments.add_bindings
   [
+    Ocaml_variables.arch, Ocamltest_config.arch;
     Ocaml_variables.ocamlrun, Ocaml_files.ocamlrun ocamlsrcdir;
     Ocaml_variables.ocamlc_byte, Ocaml_files.ocamlc ocamlsrcdir;
     Ocaml_variables.ocamlopt_byte, Ocaml_files.ocamlopt ocamlsrcdir;
@@ -1109,6 +1124,7 @@ let config_variables _log env =
     Ocaml_variables.shared_library_cflags,
       Ocamltest_config.shared_library_cflags;
     Ocaml_variables.objext, Ocamltest_config.objext;
+    Ocaml_variables.asmext, Ocamltest_config.asmext;
     Ocaml_variables.sharedobjext, Ocamltest_config.sharedobjext;
     Ocaml_variables.ocamlc_default_flags,
       Ocamltest_config.ocamlc_default_flags;

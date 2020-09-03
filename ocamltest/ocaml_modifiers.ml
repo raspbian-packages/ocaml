@@ -97,15 +97,27 @@ let systhreads =
 
 let compilerlibs_subdirs =
 [
-  "utils"; "parsing"; "toplevel"; "typing"; "bytecomp"; "compilerlibs";
+  "asmcomp";
+  "bytecomp";
+  "compilerlibs";
+  "driver";
+  "file_formats";
+  "lambda";
+  "middle_end";
+  "parsing";
+  "toplevel";
+  "typing";
+  "utils";
 ]
 
 let add_compiler_subdir subdir =
   Append (Ocaml_variables.directories, (wrap (compiler_subdir [subdir])))
 
-let ocamlcommon =
-  (Append (Ocaml_variables.libraries, wrap "ocamlcommon")) ::
+let compilerlibs_archive archive =
+  (Append (Ocaml_variables.libraries, wrap archive)) ::
   (List.map add_compiler_subdir compilerlibs_subdirs)
+
+let debugger = [add_compiler_subdir "debugger"]
 
 let _ =
   register_modifiers "principal" principal;
@@ -114,10 +126,19 @@ let _ =
   register_modifiers "unix" unix;
   register_modifiers "dynlink" dynlink;
   register_modifiers "str" str;
-  register_modifiers "ocamlcommon" ocamlcommon;
+  List.iter
+    (fun archive -> register_modifiers archive (compilerlibs_archive archive))
+    [
+      "ocamlcommon";
+      "ocamlbytecomp";
+      "ocamlmiddleend";
+      "ocamloptcomp";
+      "ocamltoplevel";
+    ];
   register_modifiers "systhreads" systhreads;
   register_modifiers "latex" latex;
   register_modifiers "html" html;
   register_modifiers "man" man;
   register_modifiers "tool-ocaml-lib" tool_ocaml_lib;
+  register_modifiers "debugger" debugger;
   ()

@@ -30,6 +30,8 @@
 #include "caml/signals.h"
 #include "caml/signals_machdep.h"
 #include "caml/sys.h"
+#include "caml/memprof.h"
+#include "caml/finalise.h"
 
 #if defined(NATIVE_CODE) && defined(WITH_SPACETIME)
 #include "caml/spacetime.h"
@@ -39,9 +41,11 @@
 #define NSIG 64
 #endif
 
+CAMLexport int volatile caml_something_to_do = 0;
+
 /* The set of pending signals (received but not yet processed) */
 
-CAMLexport intnat volatile caml_signals_are_pending = 0;
+static intnat volatile signals_are_pending = 0;
 CAMLexport intnat volatile caml_pending_signals[NSIG];
 
 #ifdef POSIX_SIGNALS
@@ -60,7 +64,7 @@ CAMLexport int (*caml_sigmask_hook)(int, const sigset_t *, sigset_t *)
 
 /* Execute all pending signals */
 
-void caml_process_pending_signals(void)
+value caml_process_pending_signals_exn(void)
 {
   int i;
   int really_pending;
@@ -68,9 +72,9 @@ void caml_process_pending_signals(void)
   sigset_t set;
 #endif
 
-  if(!caml_signals_are_pending)
-    return;
-  caml_signals_are_pending = 0;
+  if(!signals_are_pending)
+    return Val_unit;
+  signals_are_pending = 0;
 
   /* Check that there is indeed a pending signal before issuing the
      syscall in [caml_sigmask_hook]. */
@@ -81,7 +85,7 @@ void caml_process_pending_signals(void)
       break;
     }
   if(!really_pending)
-    return;
+    return Val_unit;
 
 #ifdef POSIX_SIGNALS
   caml_sigmask_hook(/* dummy */ SIG_BLOCK, NULL, &set);
@@ -94,26 +98,40 @@ void caml_process_pending_signals(void)
       continue;
 #endif
     caml_pending_signals[i] = 0;
-    caml_execute_signal(i, 0);
+    {
+      value exn = caml_execute_signal_exn(i, 0);
+      if (Is_exception_result(exn)) return exn;
+    }
   }
+  return Val_unit;
+}
+
+CAMLno_tsan /* When called from [caml_record_signal], these memory
+               accesses may not be synchronized. */
+void caml_set_action_pending(void)
+{
+  caml_something_to_do = 1;
+
+  /* When this function is called without [caml_c_call] (e.g., in
+     [caml_modify]), this is only moderately effective on ports that cache
+     [Caml_state->young_limit] in a register, so it may take a while before the
+     register is reloaded from [Caml_state->young_limit]. */
+  Caml_state->young_limit = Caml_state->young_alloc_end;
 }
 
 /* Record the delivery of a signal, and arrange for it to be processed
    as soon as possible:
-   - in bytecode: via caml_something_to_do, processed in caml_process_event
-   - in native-code: by playing with the allocation limit, processed
-       in caml_garbage_collection
+   - via caml_something_to_do, processed in
+     caml_process_pending_actions_exn.
+   - by playing with the allocation limit, processed in
+     caml_garbage_collection and caml_alloc_small_dispatch.
 */
 
-void caml_record_signal(int signal_number)
+CAMLno_tsan void caml_record_signal(int signal_number)
 {
   caml_pending_signals[signal_number] = 1;
-  caml_signals_are_pending = 1;
-#ifndef NATIVE_CODE
-  caml_something_to_do = 1;
-#else
-  caml_young_limit = caml_young_alloc_end;
-#endif
+  signals_are_pending = 1;
+  caml_set_action_pending();
 }
 
 /* Management of blocking sections. */
@@ -146,15 +164,16 @@ CAMLexport void (*caml_leave_blocking_section_hook)(void) =
 CAMLexport int (*caml_try_leave_blocking_section_hook)(void) =
    caml_try_leave_blocking_section_default;
 
+CAMLno_tsan /* The read of [caml_something_to_do] is not synchronized. */
 CAMLexport void caml_enter_blocking_section(void)
 {
   while (1){
     /* Process all pending signals now */
-    caml_process_pending_signals();
+    caml_raise_if_exception(caml_process_pending_signals_exn());
     caml_enter_blocking_section_hook ();
     /* Check again for pending signals.
        If none, done; otherwise, try again */
-    if (! caml_signals_are_pending) break;
+    if (! signals_are_pending) break;
     caml_leave_blocking_section_hook ();
   }
 }
@@ -167,7 +186,7 @@ CAMLexport void caml_leave_blocking_section(void)
   caml_leave_blocking_section_hook ();
 
   /* Some other thread may have switched
-     [caml_signals_are_pending] to 0 even though there are still
+     [signals_are_pending] to 0 even though there are still
      pending signals (masked in the other thread). To handle this
      case, we force re-examination of all signals by setting it back
      to 1.
@@ -175,11 +194,11 @@ CAMLexport void caml_leave_blocking_section(void)
      Another case where this is necessary (even in a single threaded
      setting) is when the blocking section unmasks a pending signal:
      If the signal is pending and masked but has already been
-     examinated by [caml_process_pending_signals], then
-     [caml_signals_are_pending] is 0 but the signal needs to be
+     examined by [caml_process_pending_signals_exn], then
+     [signals_are_pending] is 0 but the signal needs to be
      handled at this point. */
-  caml_signals_are_pending = 1;
-  caml_process_pending_signals();
+  signals_are_pending = 1;
+  caml_raise_if_exception(caml_process_pending_signals_exn());
 
   errno = saved_errno;
 }
@@ -188,7 +207,7 @@ CAMLexport void caml_leave_blocking_section(void)
 
 static value caml_signal_handlers = 0;
 
-void caml_execute_signal(int signal_number, int in_signal_handler)
+value caml_execute_signal_exn(int signal_number, int in_signal_handler)
 {
   value res;
   value handler;
@@ -214,7 +233,7 @@ void caml_execute_signal(int signal_number, int in_signal_handler)
 #if defined(NATIVE_CODE) && defined(WITH_SPACETIME)
   /* Handled action may have no associated handler, which we interpret
      as meaning the signal should be handled by a call to exit.  This is
-     is used to allow spacetime profiles to be completed on interrupt */
+     used to allow spacetime profiles to be completed on interrupt */
   if (caml_signal_handlers == 0) {
     res = caml_sys_exit(Val_int(2));
   } else {
@@ -243,37 +262,96 @@ void caml_execute_signal(int signal_number, int in_signal_handler)
     caml_sigmask_hook(SIG_SETMASK, &sigs, NULL);
   }
 #endif
-  if (Is_exception_result(res)) caml_raise(Extract_exception(res));
+  return res;
+}
+
+void caml_update_young_limit (void)
+{
+  /* The minor heap grows downwards. The first trigger is the largest one. */
+  Caml_state->young_limit =
+    caml_memprof_young_trigger < Caml_state->young_trigger ?
+    Caml_state->young_trigger : caml_memprof_young_trigger;
+
+  if(caml_something_to_do)
+    Caml_state->young_limit = Caml_state->young_alloc_end;
 }
 
 /* Arrange for a garbage collection to be performed as soon as possible */
 
-int volatile caml_requested_major_slice = 0;
-int volatile caml_requested_minor_gc = 0;
-
 void caml_request_major_slice (void)
 {
-  caml_requested_major_slice = 1;
-#ifndef NATIVE_CODE
-  caml_something_to_do = 1;
-#else
-  caml_young_limit = caml_young_alloc_end;
-  /* This is only moderately effective on ports that cache [caml_young_limit]
-     in a register, since [caml_modify] is called directly, not through
-     [caml_c_call], so it may take a while before the register is reloaded
-     from [caml_young_limit]. */
-#endif
+  Caml_state->requested_major_slice = 1;
+  caml_set_action_pending();
 }
 
 void caml_request_minor_gc (void)
 {
-  caml_requested_minor_gc = 1;
-#ifndef NATIVE_CODE
-  caml_something_to_do = 1;
-#else
-  caml_young_limit = caml_young_alloc_end;
-  /* Same remark as above in [caml_request_major_slice]. */
-#endif
+  Caml_state->requested_minor_gc = 1;
+  caml_set_action_pending();
+}
+
+value caml_do_pending_actions_exn(void)
+{
+  value exn;
+
+  caml_something_to_do = 0;
+
+  // Do any pending minor collection or major slice
+  caml_check_urgent_gc(Val_unit);
+
+  caml_update_young_limit();
+
+  // Call signal handlers first
+  exn = caml_process_pending_signals_exn();
+  if (Is_exception_result(exn)) goto exception;
+
+  // Call memprof callbacks
+  exn = caml_memprof_handle_postponed_exn();
+  if (Is_exception_result(exn)) goto exception;
+
+  // Call finalisers
+  exn = caml_final_do_calls_exn();
+  if (Is_exception_result(exn)) goto exception;
+
+  return Val_unit;
+
+exception:
+  /* If an exception is raised during an asynchronous callback, then
+     it might be the case that we did not run all the callbacks we
+     needed. Therefore, we set [caml_something_to_do] again in order
+     to force reexamination of callbacks. */
+  caml_set_action_pending();
+  return exn;
+}
+
+CAMLno_tsan /* The access to [caml_something_to_do] is not synchronized. */
+Caml_inline value process_pending_actions_with_root_exn(value extra_root)
+{
+  if (caml_something_to_do) {
+    CAMLparam1(extra_root);
+    value exn = caml_do_pending_actions_exn();
+    if (Is_exception_result(exn))
+      CAMLreturn(exn);
+    CAMLdrop;
+  }
+  return extra_root;
+}
+
+value caml_process_pending_actions_with_root(value extra_root)
+{
+  value res = process_pending_actions_with_root_exn(extra_root);
+  return caml_raise_if_exception(res);
+}
+
+CAMLexport value caml_process_pending_actions_exn(void)
+{
+  return process_pending_actions_with_root_exn(Val_unit);
+}
+
+CAMLexport void caml_process_pending_actions(void)
+{
+  value exn = process_pending_actions_with_root_exn(Val_unit);
+  caml_raise_if_exception(exn);
 }
 
 /* OS-independent numbering of signals */
@@ -445,6 +523,6 @@ CAMLprim value caml_install_signal_handler(value signal_number, value action)
     }
     caml_modify(&Field(caml_signal_handlers, sig), Field(action, 0));
   }
-  caml_process_pending_signals();
+  caml_raise_if_exception(caml_process_pending_signals_exn());
   CAMLreturn (res);
 }

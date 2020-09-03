@@ -26,25 +26,37 @@ let rec make_letdef def body =
       unbind_ident id;
       Clet(id, def, make_letdef rem body)
 
+let rec make_letmutdef def body =
+  match def with
+    [] -> body
+  | (id, ty, def) :: rem ->
+      unbind_ident id;
+      Clet_mut(id, ty, def, make_letmutdef rem body)
+
 let make_switch n selector caselist =
   let index = Array.make n 0 in
   let casev = Array.of_list caselist in
-  let actv = Array.make (Array.length casev) (Cexit(0,[])) in
+  let dbg = Debuginfo.none in
+  let actv = Array.make (Array.length casev) (Cexit(0,[]), dbg) in
   for i = 0 to Array.length casev - 1 do
     let (posl, e) = casev.(i) in
     List.iter (fun pos -> index.(pos) <- i) posl;
-    actv.(i) <- e
+    actv.(i) <- (e, dbg)
   done;
-  Cswitch(selector, index, actv, Debuginfo.none)
+  Cswitch(selector, index, actv, dbg)
 
 let access_array base numelt size =
   match numelt with
-    Cconst_int 0 -> base
-  | Cconst_int n -> Cop(Cadda, [base; Cconst_int(n * size)], Debuginfo.none)
-  | _ -> Cop(Cadda, [base;
-                     Cop(Clsl, [numelt; Cconst_int(Misc.log2 size)],
-                         Debuginfo.none)],
-             Debuginfo.none)
+    Cconst_int (0, _) -> base
+  | Cconst_int (n, _) ->
+      let dbg = Debuginfo.none in
+      Cop(Cadda, [base; Cconst_int(n * size, dbg)], dbg)
+  | _ ->
+      let dbg = Debuginfo.none in
+      Cop(Cadda, [base;
+                  Cop(Clsl, [numelt; Cconst_int(Misc.log2 size, dbg)],
+                  dbg)],
+          dbg)
 
 %}
 
@@ -100,6 +112,7 @@ let access_array base numelt size =
 %token LEF
 %token LEI
 %token LET
+%token LETMUT
 %token LOAD
 %token <Location.t> LOCATION
 %token LPAREN
@@ -122,7 +135,7 @@ let access_array base numelt size =
 %token OR
 %token <int> POINTER
 %token PROJ
-%token <Cmm.raise_kind> RAISE
+%token <Lambda.raise_kind> RAISE
 %token RBRACKET
 %token RPAREN
 %token SEQ
@@ -195,13 +208,14 @@ componentlist:
   | componentlist STAR component { $3 :: $1 }
 ;
 expr:
-    INTCONST    { Cconst_int $1 }
-  | FLOATCONST  { Cconst_float (float_of_string $1) }
-  | STRING      { Cconst_symbol $1 }
-  | POINTER     { Cconst_pointer $1 }
+    INTCONST    { Cconst_int ($1, debuginfo ()) }
+  | FLOATCONST  { Cconst_float (float_of_string $1, debuginfo ()) }
+  | STRING      { Cconst_symbol ($1, debuginfo ()) }
+  | POINTER     { Cconst_pointer ($1, debuginfo ()) }
   | IDENT       { Cvar(find_ident $1) }
   | LBRACKET RBRACKET { Ctuple [] }
   | LPAREN LET letdef sequence RPAREN { make_letdef $3 $4 }
+  | LPAREN LETMUT letmutdef sequence RPAREN { make_letmutdef $3 $4 }
   | LPAREN ASSIGN IDENT expr RPAREN { Cassign(find_ident $3, $4) }
   | LPAREN APPLY location expr exprlist machtype RPAREN
                 { Cop(Capply $6, $4 :: List.rev $5, debuginfo ?loc:$3 ()) }
@@ -213,44 +227,60 @@ expr:
   | LPAREN unaryop expr RPAREN { Cop($2, [$3], debuginfo ()) }
   | LPAREN binaryop expr expr RPAREN { Cop($2, [$3; $4], debuginfo ()) }
   | LPAREN SEQ sequence RPAREN { $3 }
-  | LPAREN IF expr expr expr RPAREN { Cifthenelse($3, $4, $5) }
+  | LPAREN IF expr expr expr RPAREN
+      { Cifthenelse($3, debuginfo (), $4, debuginfo (), $5, debuginfo ()) }
   | LPAREN SWITCH INTCONST expr caselist RPAREN { make_switch $3 $4 $5 }
   | LPAREN WHILE expr sequence RPAREN
-      { let body =
+      {
+        let lbl0 = Lambda.next_raise_count () in
+        let lbl1 = Lambda.next_raise_count () in
+        let body =
           match $3 with
-            Cconst_int x when x <> 0 -> $4
-          | _ -> Cifthenelse($3, $4, (Cexit(0,[]))) in
-        Ccatch(Recursive, [0, [], Cloop body], Ctuple []) }
+            Cconst_int (x, _) when x <> 0 -> $4
+          | _ -> Cifthenelse($3, debuginfo (), $4, debuginfo (),
+                             (Cexit(lbl0,[])),
+                             debuginfo ()) in
+        Ccatch(Nonrecursive, [lbl0, [], Ctuple [], debuginfo ()],
+          Ccatch(Recursive,
+            [lbl1, [], Csequence(body, Cexit(lbl1, [])), debuginfo ()],
+            Cexit(lbl1, []))) }
   | LPAREN EXIT IDENT exprlist RPAREN
     { Cexit(find_label $3, List.rev $4) }
   | LPAREN CATCH sequence WITH catch_handlers RPAREN
     { let handlers = $5 in
-      List.iter (fun (_, l, _) ->
+      List.iter (fun (_, l, _, _) ->
         List.iter (fun (x, _) -> unbind_ident x) l) handlers;
       Ccatch(Recursive, handlers, $3) }
   | EXIT        { Cexit(0,[]) }
   | LPAREN TRY sequence WITH bind_ident sequence RPAREN
-                { unbind_ident $5; Ctrywith($3, $5, $6) }
+                { unbind_ident $5; Ctrywith($3, $5, $6, debuginfo ()) }
   | LPAREN VAL expr expr RPAREN
-      { Cop(Cload (Word_val, Mutable), [access_array $3 $4 Arch.size_addr],
+      { let open Asttypes in
+        Cop(Cload (Word_val, Mutable), [access_array $3 $4 Arch.size_addr],
           debuginfo ()) }
   | LPAREN ADDRAREF expr expr RPAREN
-      { Cop(Cload (Word_val, Mutable), [access_array $3 $4 Arch.size_addr],
+      { let open Asttypes in
+        Cop(Cload (Word_val, Mutable), [access_array $3 $4 Arch.size_addr],
           Debuginfo.none) }
   | LPAREN INTAREF expr expr RPAREN
-      { Cop(Cload (Word_int, Mutable), [access_array $3 $4 Arch.size_int],
+      { let open Asttypes in
+        Cop(Cload (Word_int, Mutable), [access_array $3 $4 Arch.size_int],
           Debuginfo.none) }
   | LPAREN FLOATAREF expr expr RPAREN
-      { Cop(Cload (Double_u, Mutable), [access_array $3 $4 Arch.size_float],
+      { let open Asttypes in
+        Cop(Cload (Double_u, Mutable), [access_array $3 $4 Arch.size_float],
           Debuginfo.none) }
   | LPAREN ADDRASET expr expr expr RPAREN
-      { Cop(Cstore (Word_val, Assignment),
+      { let open Lambda in
+        Cop(Cstore (Word_val, Assignment),
             [access_array $3 $4 Arch.size_addr; $5], Debuginfo.none) }
   | LPAREN INTASET expr expr expr RPAREN
-      { Cop(Cstore (Word_int, Assignment),
+      { let open Lambda in
+        Cop(Cstore (Word_int, Assignment),
             [access_array $3 $4 Arch.size_int; $5], Debuginfo.none) }
   | LPAREN FLOATASET expr expr expr RPAREN
-      { Cop(Cstore (Double_u, Assignment),
+      { let open Lambda in
+        Cop(Cstore (Double_u, Assignment),
             [access_array $3 $4 Arch.size_float; $5], Debuginfo.none) }
 ;
 exprlist:
@@ -268,6 +298,17 @@ letdefmult:
 oneletdef:
     IDENT expr                  { (bind_ident $1, $2) }
 ;
+letmutdef:
+    oneletmutdef                { [$1] }
+  | LPAREN letmutdefmult RPAREN { $2 }
+;
+letmutdefmult:
+    /**/                        { [] }
+  | oneletmutdef letmutdefmult  { $1 :: $2 }
+;
+oneletmutdef:
+    IDENT machtype expr         { (bind_ident $1, $2, $3) }
+;
 chunk:
     UNSIGNED BYTE               { Byte_unsigned }
   | SIGNED BYTE                 { Byte_signed }
@@ -283,14 +324,14 @@ chunk:
   | VAL                         { Word_val }
 ;
 unaryop:
-    LOAD chunk                  { Cload ($2, Mutable) }
+    LOAD chunk                  { Cload ($2, Asttypes.Mutable) }
   | FLOATOFINT                  { Cfloatofint }
   | INTOFFLOAT                  { Cintoffloat }
   | RAISE                       { Craise $1 }
   | ABSF                        { Cabsf }
 ;
 binaryop:
-    STORE chunk                 { Cstore ($2, Assignment) }
+    STORE chunk                 { Cstore ($2, Lambda.Assignment) }
   | ADDI                        { Caddi }
   | SUBI                        { Csubi }
   | STAR                        { Cmuli }
@@ -376,9 +417,9 @@ catch_handlers:
 
 catch_handler:
   | sequence
-    { 0, [], $1 }
+    { 0, [], $1, debuginfo () }
   | LPAREN IDENT params RPAREN sequence
-    { find_label $2, $3, $5 }
+    { find_label $2, $3, $5, debuginfo () }
 
 location:
     /**/                        { None }

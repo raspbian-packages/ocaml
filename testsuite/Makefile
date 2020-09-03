@@ -13,6 +13,8 @@
 #*                                                                        *
 #**************************************************************************
 
+.NOTPARALLEL:
+
 BASEDIR := $(shell pwd)
 NO_PRINT=`$(MAKE) empty --no-print-directory >/dev/null 2>&1 \
 	  && echo --no-print-directory`
@@ -39,6 +41,7 @@ ifeq "$(UNIX_OR_WIN32)" "unix"
   else # Non-cygwin Unix
     find := find
   endif
+  FLEXLINK_ENV =
 else # Windows
   find := /usr/bin/find
   FLEXDLL_SUBMODULE_PRESENT := $(wildcard ../flexdll/Makefile)
@@ -61,12 +64,33 @@ else
                                $(ocamltest_program)
 endif
 
+# PROMOTE is only meant to be used internally in recursive calls;
+# users should call the 'promote' target explicitly.
+PROMOTE =
+ifeq "$(PROMOTE)" ""
+  OCAMLTEST_PROMOTE_FLAG :=
+else
+  OCAMLTEST_PROMOTE_FLAG := -promote
+endif
+
+# KEEP_TEST_DIR_ON_SUCCESS should be set by the user (to a non-empty value)
+# if they want to pass the -keep-test-dir-on-success option to ocamltest,
+# to preserve test data of succesful tests.
+KEEP_TEST_DIR_ON_SUCCESS ?=
+ifeq "$(KEEP_TEST_DIR_ON_SUCCESS)" ""
+  OCAMLTEST_KEEP_TEST_DIR_ON_SUCCESS_FLAG :=
+else
+  OCAMLTEST_KEEP_TEST_DIR_ON_SUCCESS_FLAG := -keep-test-dir-on-success
+endif
+
+OCAMLTESTFLAGS := \
+  $(OCAMLTEST_PROMOTE_FLAG) \
+  $(OCAMLTEST_KEEP_TEST_DIR_ON_SUCCESS_FLAG)
+
 .PHONY: default
 default:
 	@echo "Available targets:"
 	@echo "  all             launch all tests"
-	@echo "  legacy          launch legacy tests"
-	@echo "  new             launch new (ocamltest based) tests"
 	@echo "  all-foo         launch all tests beginning with foo"
 	@echo "  parallel        launch all tests using GNU parallel"
 	@echo "  parallel-foo    launch all tests beginning with foo using \
@@ -86,37 +110,17 @@ default:
 .PHONY: all
 all:
 	@rm -f $(TESTLOG)
-	@$(MAKE) $(NO_PRINT) legacy-without-report
-	@$(MAKE) $(NO_PRINT) new-without-report
-	@$(MAKE) $(NO_PRINT) report
-
-.PHONY: legacy
-legacy:
-	@rm -f $(TESTLOG)
-	@$(MAKE) $(NO_PRINT) legacy-without-report
-	@$(MAKE) $(NO_PRINT) report
-
-.PHONY: legacy-without-report
-legacy-without-report: lib tools
-	@for dir in tests/*; do \
-	  $(MAKE) $(NO_PRINT) exec-one DIR=$$dir LEGACY=y; \
-	done 2>&1 | tee -a $(TESTLOG)
-	@$(MAKE) $(NO_PRINT) retries
-
-.PHONY: new
-new:
-	@rm -f $(TESTLOG)
 	@$(MAKE) $(NO_PRINT) new-without-report
 	@$(MAKE) $(NO_PRINT) report
 
 .PHONY: new-without-report
 new-without-report: lib tools
 	@rm -f $(failstamp)
-	@(for file in `$(find) tests -name ocamltests`; do \
-	  dir=`dirname $$file`; \
+	@(IFS=$$(printf "\r\n"); \
+	$(ocamltest) -find-test-dirs tests | while read dir; do \
 	  echo Running tests from \'$$dir\' ... ; \
 	  $(MAKE) exec-ocamltest DIR=$$dir \
-	    OCAMLTESTENV="" OCAMLTESTFLAGS=""; \
+	    OCAMLTESTENV=""; \
 	done || echo outer loop >> $(failstamp)) 2>&1 | tee -a $(TESTLOG)
 	@$(MAKE) check-failstamp
 
@@ -208,33 +212,28 @@ one: lib tools
 
 .PHONY: exec-one
 exec-one:
-	@if [ ! -f $(DIR)/Makefile -a ! -f $(DIR)/ocamltests ]; then \
+	@if $(ocamltest) -list-tests $(DIR) >/dev/null 2>&1; then \
+	  echo "Running tests from '$$DIR' ..."; \
+	  $(MAKE) exec-ocamltest DIR=$(DIR) \
+	    OCAMLTESTENV="OCAMLTESTDIR=$(OCAMLTESTDIR_CYGPATH)"; \
+	else \
 	  for dir in $(DIR)/*; do \
 	    if [ -d $$dir ]; then \
 	      $(MAKE) exec-one DIR=$$dir; \
 	    fi; \
 	  done; \
-	elif [ -f $(DIR)/Makefile ]; then \
-	  echo "Running tests from '$$DIR' ..."; \
-	  cd $(DIR) && \
-	  $(MAKE) TERM=dumb BASEDIR=$(BASEDIR) || echo '=> unexpected error'; \
-	elif [ -f $(DIR)/ocamltests ] && [ -z $(LEGACY) ] ; then \
-	  echo "Running tests from '$$DIR' ..."; \
-	  $(MAKE) exec-ocamltest DIR=$(DIR) \
-	    OCAMLTESTENV="OCAMLTESTDIR=$(OCAMLTESTDIR_CYGPATH)" \
-	    OCAMLTESTFLAGS=""; \
 	fi
 
 .PHONY: exec-ocamltest
 exec-ocamltest:
 	@if [ -z "$(DIR)" ]; then exit 1; fi
 	@if [ ! -d "$(DIR)" ]; then exit 1; fi
-	@file=$(DIR)/ocamltests; \
-	(IFS=$$(printf "\r\n"); while read testfile; do \
+	@(IFS=$$(printf "\r\n"); \
+	$(ocamltest) -list-tests $(DIR) | while read testfile; do \
 	   TERM=dumb $(OCAMLTESTENV) \
 	     $(ocamltest) $(OCAMLTESTFLAGS) $(DIR)/$$testfile || \
 	   echo " ... testing '$$testfile' => unexpected error"; \
-	done < $$file) || echo directory "$(DIR)" >>$(failstamp)
+	done) || echo directory "$(DIR)" >>$(failstamp)
 
 .PHONY: clean-one
 clean-one:
@@ -258,17 +257,17 @@ promote:
 	  echo "Directory '$(DIR)' does not exist."; \
 	  exit 1; \
 	fi
-	@if [ -f $(DIR)/ocamltests ]; then \
+	@if $(ocamltest) -list-tests $(DIR) >/dev/null 2>&1; then \
 	  $(MAKE) exec-ocamltest DIR=$(DIR) \
 	    OCAMLTESTENV="OCAMLTESTDIR=$(OCAMLTESTDIR_CYGPATH)" \
-	    OCAMLTESTFLAGS="-promote"; \
+	    PROMOTE="true"; \
 	else \
 	  cd $(DIR) && $(MAKE) TERM=dumb BASEDIR=$(BASEDIR) promote; \
 	fi
 
 .PHONY: lib
 lib:
-	@cd lib && $(MAKE) -s BASEDIR=$(BASEDIR)
+	@$(MAKE) -s -C lib
 
 .PHONY: tools
 tools:
@@ -276,18 +275,15 @@ tools:
 
 .PHONY: clean
 clean:
-	@cd lib && $(MAKE) BASEDIR=$(BASEDIR) clean
+	@$(MAKE) -C lib clean
 	@cd tools && $(MAKE) BASEDIR=$(BASEDIR) clean
-	@for file in `$(FIND) interactive tests -name Makefile`; do \
-	  (cd `dirname $$file` && $(MAKE) BASEDIR=$(BASEDIR) clean); \
-	done
 	$(FIND) . -name '*_ocamltest*' | xargs rm -rf
 	rm -f $(failstamp)
 
 .PHONY: report
 report:
 	@if [ ! -f $(TESTLOG) ]; then echo "No $(TESTLOG) file."; exit 1; fi
-	@awk -f makefiles/summarize.awk < $(TESTLOG)
+	@$(AWK) -f ./summarize.awk < $(TESTLOG)
 
 .PHONY: retry-list
 retry-list:
@@ -302,8 +298,8 @@ retry-list:
 
 .PHONY: retries
 retries:
-	@awk -v retries=1 -v max_retries=$(MAX_TESTSUITE_DIR_RETRIES) \
-	     -f makefiles/summarize.awk < $(TESTLOG) > _retries
+	@$(AWK) -v retries=1 -v max_retries=$(MAX_TESTSUITE_DIR_RETRIES) \
+	     -f ./summarize.awk < $(TESTLOG) > _retries
 	@test `cat _retries | wc -l` -eq 0 || $(MAKE) $(NO_PRINT) retry-list
 	@rm -f _retries
 

@@ -103,6 +103,83 @@ let _ = Callback.register_exception "Unix.Unix_error"
 
 external error_message : error -> string = "unix_error_message"
 
+let () =
+  Printexc.register_printer
+    (function
+      | Unix_error (e, s, s') ->
+          let msg = match e with
+          | E2BIG -> "E2BIG"
+          | EACCES -> "EACCES"
+          | EAGAIN -> "EAGAIN"
+          | EBADF -> "EBADF"
+          | EBUSY -> "EBUSY"
+          | ECHILD -> "ECHILD"
+          | EDEADLK -> "EDEADLK"
+          | EDOM -> "EDOM"
+          | EEXIST -> "EEXIST"
+          | EFAULT -> "EFAULT"
+          | EFBIG -> "EFBIG"
+          | EINTR -> "EINTR"
+          | EINVAL -> "EINVAL"
+          | EIO -> "EIO"
+          | EISDIR -> "EISDIR"
+          | EMFILE -> "EMFILE"
+          | EMLINK -> "EMLINK"
+          | ENAMETOOLONG -> "ENAMETOOLONG"
+          | ENFILE -> "ENFILE"
+          | ENODEV -> "ENODEV"
+          | ENOENT -> "ENOENT"
+          | ENOEXEC -> "ENOEXEC"
+          | ENOLCK -> "ENOLCK"
+          | ENOMEM -> "ENOMEM"
+          | ENOSPC -> "ENOSPC"
+          | ENOSYS -> "ENOSYS"
+          | ENOTDIR -> "ENOTDIR"
+          | ENOTEMPTY -> "ENOTEMPTY"
+          | ENOTTY -> "ENOTTY"
+          | ENXIO -> "ENXIO"
+          | EPERM -> "EPERM"
+          | EPIPE -> "EPIPE"
+          | ERANGE -> "ERANGE"
+          | EROFS -> "EROFS"
+          | ESPIPE -> "ESPIPE"
+          | ESRCH -> "ESRCH"
+          | EXDEV -> "EXDEV"
+          | EWOULDBLOCK -> "EWOULDBLOCK"
+          | EINPROGRESS -> "EINPROGRESS"
+          | EALREADY -> "EALREADY"
+          | ENOTSOCK -> "ENOTSOCK"
+          | EDESTADDRREQ -> "EDESTADDRREQ"
+          | EMSGSIZE -> "EMSGSIZE"
+          | EPROTOTYPE -> "EPROTOTYPE"
+          | ENOPROTOOPT -> "ENOPROTOOPT"
+          | EPROTONOSUPPORT -> "EPROTONOSUPPORT"
+          | ESOCKTNOSUPPORT -> "ESOCKTNOSUPPORT"
+          | EOPNOTSUPP -> "EOPNOTSUPP"
+          | EPFNOSUPPORT -> "EPFNOSUPPORT"
+          | EAFNOSUPPORT -> "EAFNOSUPPORT"
+          | EADDRINUSE -> "EADDRINUSE"
+          | EADDRNOTAVAIL -> "EADDRNOTAVAIL"
+          | ENETDOWN -> "ENETDOWN"
+          | ENETUNREACH -> "ENETUNREACH"
+          | ENETRESET -> "ENETRESET"
+          | ECONNABORTED -> "ECONNABORTED"
+          | ECONNRESET -> "ECONNRESET"
+          | ENOBUFS -> "ENOBUFS"
+          | EISCONN -> "EISCONN"
+          | ENOTCONN -> "ENOTCONN"
+          | ESHUTDOWN -> "ESHUTDOWN"
+          | ETOOMANYREFS -> "ETOOMANYREFS"
+          | ETIMEDOUT -> "ETIMEDOUT"
+          | ECONNREFUSED -> "ECONNREFUSED"
+          | EHOSTDOWN -> "EHOSTDOWN"
+          | EHOSTUNREACH -> "EHOSTUNREACH"
+          | ELOOP -> "ELOOP"
+          | EOVERFLOW -> "EOVERFLOW"
+          | EUNKNOWNERR x -> Printf.sprintf "EUNKNOWNERR %d" x in
+          Some (Printf.sprintf "Unix.Unix_error(Unix.%s, %S, %S)" msg s s')
+      | _ -> None)
+
 let handle_unix_error f arg =
   try
     f arg
@@ -138,10 +215,29 @@ type wait_flag =
 
 type file_descr
 
-external execv : string -> string array -> 'a = "unix_execv"
-external execve : string -> string array -> string array -> 'a = "unix_execve"
-external execvp : string -> string array -> 'a = "unix_execvp"
-external execvpe : string -> string array -> string array -> 'a = "unix_execvpe"
+let maybe_quote f =
+  if String.contains f ' ' ||
+     String.contains f '\"' ||
+     String.contains f '\t' ||
+     f = ""
+  then Filename.quote f
+  else f
+
+external sys_execv : string -> string array -> 'a = "unix_execv"
+external sys_execve :
+             string -> string array -> string array -> 'a = "unix_execve"
+external sys_execvp : string -> string array -> 'a = "unix_execvp"
+external sys_execvpe :
+             string -> string array -> string array -> 'a = "unix_execvpe"
+
+let execv prog args =
+  sys_execv prog (Array.map maybe_quote args)
+let execve prog args env =
+  sys_execve prog (Array.map maybe_quote args) env
+let execvp prog args =
+  sys_execvp prog (Array.map maybe_quote args)
+let execvpe prog args env =
+  sys_execvpe prog (Array.map maybe_quote args) env
 
 external waitpid : wait_flag list -> int -> int * process_status
                  = "win_waitpid"
@@ -229,8 +325,8 @@ type seek_command =
 
 external lseek : file_descr -> int -> seek_command -> int = "unix_lseek"
 
-let truncate _name _len = invalid_arg "Unix.truncate not implemented"
-let ftruncate _fd _len = invalid_arg "Unix.ftruncate not implemented"
+external truncate : string -> int -> unit = "unix_truncate"
+external ftruncate : file_descr -> int -> unit = "unix_ftruncate"
 
 (* File statistics *)
 
@@ -274,10 +370,8 @@ module LargeFile =
   struct
     external lseek : file_descr -> int64 -> seek_command -> int64
        = "unix_lseek_64"
-    let truncate _name _len =
-      invalid_arg "Unix.LargeFile.truncate not implemented"
-    let ftruncate _name _len =
-      invalid_arg "Unix.LargeFile.ftruncate not implemented"
+    external truncate : string -> int64 -> unit = "unix_truncate_64"
+    external ftruncate : file_descr -> int64 -> unit = "unix_ftruncate_64"
     type stats =
       { st_dev : int;
         st_ino : int;
@@ -860,13 +954,6 @@ external win_create_process : string -> string -> string option ->
                             = "win_create_process" "win_create_process_native"
 
 let make_cmdline args =
-  let maybe_quote f =
-    if String.contains f ' ' ||
-       String.contains f '\"' ||
-       String.contains f '\t' ||
-       f = ""
-    then Filename.quote f
-    else f in
   String.concat " " (List.map maybe_quote (Array.to_list args))
 
 let make_process_env env =

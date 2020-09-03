@@ -85,6 +85,7 @@ val no_check_prims : bool ref
 val bytecode_compatible_32 : bool ref
 val output_c_object : bool ref
 val output_complete_object : bool ref
+val output_complete_executable : bool ref
 val all_ccopts : string list ref
 val classic : bool ref
 val nopervasives : bool ref
@@ -96,7 +97,6 @@ val absname : bool ref
 val annotations : bool ref
 val binary_annotations : bool ref
 val use_threads : bool ref
-val use_vmthreads : bool ref
 val noassert : bool ref
 val verbose : bool ref
 val noprompt : bool ref
@@ -106,6 +106,7 @@ val noinit : bool ref
 val noversion : bool ref
 val use_prims : string ref
 val use_runtime : string ref
+val plugin : bool ref
 val principal : bool ref
 val real_paths : bool ref
 val recursive_types : bool ref
@@ -113,7 +114,6 @@ val strict_sequence : bool ref
 val strict_formats : bool ref
 val applicative_functors : bool ref
 val make_runtime : bool ref
-val gprofile : bool ref
 val c_compiler : string option ref
 val no_auto_link : bool ref
 val dllpaths : string list ref
@@ -123,6 +123,7 @@ val error_size : int ref
 val float_const_prop : bool ref
 val transparent_modules : bool ref
 val unique_ids : bool ref
+val locations : bool ref
 val dump_source : bool ref
 val dump_parsetree : bool ref
 val dump_typedtree : bool ref
@@ -186,6 +187,7 @@ val shared : bool ref
 val dlcode : bool ref
 val pic_code : bool ref
 val runtime_variant : string ref
+val with_runtime : bool ref
 val force_slash : bool ref
 val keep_docs : bool ref
 val keep_locs : bool ref
@@ -206,6 +208,7 @@ val dump_flambda_verbose : bool ref
 val classic_inlining : bool ref
 val afl_instrument : bool ref
 val afl_inst_ratio : int ref
+val function_sections : bool ref
 
 val all_passes : string list ref
 val dumped_pass : string -> bool
@@ -216,6 +219,7 @@ val dump_into_file : bool ref
 (* Support for flags that can also be set from an environment variable *)
 type 'a env_reader = {
   parse : string -> 'a option;
+  print : 'a -> string;
   usage : string;
   env_var : string;
 }
@@ -228,12 +232,15 @@ val error_style_reader : Misc.Error_style.setting env_reader
 
 val unboxed_types : bool ref
 
+val insn_sched : bool ref
+val insn_sched_default : bool
+
 module Compiler_pass : sig
-  type t = Parsing | Typing
+  type t = Parsing | Typing | Scheduling
   val of_string : string -> t option
   val to_string : t -> string
-  val passes : t list
-  val pass_names : string list
+  val is_compilation_pass : t -> bool
+  val available_pass_names : native:bool -> string list
 end
 val stop_after : Compiler_pass.t option ref
 val should_stop_after : Compiler_pass.t -> bool
@@ -248,8 +255,7 @@ val arg_spec : (string * Arg.spec * string) list ref
 val add_arguments : string -> (string * Arg.spec * string) list -> unit
 
 (* [parse_arguments anon_arg usage] will parse the arguments, using
-  the arguments provided in [Clflags.arg_spec]. It allows plugins to
-  provide their own arguments.
+  the arguments provided in [Clflags.arg_spec].
 *)
 val parse_arguments : Arg.anon_fun -> string -> unit
 

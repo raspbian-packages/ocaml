@@ -134,7 +134,7 @@ val bind_map : int list = [8; 9; 10; 9; 10; 11; 10; 11; 12]
 module Let_unbound = struct
 end;;
 [%%expect{|
-module Let_unbound : sig  end
+module Let_unbound : sig end
 |}];;
 
 let let_unbound =
@@ -217,6 +217,7 @@ Line 3, characters 13-14:
                  ^
 Error: This expression has type int but an expression was expected of type
          float
+  Hint: Did you mean `1.'?
 |}];;
 
 module Ill_typed_3 = struct
@@ -289,7 +290,7 @@ let ill_typed_5 =
     x + y + z
   );;
 [%%expect{|
-Line 3, characters 9-44:
+Lines 3-5, characters 9-14:
 3 | .........x = 1
 4 |     and+ y = 2
 5 |     and+ z = 3...
@@ -319,7 +320,7 @@ let ill_typed_6 =
     x + y + z
   );;
 [%%expect{|
-Line 3, characters 9-29:
+Lines 3-4, characters 9-14:
 3 | .........x = 1
 4 |     and+ y = 2
 Error: These bindings have type int * int but bindings were expected of type
@@ -511,7 +512,7 @@ let indexed_monad4 =
       return (first ^ second)
   );;
 [%%expect{|
-Line 6, characters 4-55:
+Lines 6-7, characters 4-29:
 6 | ....let* second = read in
 7 |       return (first ^ second)
 Error: This expression has type

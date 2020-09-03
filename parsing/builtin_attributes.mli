@@ -25,6 +25,7 @@
     - ocaml.warn_on_literal_pattern
     - ocaml.deprecated_mutable
     - ocaml.immediate
+    - ocaml.immediate64
     - ocaml.boxed / ocaml.unboxed
 
     {b Warning:} this module is unstable and part of
@@ -32,14 +33,13 @@
 
 *)
 
-
 val check_alerts: Location.t -> Parsetree.attributes -> string -> unit
 val check_alerts_inclusion:
   def:Location.t -> use:Location.t -> Location.t -> Parsetree.attributes ->
   Parsetree.attributes -> string -> unit
-val alerts_of_attrs: Parsetree.attributes -> string Misc.Stdlib.String.Map.t
-val alerts_of_sig: Parsetree.signature -> string Misc.Stdlib.String.Map.t
-val alerts_of_str: Parsetree.structure -> string Misc.Stdlib.String.Map.t
+val alerts_of_attrs: Parsetree.attributes -> Misc.alerts
+val alerts_of_sig: Parsetree.signature -> Misc.alerts
+val alerts_of_str: Parsetree.structure -> Misc.alerts
 
 val check_deprecated_mutable:
     Location.t -> Parsetree.attributes -> string -> unit
@@ -78,6 +78,7 @@ val explicit_arity: Parsetree.attributes -> bool
 
 
 val immediate: Parsetree.attributes -> bool
+val immediate64: Parsetree.attributes -> bool
 
 val has_unboxed: Parsetree.attributes -> bool
 val has_boxed: Parsetree.attributes -> bool

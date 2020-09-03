@@ -18,7 +18,7 @@
 # it is possible to bootstrap the compiler.
 
 # To know the slave's architecture, this script looks at the OCAML_ARCH
-# environment variable. For a given node NODe, this variable can be defined
+# environment variable. For a given node NODE, this variable can be defined
 # in Jenkins at the following address:
 # https://ci.inria.fr/ocaml/computer/NODE/configure
 
@@ -125,7 +125,7 @@ set -ex
 # default values
 make=make
 instdir="$HOME/ocaml-tmp-install"
-confoptions="${OCAML_CONFIGURE_OPTIONS}"
+confoptions="--enable-ocamltest ${OCAML_CONFIGURE_OPTIONS}"
 make_native=true
 cleanup=false
 check_make_alldepend=false

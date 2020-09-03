@@ -28,7 +28,7 @@ struct custom_fixed_length {
 };
 
 struct custom_operations {
-  char *identifier;
+  char const *identifier;
   void (*finalize)(value v);
   int (*compare)(value v1, value v2);
   intnat (*hash)(value v);
@@ -66,8 +66,8 @@ CAMLextern value caml_alloc_custom_mem(struct custom_operations * ops,
 
 CAMLextern void caml_register_custom_operations(struct custom_operations * ops);
 
-CAMLextern int caml_compare_unordered;
-  /* Used by custom comparison to report unordered NaN-like cases. */
+/* Global variable moved to Caml_state in 4.10 */
+#define caml_compare_unordered (Caml_state_field(compare_unordered))
 
 #ifdef CAML_INTERNALS
 extern struct custom_operations * caml_find_custom_operations(char * ident);

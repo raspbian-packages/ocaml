@@ -24,6 +24,7 @@ let in_file name =
 ;;
 
 let none = in_file "_none_";;
+let is_none l = (l = none);;
 
 let curr lexbuf = {
   loc_start = lexbuf.lex_start_p;
@@ -82,6 +83,7 @@ let mknoloc txt = mkloc txt none
 
 let input_name = ref "_none_"
 let input_lexbuf = ref (None : lexbuf option)
+let input_phrase_buffer = ref (None : Buffer.t option)
 
 (******************************************************************************)
 (* Terminal info *)
@@ -190,9 +192,10 @@ let print_loc ppf loc =
     if loc.loc_start.pos_fname = "" then !input_name
     else loc.loc_start.pos_fname
   in
-  let line = loc.loc_start.pos_lnum in
+  let startline = loc.loc_start.pos_lnum in
+  let endline = loc.loc_end.pos_lnum in
   let startchar = loc.loc_start.pos_cnum - loc.loc_start.pos_bol in
-  let endchar = loc.loc_end.pos_cnum - loc.loc_start.pos_bol in
+  let endchar = loc.loc_end.pos_cnum - loc.loc_end.pos_bol in
 
   let first = ref true in
   let capitalize s =
@@ -210,8 +213,13 @@ let print_loc ppf loc =
      existing setup of editors that parse locations in error messages (e.g.
      Emacs). *)
   comma ();
-  Format.fprintf ppf "%s %i" (capitalize "line")
-    (if line_valid line then line else 1);
+  let startline = if line_valid startline then startline else 1 in
+  let endline = if line_valid endline then endline else startline in
+  begin if startline = endline then
+    Format.fprintf ppf "%s %i" (capitalize "line") startline
+  else
+    Format.fprintf ppf "%s %i-%i" (capitalize "lines") startline endline
+  end;
 
   if chars_valid ~startchar ~endchar then (
     comma ();
@@ -446,7 +454,7 @@ let highlight_quote ppf
         |> infer_line_numbers
         |> List.map (fun (lnum, { text; start_pos }) ->
           (text,
-           Misc.Stdlib.Option.value_default Int.to_string ~default:"" lnum,
+           Option.fold ~some:Int.to_string ~none:"" lnum,
            start_pos))
       in
     Format.fprintf ppf "@[<v>";
@@ -540,6 +548,23 @@ let lines_around_from_lexbuf
     lines_around ~start_pos ~end_pos ~seek ~read_char
   end
 
+(* Attempt to get lines from the phrase buffer *)
+let lines_around_from_phrasebuf
+    ~(start_pos: position) ~(end_pos: position)
+    (pb: Buffer.t):
+  input_line list
+  =
+  let pos = ref 0 in
+  let seek n = pos := n in
+  let read_char () =
+    if !pos >= Buffer.length pb then None
+    else begin
+      let c = Buffer.nth pb !pos in
+      incr pos; Some c
+    end
+  in
+  lines_around ~start_pos ~end_pos ~seek ~read_char
+
 (* Get lines from a file *)
 let lines_around_from_file
     ~(start_pos: position) ~(end_pos: position)
@@ -577,15 +602,23 @@ let lines_around_from_current_input ~start_pos ~end_pos =
     else
       []
   in
-  match !input_lexbuf with
-  | Some lb ->
+  match !input_lexbuf, !input_phrase_buffer, !input_name with
+  | _, Some pb, "//toplevel//" ->
+      begin match lines_around_from_phrasebuf pb ~start_pos ~end_pos with
+      | [] -> (* Could not read the input from the phrase buffer. This is likely
+                 a sign that we were given a buggy location. *)
+          []
+      | lines ->
+          lines
+      end
+  | Some lb, _, _ ->
       begin match lines_around_from_lexbuf lb ~start_pos ~end_pos with
       | [] -> (* The input is likely not in the lexbuf anymore *)
           from_file ()
       | lines ->
           lines
       end
-  | None ->
+  | None, _, _ ->
       from_file ()
 
 (******************************************************************************)
@@ -660,10 +693,9 @@ let is_quotable_loc loc =
   && loc.loc_end.pos_fname = !input_name
 
 let error_style () =
-  let open Misc.Error_style in
   match !Clflags.error_style with
-  | Some Contextual | None -> Contextual
-  | Some Short -> Short
+  | Some setting -> setting
+  | None -> Misc.Error_style.default_setting
 
 let batch_mode_printer : report_printer =
   let pp_loc _self report ppf loc =
@@ -747,7 +779,8 @@ let terminfo_toplevel_printer (lb: lexbuf): report_printer =
   in
   let pp_main_loc _ _ _ _ = () in
   let pp_submsg_loc _ _ ppf loc =
-    Format.fprintf ppf "%a:@ " print_loc loc in
+    if not loc.loc_ghost then
+      Format.fprintf ppf "%a:@ " print_loc loc in
   { batch_mode_printer with pp; pp_main_loc; pp_submsg_loc }
 
 let best_toplevel_printer () =
@@ -882,17 +915,6 @@ let () =
     (function
       | Sys_error msg ->
           Some (errorf ~loc:(in_file !input_name) "I/O error: %s" msg)
-
-      | Misc.HookExnWrapper {error = e; hook_name;
-                             hook_info={Misc.sourcefile}} ->
-          let sub = match error_of_exn e with
-            | None | Some `Already_displayed ->
-                [msg "%s" (Printexc.to_string e)]
-            | Some (`Ok err) ->
-                (msg ~loc:err.main.loc "%t" err.main.txt) :: err.sub
-          in
-          Some
-            (errorf ~loc:(in_file sourcefile) ~sub "In hook %S:" hook_name)
       | _ -> None
     )
 

@@ -27,11 +27,6 @@ let typ_addr = [|Addr|]
 let typ_int = [|Int|]
 let typ_float = [|Float|]
 
-let size_component = function
-  | Val | Addr -> Arch.size_addr
-  | Int -> Arch.size_int
-  | Float -> Arch.size_float
-
 (** [machtype_component]s are partially ordered as follows:
 
       Addr     Float
@@ -82,13 +77,6 @@ let ge_component comp1 comp2 =
   | Float, (Int | Addr | Val) ->
     assert false
 
-let size_machtype mty =
-  let size = ref 0 in
-  for i = 0 to Array.length mty - 1 do
-    size := !size + size_component mty.(i)
-  done;
-  !size
-
 type integer_comparison = Lambda.integer_comparison =
   | Ceq | Cne | Clt | Cgt | Cle | Cge
 
@@ -109,10 +97,6 @@ type label = int
 let label_counter = ref 99
 
 let new_label() = incr label_counter; !label_counter
-
-type raise_kind =
-  | Raise_withtrace
-  | Raise_notrace
 
 type rec_flag = Nonrecursive | Recursive
 
@@ -155,35 +139,39 @@ and operation =
   | Caddf | Csubf | Cmulf | Cdivf
   | Cfloatofint | Cintoffloat
   | Ccmpf of float_comparison
-  | Craise of raise_kind
+  | Craise of Lambda.raise_kind
   | Ccheckbound
 
 type expression =
-    Cconst_int of int
-  | Cconst_natint of nativeint
-  | Cconst_float of float
-  | Cconst_symbol of string
-  | Cconst_pointer of int
-  | Cconst_natpointer of nativeint
+    Cconst_int of int * Debuginfo.t
+  | Cconst_natint of nativeint * Debuginfo.t
+  | Cconst_float of float * Debuginfo.t
+  | Cconst_symbol of string * Debuginfo.t
+  | Cconst_pointer of int * Debuginfo.t
+  | Cconst_natpointer of nativeint * Debuginfo.t
   | Cblockheader of nativeint * Debuginfo.t
   | Cvar of Backend_var.t
   | Clet of Backend_var.With_provenance.t * expression * expression
+  | Clet_mut of Backend_var.With_provenance.t * machtype
+                * expression * expression
   | Cphantom_let of Backend_var.With_provenance.t
       * phantom_defining_expr option * expression
   | Cassign of Backend_var.t * expression
   | Ctuple of expression list
   | Cop of operation * expression list * Debuginfo.t
   | Csequence of expression * expression
-  | Cifthenelse of expression * expression * expression
-  | Cswitch of expression * int array * expression array * Debuginfo.t
-  | Cloop of expression
+  | Cifthenelse of expression * Debuginfo.t * expression
+      * Debuginfo.t * expression * Debuginfo.t
+  | Cswitch of expression * int array * (expression * Debuginfo.t) array
+      * Debuginfo.t
   | Ccatch of
       rec_flag
         * (int * (Backend_var.With_provenance.t * machtype) list
-          * expression) list
+          * expression * Debuginfo.t) list
         * expression
   | Cexit of int * expression list
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
+      * Debuginfo.t
 
 type codegen_option =
   | Reduce_code_size
@@ -215,8 +203,121 @@ type phrase =
     Cfunction of fundecl
   | Cdata of data_item list
 
-let ccatch (i, ids, e1, e2)=
-  Ccatch(Nonrecursive, [i, ids, e2], e1)
+let ccatch (i, ids, e1, e2, dbg) =
+  Ccatch(Nonrecursive, [i, ids, e2, dbg], e1)
 
 let reset () =
   label_counter := 99
+
+let iter_shallow_tail f = function
+  | Clet(_, _, body) | Cphantom_let (_, _, body) | Clet_mut(_, _, _, body) ->
+      f body;
+      true
+  | Cifthenelse(_cond, _ifso_dbg, ifso, _ifnot_dbg, ifnot, _dbg) ->
+      f ifso;
+      f ifnot;
+      true
+  | Csequence(_e1, e2) ->
+      f e2;
+      true
+  | Cswitch(_e, _tbl, el, _dbg') ->
+      Array.iter (fun (e, _dbg) -> f e) el;
+      true
+  | Ccatch(_rec_flag, handlers, body) ->
+      List.iter (fun (_, _, h, _dbg) -> f h) handlers;
+      f body;
+      true
+  | Ctrywith(e1, _id, e2, _dbg) ->
+      f e1;
+      f e2;
+      true
+  | Cexit _ | Cop (Craise _, _, _) ->
+      true
+  | Cconst_int _
+  | Cconst_natint _
+  | Cconst_float _
+  | Cconst_symbol _
+  | Cconst_pointer _
+  | Cconst_natpointer _
+  | Cblockheader _
+  | Cvar _
+  | Cassign _
+  | Ctuple _
+  | Cop _ ->
+      false
+
+let rec map_tail f = function
+  | Clet(id, exp, body) ->
+      Clet(id, exp, map_tail f body)
+  | Clet_mut(id, kind, exp, body) ->
+      Clet_mut(id, kind, exp, map_tail f body)
+  | Cphantom_let(id, exp, body) ->
+      Cphantom_let (id, exp, map_tail f body)
+  | Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg) ->
+      Cifthenelse
+        (
+          cond,
+          ifso_dbg, map_tail f ifso,
+          ifnot_dbg, map_tail f ifnot,
+          dbg
+        )
+  | Csequence(e1, e2) ->
+      Csequence(e1, map_tail f e2)
+  | Cswitch(e, tbl, el, dbg') ->
+      Cswitch(e, tbl, Array.map (fun (e, dbg) -> map_tail f e, dbg) el, dbg')
+  | Ccatch(rec_flag, handlers, body) ->
+      let map_h (n, ids, handler, dbg) = (n, ids, map_tail f handler, dbg) in
+      Ccatch(rec_flag, List.map map_h handlers, map_tail f body)
+  | Ctrywith(e1, id, e2, dbg) ->
+      Ctrywith(map_tail f e1, id, map_tail f e2, dbg)
+  | Cexit _ | Cop (Craise _, _, _) as cmm ->
+      cmm
+  | Cconst_int _
+  | Cconst_natint _
+  | Cconst_float _
+  | Cconst_symbol _
+  | Cconst_pointer _
+  | Cconst_natpointer _
+  | Cblockheader _
+  | Cvar _
+  | Cassign _
+  | Ctuple _
+  | Cop _ as c ->
+      f c
+
+let map_shallow f = function
+  | Clet (id, e1, e2) ->
+      Clet (id, f e1, f e2)
+  | Clet_mut (id, kind, e1, e2) ->
+      Clet_mut (id, kind, f e1, f e2)
+  | Cphantom_let (id, de, e) ->
+      Cphantom_let (id, de, f e)
+  | Cassign (id, e) ->
+      Cassign (id, f e)
+  | Ctuple el ->
+      Ctuple (List.map f el)
+  | Cop (op, el, dbg) ->
+      Cop (op, List.map f el, dbg)
+  | Csequence (e1, e2) ->
+      Csequence (f e1, f e2)
+  | Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg) ->
+      Cifthenelse(f cond, ifso_dbg, f ifso, ifnot_dbg, f ifnot, dbg)
+  | Cswitch (e, ia, ea, dbg) ->
+      Cswitch (e, ia, Array.map (fun (e, dbg) -> f e, dbg) ea, dbg)
+  | Ccatch (rf, hl, body) ->
+      let map_h (n, ids, handler, dbg) = (n, ids, f handler, dbg) in
+      Ccatch (rf, List.map map_h hl, f body)
+  | Cexit (n, el) ->
+      Cexit (n, List.map f el)
+  | Ctrywith (e1, id, e2, dbg) ->
+      Ctrywith (f e1, id, f e2, dbg)
+  | Cconst_int _
+  | Cconst_natint _
+  | Cconst_float _
+  | Cconst_symbol _
+  | Cconst_pointer _
+  | Cconst_natpointer _
+  | Cblockheader _
+  | Cvar _
+    as c ->
+      c

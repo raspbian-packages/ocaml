@@ -20,7 +20,7 @@
   an error.
 *)
 
-val argv : string array
+external argv : string array = "%sys_argv"
 (** The command line arguments given to the process.
    The first element is the command name used to invoke the program.
    The following elements are the command-line arguments
@@ -38,7 +38,7 @@ external file_exists : string -> bool = "caml_sys_file_exists"
 external is_directory : string -> bool = "caml_sys_is_directory"
 (** Returns [true] if the given name refers to a directory,
     [false] if it refers to another kind of file.
-    Raise [Sys_error] if no file exists with the given name.
+    @raise Sys_error if no file exists with the given name.
     @since 3.10.0
 *)
 
@@ -57,7 +57,8 @@ external rename : string -> string -> unit = "caml_sys_rename"
 
 external getenv : string -> string = "caml_sys_getenv"
 (** Return the value associated to a variable in the process
-   environment. Raise [Not_found] if the variable is unbound. *)
+   environment.
+   @raise Not_found if the variable is unbound. *)
 
 val getenv_opt: string -> string option
 (** Return the value associated to a variable in the process
@@ -66,7 +67,24 @@ val getenv_opt: string -> string option
 *)
 
 external command : string -> int = "caml_sys_system_command"
-(** Execute the given shell command and return its exit code. *)
+(** Execute the given shell command and return its exit code.
+
+  The argument of {!Sys.command} is generally the name of a
+  command followed by zero, one or several arguments, separated
+  by whitespace.  The given argument is interpreted by a
+  shell: either the Windows shell [cmd.exe] for the Win32 ports of
+  OCaml, or the POSIX shell [sh] for other ports.  It can contain
+  shell builtin commands such as [echo], and also special characters
+  such as file redirections [>] and [<], which will be honored by the
+  shell.
+
+  Conversely, whitespace or special shell characters occurring in
+  command names or in their arguments must be quoted or escaped
+  so that the shell does not interpret them.  The quoting rules vary
+  between the POSIX shell and the Windows shell.
+  The {!Filename.quote_command} performs the appropriate quoting
+  given a command name, a list of arguments, and optional file redirections.
+*)
 
 external time : unit -> (float [@unboxed]) =
   "caml_sys_time" "caml_sys_time_unboxed" [@@noalloc]
@@ -303,17 +321,19 @@ val catch_break : bool -> unit
 
 val ocaml_version : string
 (** [ocaml_version] is the version of OCaml.
-    It is a string of the form ["major.minor[.patchlevel][+additional-info]"],
+    It is a string of the form
+      ["major.minor[.patchlevel][(+|~)additional-info]"],
     where [major], [minor], and [patchlevel] are integers, and
-    [additional-info] is an arbitrary string. The [[.patchlevel]] and
-    [[+additional-info]] parts may be absent. *)
+    [additional-info] is an arbitrary string.
+    The [[.patchlevel]] part is absent for versions anterior to 3.08.0.
+    The [[(+|~)additional-info]] part may be absent. *)
 
 
 val enable_runtime_warnings: bool -> unit
 (** Control whether the OCaml runtime system can emit warnings
     on stderr.  Currently, the only supported warning is triggered
     when a channel created by [open_*] functions is finalized without
-    being closed.  Runtime warnings are enabled by default.
+    being closed.  Runtime warnings are disabled by default.
 
     @since 4.03.0 *)
 
@@ -340,3 +360,28 @@ external opaque_identity : 'a -> 'a = "%opaque"
 
     @since 4.03.0
 *)
+
+module Immediate64 : sig
+  (** This module allows to define a type [t] with the [immediate64]
+      attribute. This attribute means that the type is immediate on 64
+      bit architectures. On other architectures, it might or might not
+      be immediate.
+
+      @since 4.10.0
+  *)
+
+  module type Non_immediate = sig
+    type t
+  end
+  module type Immediate = sig
+    type t [@@immediate]
+  end
+
+  module Make(Immediate : Immediate)(Non_immediate : Non_immediate) : sig
+    type t [@@immediate64]
+    type 'a repr =
+      | Immediate : Immediate.t repr
+      | Non_immediate : Non_immediate.t repr
+    val repr : t repr
+  end
+end

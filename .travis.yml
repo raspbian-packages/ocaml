@@ -13,14 +13,15 @@
 #*                                                                        *
 #**************************************************************************
 
-sudo: false
+dist: xenial
 language: c
 git:
   submodules: false
-script: bash -e tools/ci/travis/travis-ci.sh
+script: tools/ci/travis/travis-ci.sh
 matrix:
   include:
-  - env: CI_KIND=build XARCH=i386
+  - env: CI_KIND=build XARCH=x64 CONFIG_ARG=--enable-flambda OCAMLRUNPARAM=b,v=0
+  - env: CI_KIND=build XARCH=i386 CONFIG_ARG=--disable-stdlib-manpages
     addons:
       apt:
         packages:
@@ -31,13 +32,19 @@ matrix:
         - libx11-dev:i386
         - libc6-dev:i386
   - env: CI_KIND=build XARCH=x64
-  - env: CI_KIND=build XARCH=x64 CONFIG_ARG=--enable-flambda OCAMLRUNPARAM=b,v=0
+    addons:
+      apt:
+        packages:
+        - texlive-latex-extra
+        - texlive-fonts-recommended
+  - env: CI_KIND=build XARCH=x64 CONFIG_ARG=--disable-shared
+  - env: CI_KIND=build XARCH=x64 MIN_BUILD=1
   - env: CI_KIND=changes
   - env: CI_KIND=manual
   - env: CI_KIND=check-typo
-  - env: CI_KIND=tests
-  allow_failures:
-  - env: CI_KIND=tests
+#  - env: CI_KIND=tests
+#  allow_failures:
+#  - env: CI_KIND=tests
 addons:
   apt:
     packages:

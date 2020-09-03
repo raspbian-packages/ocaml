@@ -23,6 +23,8 @@
 #include "caml/backtrace.h"
 #include "caml/custom.h"
 #include "caml/debugger.h"
+#include "caml/domain.h"
+#include "caml/eventlog.h"
 #include "caml/fail.h"
 #include "caml/freelist.h"
 #include "caml/gc.h"
@@ -44,7 +46,6 @@
 #endif
 
 extern int caml_parser_trace;
-CAMLexport header_t caml_atom_table[256];
 char * caml_code_area_start, * caml_code_area_end;
 struct ext_table caml_code_fragments_table;
 
@@ -90,7 +91,7 @@ static void init_static(void)
 struct longjmp_buffer caml_termination_jmpbuf;
 void (*caml_termination_hook)(void *) = NULL;
 
-extern value caml_start_program (void);
+extern value caml_start_program (caml_domain_state*);
 extern void caml_init_ieee_floats (void);
 extern void caml_init_signals (void);
 #ifdef _WIN32
@@ -109,11 +110,14 @@ value caml_startup_common(char_os **argv, int pooling)
   char_os * exe_name, * proc_self_exe;
   char tos;
 
+  /* Initialize the domain */
+  caml_init_domain();
   /* Determine options */
 #ifdef DEBUG
   caml_verb_gc = 0x3F;
 #endif
   caml_parse_ocamlrunparam();
+  CAML_EVENTLOG_INIT();
 #ifdef DEBUG
   caml_gc_message (-1, "### OCaml runtime: debug mode ###\n");
 #endif
@@ -132,7 +136,7 @@ value caml_startup_common(char_os **argv, int pooling)
   caml_install_invalid_parameter_handler();
 #endif
   caml_init_custom_operations();
-  caml_top_of_stack = &tos;
+  Caml_state->top_of_stack = &tos;
   caml_init_gc (caml_init_minor_heap_wsz, caml_init_heap_wsz,
                 caml_init_heap_chunk_sz, caml_init_percent_free,
                 caml_init_max_percent_free, caml_init_major_window,
@@ -146,7 +150,7 @@ value caml_startup_common(char_os **argv, int pooling)
   caml_init_backtrace();
   caml_debugger_init (); /* force debugger.o stub to be linked */
   exe_name = argv[0];
-  if (exe_name == NULL) exe_name = _T("");
+  if (exe_name == NULL) exe_name = T("");
   proc_self_exe = caml_executable_name();
   if (proc_self_exe != NULL)
     exe_name = proc_self_exe;
@@ -157,7 +161,7 @@ value caml_startup_common(char_os **argv, int pooling)
     if (caml_termination_hook != NULL) caml_termination_hook(NULL);
     return Val_unit;
   }
-  return caml_start_program();
+  return caml_start_program(Caml_state);
 }
 
 value caml_startup_exn(char_os **argv)

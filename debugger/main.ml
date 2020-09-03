@@ -29,7 +29,7 @@ open Primitives
 
 let line_buffer = Lexing.from_function read_user_input
 
-let loop ppf = line_loop ppf line_buffer
+let loop ppf = line_loop ppf line_buffer; stop_user_input ()
 
 let current_duration = ref (-1L)
 
@@ -104,8 +104,7 @@ let rec protect ppf restart loop =
             restart ppf
           end)
   | x ->
-      kill_program ();
-      raise x
+      cleanup x kill_program
 
 let execute_file_if_any () =
   let buffer = Buffer.create 128 in
@@ -131,7 +130,8 @@ let execute_file_if_any () =
   let len = Buffer.length buffer in
   if len > 0 then
     let commands = Buffer.sub buffer 0 (pred len) in
-    line_loop Format.std_formatter (Lexing.from_string commands)
+    line_loop Format.std_formatter (Lexing.from_string commands);
+    stop_user_input ()
 
 let toplevel_loop () =
   interactif := false;
@@ -199,6 +199,10 @@ let speclist = [
 let function_placeholder () =
   raise Not_found
 
+let report report_error error =
+  eprintf "Debugger [version %s] environment error:@ @[@;%a@]@.;"
+    Config.version report_error error
+
 let main () =
   Callback.register "Debugger.function_placeholder" function_placeholder;
   try
@@ -232,18 +236,14 @@ let main () =
     kill_program ();
     exit 0
   with
-    Toplevel ->
+  | Toplevel ->
       exit 2
-  | Env.Error e ->
-      eprintf "Debugger [version %s] environment error:@ @[@;" Config.version;
-      Env.report_error err_formatter e;
-      eprintf "@]@.";
+  | Persistent_env.Error e ->
+      report Persistent_env.report_error e;
       exit 2
   | Cmi_format.Error e ->
-      eprintf "Debugger [version %s] environment error:@ @[@;" Config.version;
-      Cmi_format.report_error err_formatter e;
-      eprintf "@]@.";
+      report Cmi_format.report_error e;
       exit 2
 
 let _ =
-  Printexc.catch (Unix.handle_unix_error main) ()
+  Unix.handle_unix_error main ()

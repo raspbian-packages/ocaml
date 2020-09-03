@@ -34,15 +34,12 @@
 #endif
 
 #if defined(_MSC_VER) && !defined(__cplusplus)
-#define inline __inline
+#define Caml_inline static __inline
+#else
+#define Caml_inline static inline
 #endif
 
 #include "s.h"
-
-#if defined(_MSC_VER) && _MSC_VER < 1300
-#define LACKS_SANE_NAN
-#define LACKS_VSCPRINTF
-#endif
 
 #ifdef BOOTSTRAPPING_FLEXLINK
 #undef SUPPORT_DYNAMIC_LINKING
@@ -51,6 +48,8 @@
 #ifndef CAML_NAME_SPACE
 #include "compatibility.h"
 #endif
+
+#ifndef CAML_CONFIG_H_NO_TYPEDEFS
 
 #include <stddef.h>
 
@@ -123,6 +122,7 @@ typedef unsigned short uint16_t;
 #else
 #error "No 16-bit integer type available"
 #endif
+typedef unsigned char uint8_t;
 #endif
 
 #if SIZEOF_PTR == SIZEOF_LONG
@@ -143,6 +143,8 @@ typedef uint64_t uintnat;
 #else
 #error "No integer type available to represent pointers"
 #endif
+
+#endif /* CAML_CONFIG_H_NO_TYPEDEFS */
 
 /* Endianness of floats */
 

@@ -19,10 +19,11 @@
 
 (** Construction of dynlink functionality given the platform-specific code. *)
 
-module Make (P : Dynlink_platform_intf.S) : sig
+module Make (_ : Dynlink_platform_intf.S) : sig
   val is_native : bool
   val loadfile : string -> unit
   val loadfile_private : string -> unit
+  val unsafe_get_global_value : bytecode_or_asm_symbol:string -> Obj.t option
   val adapt_filename : string -> string
   val set_allowed_units : string list -> unit
   val allow_only: string list -> unit

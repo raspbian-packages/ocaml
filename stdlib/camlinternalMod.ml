@@ -13,6 +13,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+external make_forward : Obj.t -> Obj.t -> unit = "caml_obj_make_forward"
+
 type shape =
   | Function
   | Lazy
@@ -49,19 +51,26 @@ let rec init_mod loc shape =
 let rec update_mod shape o n =
   match shape with
   | Function ->
-      if Obj.tag n = Obj.closure_tag && Obj.size n <= Obj.size o
-      then begin overwrite o n; Obj.truncate o (Obj.size n) (* PR#4008 *) end
+      (* In bytecode, the RESTART instruction checks the size of closures.
+         Hence, the optimized case [overwrite o n] is valid only if [o] and
+         [n] have the same size.  (See PR#4008.)
+         In native code, the size of closures does not matter, so overwriting
+         is possible so long as the size of [n] is no greater than that of [o].
+      *)
+      if Obj.tag n = Obj.closure_tag
+      && (Obj.size n = Obj.size o
+          || (Sys.backend_type = Sys.Native
+              && Obj.size n <= Obj.size o))
+      then begin overwrite o n end
       else overwrite o (Obj.repr (fun x -> (Obj.obj n : _ -> _) x))
   | Lazy ->
       if Obj.tag n = Obj.lazy_tag then
         Obj.set_field o 0 (Obj.field n 0)
       else if Obj.tag n = Obj.forward_tag then begin (* PR#4316 *)
-        Obj.set_tag o Obj.forward_tag;
-        Obj.set_field o 0 (Obj.field n 0)
+        make_forward o (Obj.field n 0)
       end else begin
         (* forwarding pointer was shortcut by GC *)
-        Obj.set_tag o Obj.forward_tag;
-        Obj.set_field o 0 n
+        make_forward o n
       end
   | Class ->
       assert (Obj.tag n = 0 && Obj.size n = 4);

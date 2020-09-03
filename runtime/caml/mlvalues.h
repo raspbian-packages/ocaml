@@ -64,6 +64,8 @@ typedef unsigned int tag_t;             /* Actually, an unsigned char */
 typedef uintnat color_t;
 typedef uintnat mark_t;
 
+#include "domain_state.h"
+
 /* Longs vs blocks. */
 #define Is_long(x)   (((x) & 1) != 0)
 #define Is_block(x)  (((x) & 1) == 0)
@@ -78,6 +80,13 @@ typedef uintnat mark_t;
 #define Int_val(x) ((int) Long_val(x))
 #define Unsigned_long_val(x) ((uintnat)(x) >> 1)
 #define Unsigned_int_val(x)  ((int) Unsigned_long_val(x))
+
+/* Encoded exceptional return values, when functions are suffixed with
+   _exn. Encoded exceptions are invalid values and must not be seen
+   by the garbage collector. */
+#define Make_exception_result(v) ((v) | 2)
+#define Is_exception_result(v) (((v) & 3) == 2)
+#define Extract_exception(v) ((v) & ~3)
 
 /* Structure of the header:
 
@@ -303,14 +312,14 @@ CAMLextern void caml_Store_double_val (value,double);
   #define Double_field(v,i) Double_flat_field(v,i)
   #define Store_double_field(v,i,d) Store_double_flat_field(v,i,d)
 #else
-  static inline double Double_field (value v, mlsize_t i) {
+  Caml_inline double Double_field (value v, mlsize_t i) {
     if (Tag_val (v) == Double_array_tag){
       return Double_flat_field (v, i);
     }else{
       return Double_array_field (v, i);
     }
   }
-  static inline void Store_double_field (value v, mlsize_t i, double d) {
+  Caml_inline void Store_double_field (value v, mlsize_t i, double d) {
     if (Tag_val (v) == Double_array_tag){
       Store_double_flat_field (v, i, d);
     }else{
@@ -345,7 +354,7 @@ CAMLextern int64_t caml_Int64_val(value v);
 
 /* 3- Atoms are 0-tuples.  They are statically allocated once and for all. */
 
-CAMLextern header_t caml_atom_table[];
+CAMLextern header_t *caml_atom_table;
 #define Atom(tag) (Val_hp (&(caml_atom_table [(tag)])))
 
 /* Booleans are integers 0 or 1 */

@@ -167,17 +167,9 @@ excluding the filename.
 Show absolute filenames in error messages.
 .TP
 .B \-annot
-Dump detailed information about the compilation (types, bindings,
-tail-calls, etc).  The information for file
-.IR src .ml
-is put into file
-.IR src .annot.
-In case of a type error, dump all the information inferred by the
-type-checker before the error. The
-.IR src .annot
-file can be used with the emacs commands given in
-.B emacs/caml\-types.el
-to display types and other annotations interactively.
+Deprecated since OCaml 4.11. Please use
+.BR \-bin-annot
+instead.
 .TP
 .B \-bin\-annot
 Dump detailed information about the compilation (types, bindings,
@@ -349,6 +341,9 @@ in a slight expansion in code size. Higher values for the
 option cause larger and larger functions to become candidate for
 inlining, but can result in a serious increase in code size.
 .TP
+.B \-insn\-sched
+Enables the instruction scheduling pass in the compiler backend.
+.TP
 .BI \-intf \ filename
 Compile the file
 .I filename
@@ -426,6 +421,9 @@ and pass the correct C libraries and options on the command line.
 Allow the compiler to use some optimizations that are valid only for code
 that is never dynlinked.
 .TP
+.B \-no\-insn\-sched
+Disables the instruction scheduling pass in the compiler backend.
+.TP
 .B -nostdlib
 Do not automatically add the standard library directory to the list of
 directories searched for compiled interface files (.cmi), compiled
@@ -478,31 +476,6 @@ option.
 This option can also be used to produce a compiled shared/dynamic
 library (.so extension).
 .TP
-.B \-p
-Generate extra code to write profile information when the program is
-executed.  The profile information can then be examined with the
-analysis program
-.BR gprof (1).
-The
-.B \-p
-option must be given both at
-compile-time and at link-time.  Linking object files not compiled with
-.B \-p
-is possible, but results in less precise profiling.
-
-See the
-.BR gprof (1)
-man page for more information about the profiles.
-
-Full support for
-.BR gprof (1)
-is only available for certain platforms
-(currently: Intel x86/Linux and Alpha/Digital Unix).
-On other platforms, the
-.B \-p
-option will result in a less precise
-profile (no call graph information, only a time profile).
-.TP
 .B \-pack
 Build an object file (.cmx and .o files) and its associated compiled
 interface (.cmi) that combines the .cmx object
@@ -532,15 +505,6 @@ with
 See
 .IR "The OCaml user's manual" ,
 chapter "Native-code compilation" for more details.
-.TP
-.BI \-plugin \ plugin
-Dynamically load the code of the given
-.I plugin
-(a .cmo, .cma or .cmxs file) in the compiler. The plugin must exist in
-the same kind of code as the compiler (ocamlopt.byte must load bytecode
-plugins, while ocamlopt.opt must load native code plugins), and
-extension adaptation is done automatically for .cma files (to .cmxs files
-if the compiler is compiled in native code).
 .TP
 .BI \-pp \ command
 Cause the compiler to call the given
@@ -712,6 +676,13 @@ Show the description of all available warning numbers.
 .B \-where
 Print the location of the standard library, then exit.
 .TP
+.B \-with-runtime
+Include the runtime system in the generated program. This is the default.
+.TP
+.B \-without-runtime
+The compiler does not include the runtime system (nor a reference to it) in the
+generated program; it must be supplied separately.
+.TP
 .BI \- \ file
 Process
 .I file
@@ -756,6 +727,19 @@ Generate position-independent machine code.  This is the default.
 .TP
 .B \-fno\-PIC
 Generate position-dependent machine code.
+
+.SH OPTIONS FOR THE POWER ARCHITECTURE
+
+The PowerPC code generator supports the following additional options:
+.TP
+.B \-flarge\-toc
+Enables the PowerPC large model allowing the TOC (table of contents) to be
+arbitrarily large.  This is the default since 4.11.
+.TP
+.B \-fsmall\-toc
+Enables the PowerPC small model allowing the TOC to be up to 64 kbytes per
+compilation unit.  Prior to 4.11 this was the default behaviour.
+\end{options}
 
 .SH OPTIONS FOR THE ARM ARCHITECTURE
 The ARM code generator supports the following additional options:

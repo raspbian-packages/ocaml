@@ -36,6 +36,10 @@ type directive_info = {
   doc: string;
 }
 
+(* Phase buffer that stores the last toplevel phrase (see
+   [Location.input_phrase_buffer]). *)
+let phrase_buffer = Buffer.create 1024
+
 (* The table of toplevel value bindings and its accessors *)
 
 let toplevel_value_bindings : Obj.t String.Map.t ref = ref String.Map.empty
@@ -147,7 +151,7 @@ let parse_mod_use_file name lb =
   [ Ptop_def
       [ Str.module_
           (Mb.mk
-             (Location.mknoloc modname)
+             (Location.mknoloc (Some modname))
              (Mod.structure items)
           )
        ]
@@ -186,7 +190,7 @@ let record_backtrace () =
 
 let load_lambda ppf lam =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
-  let slam = Simplif.simplify_lambda "//toplevel//" lam in
+  let slam = Simplif.simplify_lambda lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
   let (init_code, fun_code) = Bytegen.compile_phrase slam in
   if !Clflags.dump_instr then
@@ -271,7 +275,7 @@ let execute_phrase print_outcome ppf phr =
       let (str, sg, sn, newenv) = Typemod.type_toplevel_phrase oldenv sstr in
       if !Clflags.dump_typedtree then Printtyped.implementation ppf str;
       let sg' = Typemod.Signature_names.simplify newenv sn sg in
-      ignore (Includemod.signatures oldenv sg sg');
+      ignore (Includemod.signatures ~mark:Mark_positive oldenv sg sg');
       Typecore.force_delayed_checks ();
       let lam = Translmod.transl_toplevel_definition str in
       Warnings.check_fatal ();
@@ -383,9 +387,6 @@ let preprocess_phrase ppf phr =
         let str =
           Pparse.apply_rewriters_str ~restore:true ~tool_name:"ocaml" str
         in
-        let str =
-          Pparse.ImplementationHooks.apply_hooks
-            { Misc.sourcefile = "//toplevel//" } str in
         Ptop_def str
     | phr -> phr
   in
@@ -393,46 +394,67 @@ let preprocess_phrase ppf phr =
   if !Clflags.dump_source then Pprintast.top_phrase ppf phr;
   phr
 
-let use_file ppf wrap_mod name =
-  try
-    let (filename, ic, must_close) =
-      if name = "" then
-        ("(stdin)", stdin, false)
-      else begin
-        let filename = Load_path.find name in
-        let ic = open_in_bin filename in
-        (filename, ic, true)
-      end
-    in
-    let lb = Lexing.from_channel ic in
-    Warnings.reset_fatal ();
-    Location.init lb filename;
-    (* Skip initial #! line if any *)
-    Lexer.skip_hash_bang lb;
-    let success =
-      protect_refs [ R (Location.input_name, filename);
-                     R (Location.input_lexbuf, Some lb); ]
-        (fun () ->
-        try
-          List.iter
-            (fun ph ->
-              let ph = preprocess_phrase ppf ph in
-              if not (execute_phrase !use_print_results ppf ph) then raise Exit)
-            (if wrap_mod then
-               parse_mod_use_file name lb
-             else
-               !parse_use_file lb);
-          true
-        with
-        | Exit -> false
-        | Sys.Break -> fprintf ppf "Interrupted.@."; false
-        | x -> Location.report_exception ppf x; false) in
-    if must_close then close_in ic;
-    success
-  with Not_found -> fprintf ppf "Cannot find file %s.@." name; false
+let use_channel ppf ~wrap_in_module ic name filename =
+  let lb = Lexing.from_channel ic in
+  Warnings.reset_fatal ();
+  Location.init lb filename;
+  (* Skip initial #! line if any *)
+  Lexer.skip_hash_bang lb;
+  protect_refs [ R (Location.input_name, filename);
+                 R (Location.input_lexbuf, Some lb); ]
+    (fun () ->
+    try
+      List.iter
+        (fun ph ->
+          let ph = preprocess_phrase ppf ph in
+          if not (execute_phrase !use_print_results ppf ph) then raise Exit)
+        (if wrap_in_module then
+           parse_mod_use_file name lb
+         else
+           !parse_use_file lb);
+      true
+    with
+    | Exit -> false
+    | Sys.Break -> fprintf ppf "Interrupted.@."; false
+    | x -> Location.report_exception ppf x; false)
 
-let mod_use_file ppf name = use_file ppf true name
-let use_file ppf name = use_file ppf false name
+let use_output ppf command =
+  let fn = Filename.temp_file "ocaml" "_toploop.ml" in
+  Misc.try_finally ~always:(fun () ->
+      try Sys.remove fn with Sys_error _ -> ())
+    (fun () ->
+       match
+         Printf.ksprintf Sys.command "%s > %s"
+           command
+           (Filename.quote fn)
+       with
+       | 0 ->
+         let ic = open_in_bin fn in
+         Misc.try_finally ~always:(fun () -> close_in ic)
+           (fun () ->
+              use_channel ppf ~wrap_in_module:false ic "" "(command-output)")
+       | n ->
+         fprintf ppf "Command exited with code %d.@." n;
+         false)
+
+let use_file ppf ~wrap_in_module name =
+  match name with
+  | "" ->
+    use_channel ppf ~wrap_in_module stdin name "(stdin)"
+  | _ ->
+    match Load_path.find name with
+    | filename ->
+      let ic = open_in_bin filename in
+      Misc.try_finally ~always:(fun () -> close_in ic)
+        (fun () -> use_channel ppf ~wrap_in_module ic name filename)
+    | exception Not_found ->
+      fprintf ppf "Cannot find file %s.@." name;
+      false
+
+let mod_use_file ppf name =
+  use_file ppf ~wrap_in_module:true name
+let use_file ppf name =
+  use_file ppf ~wrap_in_module:false name
 
 let use_silently ppf name =
   protect_refs [ R (use_print_results, false) ] (fun () -> use_file ppf name)
@@ -450,6 +472,8 @@ let read_input_default prompt buffer len =
       if !i >= len then raise Exit;
       let c = input_char stdin in
       Bytes.set buffer !i c;
+      (* Also populate the phrase buffer as new characters are added. *)
+      Buffer.add_char phrase_buffer c;
       incr i;
       if c = '\n' then raise Exit;
     done;
@@ -491,15 +515,36 @@ let _ =
                  cannot be loaded inside the OCaml toplevel";
   Sys.interactive := true;
   let crc_intfs = Symtable.init_toplevel() in
-  Compmisc.init_path false;
-  List.iter
-    (fun (name, crco) ->
-      Env.add_import name;
-      match crco with
-        None -> ()
-      | Some crc->
-          Consistbl.set Env.crc_units name crc Sys.executable_name)
-    crc_intfs
+  Compmisc.init_path ();
+  Env.import_crcs ~source:Sys.executable_name crc_intfs;
+  ()
+
+let find_ocamlinit () =
+  let ocamlinit = ".ocamlinit" in
+  if Sys.file_exists ocamlinit then Some ocamlinit else
+  let getenv var = match Sys.getenv var with
+    | exception Not_found -> None | "" -> None | v -> Some v
+  in
+  let exists_in_dir dir file = match dir with
+    | None -> None
+    | Some dir ->
+        let file = Filename.concat dir file in
+        if Sys.file_exists file then Some file else None
+  in
+  let home_dir () = getenv "HOME" in
+  let config_dir () =
+    if Sys.win32 then None else
+    match getenv "XDG_CONFIG_HOME" with
+    | Some _ as v -> v
+    | None ->
+        match home_dir () with
+        | None -> None
+        | Some dir -> Some (Filename.concat dir ".config")
+  in
+  let init_ml = Filename.concat "ocaml" "init.ml" in
+  match exists_in_dir (config_dir ()) init_ml with
+  | Some _ as v -> v
+  | None -> exists_in_dir (home_dir ()) ocamlinit
 
 let load_ocamlinit ppf =
   if !Clflags.noinit then ()
@@ -507,11 +552,9 @@ let load_ocamlinit ppf =
   | Some f -> if Sys.file_exists f then ignore (use_silently ppf f)
               else fprintf ppf "Init file not found: \"%s\".@." f
   | None ->
-     if Sys.file_exists ".ocamlinit" then ignore (use_silently ppf ".ocamlinit")
-     else try
-       let home_init = Filename.concat (Sys.getenv "HOME") ".ocamlinit" in
-       if Sys.file_exists home_init then ignore (use_silently ppf home_init)
-     with Not_found -> ()
+      match find_ocamlinit () with
+      | None -> ()
+      | Some file -> ignore (use_silently ppf file)
 ;;
 
 let set_paths () =
@@ -553,6 +596,7 @@ let loop ppf =
   Location.init lb "//toplevel//";
   Location.input_name := "//toplevel//";
   Location.input_lexbuf := Some lb;
+  Location.input_phrase_buffer := Some phrase_buffer;
   Sys.catch_break true;
   run_hooks After_setup;
   load_ocamlinit ppf;
@@ -560,6 +604,8 @@ let loop ppf =
     let snap = Btype.snapshot () in
     try
       Lexing.flush_input lb;
+      (* Reset the phrase buffer when we flush the lexing buffer. *)
+      Buffer.reset phrase_buffer;
       Location.reset();
       Warnings.reset_fatal ();
       first_line := true;
@@ -574,18 +620,18 @@ let loop ppf =
     | x -> Location.report_exception ppf x; Btype.backtrack snap
   done
 
-(* Execute a script.  If [name] is "", read the script from stdin. *)
+external caml_sys_modify_argv : string array -> unit =
+  "caml_sys_modify_argv"
 
-let override_sys_argv args =
-  let len = Array.length args in
-  if Array.length Sys.argv < len then invalid_arg "Toploop.override_sys_argv";
-  Array.blit args 0 Sys.argv 0 len;
-  Obj.truncate (Obj.repr Sys.argv) len;
+let override_sys_argv new_argv =
+  caml_sys_modify_argv new_argv;
   Arg.current := 0
+
+(* Execute a script.  If [name] is "", read the script from stdin. *)
 
 let run_script ppf name args =
   override_sys_argv args;
-  Compmisc.init_path ~dir:(Filename.dirname name) true;
+  Compmisc.init_path ~dir:(Filename.dirname name) ();
                    (* Note: would use [Filename.abspath] here, if we had it. *)
   begin
     try toplevel_env := Compmisc.initial_env()

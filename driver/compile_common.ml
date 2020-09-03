@@ -32,7 +32,7 @@ let cmo i = i.output_prefix ^ ".cmo"
 let annot i = i.output_prefix ^ ".annot"
 
 let with_info ~native ~tool_name ~source_file ~output_prefix ~dump_ext k =
-  Compmisc.init_path native;
+  Compmisc.init_path ();
   let module_name = module_of_filename source_file output_prefix in
   Env.set_unit_name module_name;
   let env = Compmisc.initial_env() in
@@ -59,7 +59,7 @@ let typecheck_intf info ast =
   Profile.(record_call typing) @@ fun () ->
   let tsg =
     ast
-    |> Typemod.type_interface info.source_file info.env
+    |> Typemod.type_interface info.env
     |> print_if info.ppf_dump Clflags.dump_typedtree Printtyped.interface
   in
   let sg = tsg.Typedtree.sig_type in
@@ -68,7 +68,7 @@ let typecheck_intf info ast =
         Format.(fprintf std_formatter) "%a@."
           (Printtyp.printed_signature info.source_file)
           sg);
-  ignore (Includemod.signatures info.env sg sg);
+  ignore (Includemod.signatures info.env ~mark:Mark_both sg sg);
   Typecore.force_delayed_checks ();
   Warnings.check_fatal ();
   tsg
@@ -101,15 +101,12 @@ let parse_impl i =
   |> print_if i.ppf_dump Clflags.dump_source Pprintast.structure
 
 let typecheck_impl i parsetree =
-  let always () = Stypes.dump (Some (annot i)) in
-  Misc.try_finally ~always (fun () ->
-    parsetree
-    |> Profile.(record typing)
-      (Typemod.type_implementation
-         i.source_file i.output_prefix i.module_name i.env)
-    |> print_if i.ppf_dump Clflags.dump_typedtree
-      Printtyped.implementation_with_coercion
-  )
+  parsetree
+  |> Profile.(record typing)
+    (Typemod.type_implementation
+       i.source_file i.output_prefix i.module_name i.env)
+  |> print_if i.ppf_dump Clflags.dump_typedtree
+    Printtyped.implementation_with_coercion
 
 let implementation info ~backend =
   Profile.record_call info.source_file @@ fun () ->

@@ -21,7 +21,7 @@ let x = N.f A;;
 
 [%%expect{|
 type (_, _) t = A : ('a, 'a) t | B : string -> ('a, 'b) t
-Line 8, characters 52-74:
+Lines 8-9, characters 52-13:
 8 | ....................................................function
 9 |    | B s -> s
 Warning 8: this pattern-matching is not exhaustive.
@@ -30,7 +30,7 @@ A
 module M :
   functor (A : sig module type T end) (B : sig module type T end) ->
     sig val f : ((module A.T), (module B.T)) t -> string end
-module A : sig module type T = sig  end end
+module A : sig module type T = sig end end
 module N : sig val f : ((module A.T), (module A.T)) t -> string end
 Exception: Match_failure ("", 8, 52).
 |}];;

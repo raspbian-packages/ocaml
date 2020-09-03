@@ -43,31 +43,37 @@ let fields x =
   | 2 -> sprintf "(%s)" (field x 1)
   | _ -> sprintf "(%s%s)" (field x 1) (other_fields x 2)
 
-let to_string x =
+let use_printers x =
   let rec conv = function
     | hd :: tl ->
-        (match try hd x with _ -> None with
-        | Some s -> s
-        | None -> conv tl)
-    | [] ->
-        match x with
-        | Out_of_memory -> "Out of memory"
-        | Stack_overflow -> "Stack overflow"
-        | Match_failure(file, line, char) ->
-            sprintf locfmt file line char (char+5) "Pattern matching failed"
-        | Assert_failure(file, line, char) ->
-            sprintf locfmt file line char (char+6) "Assertion failed"
-        | Undefined_recursive_module(file, line, char) ->
-            sprintf locfmt file line char (char+6) "Undefined recursive module"
-        | _ ->
-            let x = Obj.repr x in
-            if Obj.tag x <> 0 then
-              (Obj.magic (Obj.field x 0) : string)
-            else
-              let constructor =
-                (Obj.magic (Obj.field (Obj.field x 0) 0) : string) in
-              constructor ^ (fields x) in
+        (match hd x with
+         | None | exception _ -> conv tl
+         | Some s -> Some s)
+    | [] -> None in
   conv !printers
+
+let to_string_default = function
+  | Out_of_memory -> "Out of memory"
+  | Stack_overflow -> "Stack overflow"
+  | Match_failure(file, line, char) ->
+      sprintf locfmt file line char (char+5) "Pattern matching failed"
+  | Assert_failure(file, line, char) ->
+      sprintf locfmt file line char (char+6) "Assertion failed"
+  | Undefined_recursive_module(file, line, char) ->
+      sprintf locfmt file line char (char+6) "Undefined recursive module"
+  | x ->
+      let x = Obj.repr x in
+      if Obj.tag x <> 0 then
+        (Obj.magic (Obj.field x 0) : string)
+      else
+        let constructor =
+          (Obj.magic (Obj.field (Obj.field x 0) 0) : string) in
+        constructor ^ (fields x)
+
+let to_string e =
+  match use_printers e with
+  | Some s -> s
+  | None -> to_string_default e
 
 let print fct arg =
   try
@@ -102,6 +108,7 @@ type backtrace_slot =
       start_char  : int;
       end_char    : int;
       is_inline   : bool;
+      defname     : string;
     }
   | Unknown_location of {
       is_raise : bool
@@ -110,7 +117,7 @@ type backtrace_slot =
 (* to avoid warning *)
 let _ = [Known_location { is_raise = false; filename = "";
                           line_number = 0; start_char = 0; end_char = 0;
-                          is_inline = false };
+                          is_inline = false; defname = "" };
          Unknown_location { is_raise = false }]
 
 external convert_raw_backtrace_slot:
@@ -137,8 +144,8 @@ let format_backtrace_slot pos slot =
       else
         Some (sprintf "%s unknown location" (info false))
   | Known_location l ->
-      Some (sprintf "%s file \"%s\"%s, line %d, characters %d-%d"
-              (info l.is_raise) l.filename
+      Some (sprintf "%s %s in file \"%s\"%s, line %d, characters %d-%d"
+              (info l.is_raise) l.defname l.filename
               (if l.is_inline then " (inlined)" else "")
               l.line_number l.start_char l.end_char)
 
@@ -202,6 +209,11 @@ let backtrace_slot_location = function
       end_char    = l.end_char;
     }
 
+let backtrace_slot_defname = function
+  | Unknown_location _
+  | Known_location { defname = "" } -> None
+  | Known_location l -> Some l.defname
+
 let backtrace_slots raw_backtrace =
   (* The documentation of this function guarantees that Some is
      returned only if a part of the trace is usable. This gives us
@@ -228,6 +240,7 @@ module Slot = struct
   let is_raise = backtrace_slot_is_raise
   let is_inline = backtrace_slot_is_inline
   let location = backtrace_slot_location
+  let name = backtrace_slot_defname
 end
 
 external raw_backtrace_length :
@@ -264,10 +277,14 @@ let exn_slot_name x =
   let slot = exn_slot x in
   (Obj.obj (Obj.field slot 0) : string)
 
+let default_uncaught_exception_handler exn raw_backtrace =
+  eprintf "Fatal error: exception %s\n" (to_string exn);
+  print_raw_backtrace stderr raw_backtrace;
+  flush stderr
 
-let uncaught_exception_handler = ref None
+let uncaught_exception_handler = ref default_uncaught_exception_handler
 
-let set_uncaught_exception_handler fn = uncaught_exception_handler := Some fn
+let set_uncaught_exception_handler fn = uncaught_exception_handler := fn
 
 let empty_backtrace : raw_backtrace = Obj.obj (Obj.new_block Obj.abstract_tag 0)
 
@@ -288,22 +305,16 @@ let handle_uncaught_exception' exn debugger_in_use =
         try_get_raw_backtrace ()
     in
     (try Stdlib.do_at_exit () with _ -> ());
-    match !uncaught_exception_handler with
-    | None ->
-        eprintf "Fatal error: exception %s\n" (to_string exn);
-        print_raw_backtrace stderr raw_backtrace;
-        flush stderr
-    | Some handler ->
-        try
-          handler exn raw_backtrace
-        with exn' ->
-          let raw_backtrace' = try_get_raw_backtrace () in
-          eprintf "Fatal error: exception %s\n" (to_string exn);
-          print_raw_backtrace stderr raw_backtrace;
-          eprintf "Fatal error in uncaught exception handler: exception %s\n"
-            (to_string exn');
-          print_raw_backtrace stderr raw_backtrace';
-          flush stderr
+    try
+      !uncaught_exception_handler exn raw_backtrace
+    with exn' ->
+      let raw_backtrace' = try_get_raw_backtrace () in
+      eprintf "Fatal error: exception %s\n" (to_string exn);
+      print_raw_backtrace stderr raw_backtrace;
+      eprintf "Fatal error in uncaught exception handler: exception %s\n"
+        (to_string exn');
+      print_raw_backtrace stderr raw_backtrace';
+      flush stderr
   with
     | Out_of_memory ->
         prerr_endline

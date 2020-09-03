@@ -109,10 +109,8 @@ static const uintnat chunk_size = 1024 * 1024;
 
 #ifdef _WIN32
 #define strdup_os wcsdup
-#define snprintf_os _snwprintf
 #else
 #define strdup_os strdup
-#define snprintf_os snprintf
 #endif
 
 static void reinitialise_free_node_block(void)
@@ -176,9 +174,9 @@ static void open_snapshot_channel(void)
 #else
   pid = getpid();
 #endif
-  snprintf_os(filename, filename_len, _T("%s/spacetime-%d"),
+  snprintf_os(filename, filename_len, T("%s/spacetime-%d"),
               automatic_snapshot_dir, pid);
-  filename[filename_len-1] = _T('\0');
+  filename[filename_len-1] = '\0';
   fd = open_os(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0666);
   if (fd == -1) {
     automatic_snapshots = 0;
@@ -225,10 +223,10 @@ void caml_spacetime_initialize(void)
 
   caml_spacetime_static_shape_tables = &caml_spacetime_shapes;
 
-  ap_interval = caml_secure_getenv (_T("OCAML_SPACETIME_INTERVAL"));
+  ap_interval = caml_secure_getenv (T("OCAML_SPACETIME_INTERVAL"));
   if (ap_interval != NULL) {
     unsigned int interval = 0;
-    sscanf_os(ap_interval, _T("%u"), &interval);
+    sscanf_os(ap_interval, T("%u"), &interval);
     if (interval != 0) {
       double time;
       char_os cwd[4096];
@@ -236,7 +234,7 @@ void caml_spacetime_initialize(void)
       int dir_ok = 1;
 
       user_specified_automatic_snapshot_dir =
-        caml_secure_getenv(_T("OCAML_SPACETIME_SNAPSHOT_DIR"));
+        caml_secure_getenv(T("OCAML_SPACETIME_SNAPSHOT_DIR"));
 
       if (user_specified_automatic_snapshot_dir == NULL) {
 #if defined(HAS_GETCWD)
@@ -686,8 +684,9 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
 
    caml_call_gc only invokes OCaml functions in the following circumstances:
    1. running an OCaml finaliser;
-   2. executing an OCaml signal handler.
-   Both of these are done on the finaliser trie.  Furthermore, both of
+   2. executing an OCaml signal handler;
+   3. executing memprof callbacks.
+   All of these are done on the finaliser trie.  Furthermore, all of
    these invocations start via caml_callback; the code in this file for
    handling that (caml_spacetime_c_to_ocaml) correctly copes with that by
    attaching a single "caml_start_program" node that can cope with any
@@ -708,10 +707,10 @@ static NOINLINE void* find_trie_node_from_libunwind(int for_allocation,
     uintnat wosize, struct ext_table** cached_frames)
 {
 #ifdef HAS_LIBUNWIND
-  /* Given that [caml_last_return_address] is the most recent call site in
-     OCaml code, and that we are now in C (or other) code called from that
+  /* Given that [Caml_state->last_return_address] is the most recent call site
+     in OCaml code, and that we are now in C (or other) code called from that
      site, obtain a backtrace using libunwind and graft the most recent
-     portion (everything back to but not including [caml_last_return_address])
+     portion (everything back to but not including [last_return_address])
      onto the trie.  See the important comment below regarding the fact that
      call site, and not callee, addresses are recorded during this process.
 
@@ -774,7 +773,7 @@ static NOINLINE void* find_trie_node_from_libunwind(int for_allocation,
   }
 
   if (!have_frames_already) {
-    /* Get the stack backtrace as far as [caml_last_return_address]. */
+    /* Get the stack backtrace as far as [Caml_state->last_return_address]. */
 
     ret = unw_getcontext(&ctx);
     if (ret != UNW_ESUCCESS) {
@@ -789,7 +788,7 @@ static NOINLINE void* find_trie_node_from_libunwind(int for_allocation,
     while ((ret = unw_step(&cur)) > 0) {
       unw_word_t ip;
       unw_get_reg(&cur, UNW_REG_IP, &ip);
-      if (caml_last_return_address == (uintnat) ip) {
+      if (Caml_state->last_return_address == (uintnat) ip) {
         break;
       }
       else {
@@ -824,7 +823,7 @@ static NOINLINE void* find_trie_node_from_libunwind(int for_allocation,
   for (frame = frames->size - 1; frame >= innermost_frame; frame--) {
     c_node_type expected_type;
     void* pc = frames->contents[frame];
-    CAMLassert (pc != (void*) caml_last_return_address);
+    CAMLassert (pc != (void*) Caml_state->last_return_address);
 
     if (!for_allocation) {
       expected_type = CALL;
@@ -946,7 +945,7 @@ void caml_spacetime_c_to_ocaml(void* ocaml_entry_point,
   value node;
 
   /* Update the trie with the current backtrace, as far back as
-     [caml_last_return_address], and leave the node hole pointer at
+     [Caml_state->last_return_address], and leave the node hole pointer at
      the correct place for attachment of a [caml_start_program] node. */
 
 #ifdef HAS_LIBUNWIND

@@ -15,31 +15,27 @@
 
 ROOTDIR = ..
 
-include $(ROOTDIR)/Makefile.config
-include $(ROOTDIR)/Makefile.common
+-include $(ROOTDIR)/Makefile.config
+-include $(ROOTDIR)/Makefile.common
 
 # Lists of source files
-
-PRIMS := $(addsuffix .c, \
-  alloc array compare extern floats gc_ctrl hash intern interp ints io \
-  lexing md5 meta obj parsing signals str sys callback weak finalise \
-  stacks dynlink backtrace_byt backtrace spacetime_byt afl bigarray)
 
 BYTECODE_C_SOURCES := $(addsuffix .c, \
   interp misc stacks fix_code startup_aux startup_byt freelist major_gc \
   minor_gc memory alloc roots_byt globroots fail_byt signals \
-  signals_byt printexc backtrace_byt backtrace compare ints \
+  signals_byt printexc backtrace_byt backtrace compare ints eventlog \
   floats str array io extern intern hash sys meta parsing gc_ctrl md5 obj \
   lexing callback debugger weak compact finalise custom dynlink \
-  spacetime_byt afl $(UNIX_OR_WIN32) bigarray main)
+  spacetime_byt afl $(UNIX_OR_WIN32) bigarray main memprof domain)
 
 NATIVE_C_SOURCES := $(addsuffix .c, \
   startup_aux startup_nat main fail_nat roots_nat signals \
   signals_nat misc freelist major_gc minor_gc memory alloc compare ints \
-  floats str array io extern intern hash sys parsing gc_ctrl md5 obj \
+  floats str array io extern intern hash sys parsing gc_ctrl eventlog md5 obj \
   lexing $(UNIX_OR_WIN32) printexc callback weak compact finalise custom \
   globroots backtrace_nat backtrace dynlink_nat debugger meta \
-  dynlink clambda_checks spacetime_nat spacetime_snapshot afl bigarray)
+  dynlink clambda_checks spacetime_nat spacetime_snapshot afl bigarray \
+  memprof domain)
 
 # The other_files variable stores the list of files whose dependencies
 # should be computed by `make depend` although they do not need to be
@@ -78,10 +74,6 @@ BYTECODE_STATIC_LIBRARIES += libcamlruni.$(A)
 NATIVE_STATIC_LIBRARIES += libasmruni.$(A)
 endif
 
-ifeq "$(PROFILING)" "true"
-NATIVE_STATIC_LIBRARIES += libasmrunp.$(A)
-endif
-
 ifeq "$(UNIX_OR_WIN32)" "unix"
 ifeq "$(SUPPORTS_SHARED_LIBRARIES)" "true"
 BYTECODE_STATIC_LIBRARIES += libcamlrun_pic.$(A)
@@ -110,9 +102,6 @@ libasmrund_OBJECTS := $(NATIVE_C_SOURCES:.c=_nd.$(O)) $(ASM_OBJECTS)
 
 libasmruni_OBJECTS := $(NATIVE_C_SOURCES:.c=_ni.$(O)) $(ASM_OBJECTS)
 
-libasmrunp_OBJECTS := $(NATIVE_C_SOURCES:.c=_np.$(O)) \
-  $(ASM_OBJECTS:.$(O)=_libasmrunp.$(O))
-
 libasmrunpic_OBJECTS := $(NATIVE_C_SOURCES:.c=_npic.$(O)) \
   $(ASM_OBJECTS:.$(O)=_libasmrunpic.$(O))
 
@@ -135,10 +124,10 @@ ifeq "$(UNIX_OR_WIN32)" "win32"
 # than \UXXXXXXXX). The \u is then translated to \x in order to accommodate
 # pre-Visual Studio 2013 compilers where \x is a non-standard alias for \u.
 OCAML_STDLIB_DIR = $(shell echo $(LIBDIR)| iconv -t JAVA | sed -e 's/\\u/\\x/g')
-OC_CPPFLAGS += -DOCAML_STDLIB_DIR='L"$(OCAML_STDLIB_DIR)"'
+STDLIB_CPP_FLAG = -DOCAML_STDLIB_DIR='L"$(OCAML_STDLIB_DIR)"'
 else # Unix
 OCAML_STDLIB_DIR = $(LIBDIR)
-OC_CPPFLAGS += -DOCAML_STDLIB_DIR='"$(OCAML_STDLIB_DIR)"'
+STDLIB_CPP_FLAG = -DOCAML_STDLIB_DIR='"$(OCAML_STDLIB_DIR)"'
 endif
 
 OC_CPPFLAGS += $(IFLEXDIR)
@@ -159,15 +148,10 @@ OC_DEBUG_CPPFLAGS=-DDEBUG
 OC_INSTR_CPPFLAGS=-DCAML_INSTR
 
 ifeq "$(TOOLCHAIN)" "msvc"
-OC_PROF_CFLAGS=
-OC_PROF_CPPFLAGS=-DPROFILING
 ASMFLAGS=
 ifeq ($(WITH_SPACETIME),true)
 ASMFLAGS=/DWITH_SPACETIME
 endif
-else
-OC_PROF_CFLAGS=-pg
-OC_PROF_CPPFLAGS=-DPROFILING
 endif
 
 ASPPFLAGS = -DSYS_$(SYSTEM) -I$(ROOTDIR)/runtime
@@ -206,7 +190,7 @@ ifneq "$(BYTECODE_SHARED_LIBRARIES)" ""
 	$(INSTALL_PROG) $(BYTECODE_SHARED_LIBRARIES) "$(INSTALL_LIBDIR)"
 endif
 	mkdir -p "$(INSTALL_INCDIR)"
-	$(INSTALL_DATA) caml/*.h "$(INSTALL_INCDIR)"
+	$(INSTALL_DATA) caml/domain_state.tbl caml/*.h "$(INSTALL_INCDIR)"
 
 .PHONY: installopt
 installopt:
@@ -217,13 +201,14 @@ endif
 
 .PHONY: clean
 clean:
-	rm -f $(PROGRAMS) *.$(O) *.$(A) *.$(SO) ld.conf
-	rm -f primitives prims.c caml/opnames.h caml/jumptbl.h
-	rm -f caml/version.h
+	rm -f *.o *.obj *.a *.lib *.so *.dll ld.conf
+	rm -f ocamlrun ocamlrund ocamlruni
+	rm -f ocamlrun.exe ocamlrund.exe ocamlruni.exe
+	rm -f primitives primitives.new prims.c caml/opnames.h caml/jumptbl.h
+	rm -f caml/version.h domain_state*.inc
 
 .PHONY: distclean
 distclean: clean
-	rm -r *~
 
 # Generated non-object files
 
@@ -250,9 +235,11 @@ ld.conf: $(ROOTDIR)/Makefile.config
 # see http://pubs.opengroup.org/onlinepubs/9699919799/utilities/sort.html:
 # "using sort to process pathnames, it is recommended that LC_ALL .. set to C"
 
-
-primitives : $(PRIMS)
-	./gen_primitives.sh >$@
+# To speed up builds, we avoid changing "primitives" when files
+# containing primitives change but the primitives table does not
+primitives: $(shell ./gen_primitives.sh > primitives.new; \
+                    cmp -s primitives primitives.new || echo primitives.new)
+	cp $^ $@
 
 prims.c : primitives
 	(echo '#define CAML_INTERNALS'; \
@@ -267,7 +254,7 @@ prims.c : primitives
 	 echo '	 0 };') > prims.c
 
 caml/opnames.h : caml/instruct.h
-	cat $^ | tr -d '\r' | \
+	tr -d '\r' < $< | \
 	sed -e '/\/\*/d' \
 	    -e '/^#/d' \
 	    -e 's/enum /static char * names_of_/' \
@@ -276,7 +263,7 @@ caml/opnames.h : caml/instruct.h
 
 # caml/jumptbl.h is required only if you have GCC 2.0 or later
 caml/jumptbl.h : caml/instruct.h
-	cat $^ | tr -d '\r' | \
+	tr -d '\r' < $< | \
 	sed -n -e '/^  /s/ \([A-Z]\)/ \&\&lbl_\1/gp' \
 	       -e '/^}/q' > $@
 
@@ -318,9 +305,6 @@ libasmrund.$(A): $(libasmrund_OBJECTS)
 libasmruni.$(A): $(libasmruni_OBJECTS)
 	$(call MKLIB,$@, $^)
 
-libasmrunp.$(A): $(libasmrunp_OBJECTS)
-	$(call MKLIB,$@, $^)
-
 libasmrun_pic.$(A): $(libasmrunpic_OBJECTS)
 	$(call MKLIB,$@, $^)
 
@@ -341,9 +325,6 @@ libasmrun_shared.$(SO): $(libasmrunpic_OBJECTS)
 
 %_ni.$(O): OC_CPPFLAGS += $(OC_NATIVE_CPPFLAGS) $(OC_INSTR_CPPFLAGS)
 
-%_np.$(O): OC_CFLAGS += $(OC_PROF_CFLAGS)
-%_np.$(O): OC_CPPFLAGS += $(OC_NATIVE_CPPFLAGS) $(OC_PROF_CPPFLAGS)
-
 %_npic.$(O): OC_CFLAGS += $(SHAREDLIB_CFLAGS)
 %_npic.$(O): OC_CPPFLAGS += $(OC_NATIVE_CPPFLAGS)
 
@@ -362,6 +343,11 @@ object_types := % %_b %_bd %_bi %_bpic %_n %_nd %_ni %_np %_npic
 $(foreach object_type, $(object_types), \
   $(eval $(call COMPILE_C_FILE,$(object_type))))
 
+dynlink_%.$(O): OC_CPPFLAGS += $(STDLIB_CPP_FLAG)
+
+$(foreach object_type,$(subst %,,$(object_types)), \
+  $(eval dynlink$(object_type).$(O): $(ROOTDIR)/Makefile.config))
+
 # Compilation of assembly files
 
 %.o: %.S
@@ -371,13 +357,19 @@ $(foreach object_type, $(object_types), \
           echo "try producing $*.o by hand.";\
           exit 2; }
 
-%_libasmrunp.o: %.S
-	$(ASPP) $(ASPPFLAGS) $(ASPPPROFFLAGS) -o $@ $<
-
 %_libasmrunpic.o: %.S
 	$(ASPP) $(ASPPFLAGS) $(SHAREDLIB_CFLAGS) -o $@ $<
 
-%.obj: %.asm
+domain_state64.inc: caml/domain_state.tbl gen_domain_state64_inc.awk
+	$(AWK) -f ./gen_domain_state64_inc.awk $< > $@
+
+domain_state32.inc: caml/domain_state.tbl gen_domain_state32_inc.awk
+	$(AWK) -f ./gen_domain_state32_inc.awk $< > $@
+
+amd64nt.obj: amd64nt.asm domain_state64.inc
+	$(ASM)$@ $(ASMFLAGS) $<
+
+i386nt.obj: i386nt.asm domain_state32.inc
 	$(ASM)$@ $(ASMFLAGS) $<
 
 %_libasmrunpic.obj: %.asm
@@ -392,26 +384,29 @@ depend:
 else
 
 NATIVE_DEP_CPPFLAGS := $(OC_CPPFLAGS) $(OC_NATIVE_CPPFLAGS)
+BYTECODE_DEP_FILES := $(BYTECODE_C_SOURCES) $(other_files) instrtrace.c
 NATIVE_DEP_FILES := $(NATIVE_C_SOURCES) $(other_files)
 
 depend: *.c caml/opnames.h caml/jumptbl.h caml/version.h
-	$(CC) -MM $(OC_CPPFLAGS) *.c | \
+	$(CC) -MM $(OC_CPPFLAGS) $(BYTECODE_DEP_FILES) | \
 	  sed -e 's/\([^.]*\)\.o/\1_b.$$(O)/' > .depend
-	$(CC) -MM $(OC_CPPFLAGS) $(OC_DEBUG_CPPFLAGS) *.c | \
+	$(CC) -MM $(OC_CPPFLAGS) $(OC_DEBUG_CPPFLAGS) \
+                  $(BYTECODE_DEP_FILES) | \
 	  sed -e 's/\([^.]*\)\.o/\1_bd.$$(O)/' >> .depend
-	$(CC) -MM $(OC_CPPFLAGS) $(OC_INSTR_CPPFLAGS) *.c | \
+	$(CC) -MM $(OC_CPPFLAGS) $(OC_INSTR_CPPFLAGS) \
+               $(BYTECODE_DEP_FILES) | \
 	  sed -e 's/\([^.]*\)\.o/\1_bi.$$(O)/' >> .depend
-	$(CC) -MM $(OC_CPPFLAGS) *.c | \
+	$(CC) -MM $(OC_CPPFLAGS) $(BYTECODE_DEP_FILES) | \
 	  sed -e 's/\([^.]*\)\.o/\1_bpic.$$(O)/' >> .depend
-	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) *.c | \
+	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) $(NATIVE_DEP_FILES) | \
 	  sed -e 's/\([^.]*\)\.o/\1_n.$$(O)/' >> .depend
-	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) $(OC_DEBUG_CPPFLAGS) *.c | \
+	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) $(OC_DEBUG_CPPFLAGS) \
+                  $(NATIVE_DEP_FILES) | \
 	  sed -e 's/\([^.]*\)\.o/\1_nd.$$(O)/' >> .depend
-	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) $(OC_INSTR_CPPFLAGS) *.c | \
+	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) $(OC_INSTR_CPPFLAGS) \
+                  $(NATIVE_DEP_FILES) | \
 	  sed -e 's/\([^.]*\)\.o/\1_ni.$$(O)/' >> .depend
-	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) $(OC_PROF_CPPFLAGS) *.c | \
-	  sed -e 's/\([^.]*\)\.o/\1_np.$$(O)/' >> .depend
-	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) *.c | \
+	$(CC) -MM $(NATIVE_DEP_CPPFLAGS) $(NATIVE_DEP_FILES) | \
 	  sed -e 's/\([^.]*\)\.o/\1_npic.$$(O)/' >> .depend
 endif
 

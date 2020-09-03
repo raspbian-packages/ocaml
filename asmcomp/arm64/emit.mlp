@@ -24,7 +24,7 @@ open Arch
 open Proc
 open Reg
 open Mach
-open Linearize
+open Linear
 open Emitaux
 
 (* Tradeoff between code size and code speed *)
@@ -33,6 +33,7 @@ let fastcode_flag = ref true
 
 (* Names for special regs *)
 
+let reg_domain_state_ptr = phys_reg 22
 let reg_trap_ptr = phys_reg 23
 let reg_alloc_ptr = phys_reg 24
 let reg_alloc_limit = phys_reg 25
@@ -70,6 +71,12 @@ let emit_wreg = function
 (* Layout of the stack frame *)
 
 let stack_offset = ref 0
+
+let num_stack_slots = Array.make Proc.num_register_classes 0
+
+let prologue_required = ref false
+
+let contains_calls = ref false
 
 let frame_size () =
   let sz =
@@ -119,7 +126,7 @@ let emit_addressing addr r =
 
 (* Record live pointers at call points *)
 
-let record_frame_label ?label live raise_ dbg =
+let record_frame_label ?label live dbg =
   let lbl =
     match label with
     | None -> new_label()
@@ -137,11 +144,11 @@ let record_frame_label ?label live raise_ dbg =
       | _ -> ())
     live;
   record_frame_descr ~label:lbl ~frame_size:(frame_size())
-    ~live_offset:!live_offset ~raise_frame:raise_ dbg;
+    ~live_offset:!live_offset dbg;
   lbl
 
-let record_frame ?label live raise_ dbg =
-  let lbl = record_frame_label ?label live raise_ dbg in `{emit_label lbl}:`
+let record_frame ?label live dbg =
+  let lbl = record_frame_label ?label live dbg in `{emit_label lbl}:`
 
 (* Record calls to the GC -- we've moved them out of the way *)
 
@@ -169,7 +176,7 @@ let bound_error_sites = ref ([] : bound_error_call list)
 let bound_error_label ?label dbg =
   if !Clflags.debug || !bound_error_sites = [] then begin
     let lbl_bound_error = new_label() in
-    let lbl_frame = record_frame_label ?label Reg.Set.empty false dbg in
+    let lbl_frame = record_frame_label ?label Reg.Set.empty (Dbg_other dbg) in
     bound_error_sites :=
       { bd_lbl = lbl_bound_error;
         bd_frame_lbl = lbl_frame } :: !bound_error_sites;
@@ -494,17 +501,19 @@ module BR = Branch_relaxation.Make (struct
         + begin match lbl1 with None -> 0 | Some _ -> 1 end
         + begin match lbl2 with None -> 0 | Some _ -> 1 end
     | Lswitch jumptbl -> 3 + Array.length jumptbl
-    | Lsetuptrap _ -> 2
-    | Lpushtrap -> 3
+    | Lentertrap -> 0
+    | Ladjust_trap_depth _ -> 0
+    | Lpushtrap _ -> 4
     | Lpoptrap -> 1
     | Lraise k ->
       begin match k with
-      | Cmm.Raise_withtrace -> 1
-      | Cmm.Raise_notrace -> 4
+      | Lambda.Raise_regular -> 2
+      | Lambda.Raise_reraise -> 1
+      | Lambda.Raise_notrace -> 4
       end
 
-  let relax_allocation ~num_bytes ~label_after_call_gc =
-    Lop (Ispecific (Ifar_alloc { bytes = num_bytes; label_after_call_gc; }))
+  let relax_allocation ~num_bytes ~label_after_call_gc ~dbginfo =
+    Lop (Ispecific (Ifar_alloc { bytes = num_bytes; label_after_call_gc; dbginfo }))
 
   let relax_intop_checkbound ~label_after_error =
     Lop (Ispecific (Ifar_intop_checkbound { label_after_error; }))
@@ -520,22 +529,19 @@ end)
 
 (* Output the assembly code for allocation. *)
 
-let assembly_code_for_allocation ?label_after_call_gc i ~n ~far =
+let assembly_code_for_allocation ~label_after_call_gc i ~n ~far ~dbginfo =
   let lbl_frame =
-    record_frame_label ?label:label_after_call_gc i.live false i.dbg
+    record_frame_label ?label:label_after_call_gc i.live (Dbg_alloc dbginfo)
   in
   if !fastcode_flag then begin
-    let lbl_redo = new_label() in
+    let lbl_after_alloc = new_label() in
     let lbl_call_gc = new_label() in
-    assert (n < 0x1_000_000);
-    let nl = n land 0xFFF and nh = n land 0xFFF_000 in
-    `{emit_label lbl_redo}:`;
-    if nh <> 0 then
-      `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int nh}\n`;
-    if nl <> 0 then
-      `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int nl}\n`;
+    (* n is at most Max_young_whsize * 8, i.e. currently 0x808,
+       so it is reasonable to assume n < 0x1_000.  This makes
+       the generated code simpler. *)
+    assert (16 <= n && n < 0x1_000 && n land 0x7 = 0);
+    `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int n}\n`;
     `	cmp	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_limit}\n`;
-    `	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`;
     if not far then begin
       `	b.lo	{emit_label lbl_call_gc}\n`
     end else begin
@@ -544,9 +550,11 @@ let assembly_code_for_allocation ?label_after_call_gc i ~n ~far =
       `	b	{emit_label lbl_call_gc}\n`;
       `{emit_label lbl}:\n`
     end;
+    `{emit_label lbl_after_alloc}:`;
+    `	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`;
     call_gc_sites :=
       { gc_lbl = lbl_call_gc;
-        gc_return_lbl = lbl_redo;
+        gc_return_lbl = lbl_after_alloc;
         gc_frame_lbl = lbl_frame } :: !call_gc_sites
   end else begin
     begin match n with
@@ -559,16 +567,14 @@ let assembly_code_for_allocation ?label_after_call_gc i ~n ~far =
     `{emit_label lbl_frame}:	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`
   end
 
-(* Emission of the profiling prelude *)
+(* Output .text section directive, or named .text.caml.<name> if enabled. *)
 
-let emit_profile() = ()   (* TODO *)
-(*
-  match Config.system with
-    "linux_eabi" | "linux_eabihf" | "netbsd" ->
-      `	push	\{lr}\n`;
-      `	{emit_call "__gnu_mcount_nc"}\n`
-  | _ -> ()
-*)
+let emit_named_text_section func_name =
+  if !Clflags.function_sections then begin
+    `	.section .text.caml.{emit_symbol func_name},{emit_string_literal "ax"},%progbits\n`
+  end
+  else
+    `	.text\n`
 
 (* Output the assembly code for an instruction *)
 
@@ -577,15 +583,14 @@ let emit_instr i =
     match i.desc with
     | Lend -> ()
     | Lprologue ->
-      if !Clflags.gprofile then emit_profile();
+      assert (!prologue_required);
       let n = frame_size() in
       if n > 0 then
         emit_stack_adjustment (-n);
       if !contains_calls then begin
         cfi_offset ~reg:30 (* return address *) ~offset:(-8);
         `	str	x30, [sp, #{emit_int (n-8)}]\n`
-      end;
-      `{emit_label !tailrec_entry_point}:\n`;
+      end
     | Lop(Imove | Ispill | Ireload) ->
         let src = i.arg.(0) and dst = i.res.(0) in
         if src.loc <> dst.loc then begin
@@ -607,7 +612,7 @@ let emit_instr i =
         if f = 0L then
           `	fmov	{emit_reg i.res.(0)}, xzr\n`
         else if is_immediate_float f then
-          `	fmov	{emit_reg i.res.(0)}, #{emit_printf "0x%Lx" f}\n`
+          `	fmov	{emit_reg i.res.(0)}, #{emit_printf "%.7f" (Int64.float_of_bits f)}\n`
         else begin
           let lbl = float_literal f in
           `	adrp	{emit_reg reg_tmp1}, {emit_label lbl}\n`;
@@ -617,10 +622,10 @@ let emit_instr i =
         emit_load_symbol_addr i.res.(0) s
     | Lop(Icall_ind { label_after; }) ->
         `	blr	{emit_reg i.arg.(0)}\n`;
-        `{record_frame i.live false i.dbg ~label:label_after}\n`
+        `{record_frame i.live (Dbg_other i.dbg) ~label:label_after}\n`
     | Lop(Icall_imm { func; label_after; }) ->
         `	bl	{emit_symbol func}\n`;
-        `{record_frame i.live false i.dbg ~label:label_after}\n`
+        `{record_frame i.live (Dbg_other i.dbg) ~label:label_after}\n`
     | Lop(Itailcall_ind { label_after = _; }) ->
         output_epilogue (fun () -> `	br	{emit_reg i.arg.(0)}\n`)
     | Lop(Itailcall_imm { func; label_after = _; }) ->
@@ -633,7 +638,7 @@ let emit_instr i =
     | Lop(Iextcall { func; alloc = true; label_after; }) ->
         emit_load_symbol_addr reg_x15 func;
         `	bl	{emit_symbol "caml_c_call"}\n`;
-        `{record_frame i.live false i.dbg ~label:label_after}\n`
+        `{record_frame i.live (Dbg_other i.dbg) ~label:label_after}\n`
     | Lop(Istackoffset n) ->
         assert (n mod 16 = 0);
         emit_stack_adjustment (-n);
@@ -688,10 +693,10 @@ let emit_instr i =
         | Word_int | Word_val | Double | Double_u ->
             `	str	{emit_reg src}, {emit_addressing addr base}\n`
         end
-    | Lop(Ialloc { bytes = n; label_after_call_gc; }) ->
-        assembly_code_for_allocation i ~n ~far:false ?label_after_call_gc
-    | Lop(Ispecific (Ifar_alloc { bytes = n; label_after_call_gc; })) ->
-        assembly_code_for_allocation i ~n ~far:true ?label_after_call_gc
+    | Lop(Ialloc { bytes = n; label_after_call_gc; dbginfo }) ->
+        assembly_code_for_allocation i ~n ~far:false ~label_after_call_gc ~dbginfo
+    | Lop(Ispecific (Ifar_alloc { bytes = n; label_after_call_gc; dbginfo })) ->
+        assembly_code_for_allocation i ~n ~far:true ~label_after_call_gc ~dbginfo
     | Lop(Iintop(Icomp cmp)) ->
         `	cmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	cset	{emit_reg i.res.(0)}, {emit_string (name_for_comparison cmp)}\n`
@@ -873,12 +878,15 @@ let emit_instr i =
             `	.word	{emit_label jumptbl.(j)} - {emit_label lbltbl}\n`
         done
 *)
-    | Lsetuptrap lbl ->
-        let lblnext = new_label() in
-        `	adr	{emit_reg reg_tmp1}, {emit_label lblnext}\n`;
-        `	b	{emit_label lbl}\n`;
-        `{emit_label lblnext}:\n`
-    | Lpushtrap ->
+    | Lentertrap ->
+        ()
+    | Ladjust_trap_depth { delta_traps } ->
+        (* each trap occupies 16 bytes on the stack *)
+        let delta = 16 * delta_traps in
+        cfi_adjust_cfa_offset delta;
+        stack_offset := !stack_offset + delta
+    | Lpushtrap { lbl_handler; } ->
+        `	adr	{emit_reg reg_tmp1}, {emit_label lbl_handler}\n`;
         stack_offset := !stack_offset + 16;
         `	str	{emit_reg reg_trap_ptr}, [sp, -16]!\n`;
         `	str	{emit_reg reg_tmp1}, [sp, #8]\n`;
@@ -890,10 +898,15 @@ let emit_instr i =
         stack_offset := !stack_offset - 16
     | Lraise k ->
         begin match k with
-        | Cmm.Raise_withtrace ->
+        | Lambda.Raise_regular ->
+          let offset = Domainstate.(idx_of_field Domain_backtrace_pos) * 8 in
+          `	str	xzr, [{emit_reg reg_domain_state_ptr}, {emit_int offset}]\n`;
           `	bl	{emit_symbol "caml_raise_exn"}\n`;
-          `{record_frame Reg.Set.empty true i.dbg}\n`
-        | Cmm.Raise_notrace ->
+          `{record_frame Reg.Set.empty (Dbg_raise i.dbg)}\n`
+        | Lambda.Raise_reraise ->
+          `	bl	{emit_symbol "caml_raise_exn"}\n`;
+          `{record_frame Reg.Set.empty (Dbg_raise i.dbg)}\n`
+        | Lambda.Raise_notrace ->
           `	mov	sp, {emit_reg reg_trap_ptr}\n`;
           `	ldr	{emit_reg reg_tmp1}, [sp, #8]\n`;
           `	ldr	{emit_reg reg_trap_ptr}, [sp], 16\n`;
@@ -910,12 +923,17 @@ let rec emit_all i =
 let fundecl fundecl =
   function_name := fundecl.fun_name;
   fastcode_flag := fundecl.fun_fast;
-  tailrec_entry_point := new_label();
+  tailrec_entry_point := fundecl.fun_tailrec_entry_point_label;
   float_literals := [];
   stack_offset := 0;
   call_gc_sites := [];
   bound_error_sites := [];
-  `	.text\n`;
+    for i = 0 to Proc.num_register_classes - 1 do
+    num_stack_slots.(i) <- fundecl.fun_num_stack_slots.(i);
+  done;
+  prologue_required := fundecl.fun_prologue_required;
+  contains_calls := fundecl.fun_contains_calls;
+  emit_named_text_section !function_name;
   `	.align	3\n`;
   `	.globl	{emit_symbol fundecl.fun_name}\n`;
   `	.type	{emit_symbol fundecl.fun_name}, %function\n`;
@@ -979,13 +997,13 @@ let begin_assembly() =
   `	.globl	{emit_symbol lbl_begin}\n`;
   `{emit_symbol lbl_begin}:\n`;
   let lbl_begin = Compilenv.make_symbol (Some "code_begin") in
-  `	.text\n`;
+  emit_named_text_section lbl_begin;
   `	.globl	{emit_symbol lbl_begin}\n`;
   `{emit_symbol lbl_begin}:\n`
 
 let end_assembly () =
   let lbl_end = Compilenv.make_symbol (Some "code_end") in
-  `	.text\n`;
+  emit_named_text_section lbl_end;
   `	.globl	{emit_symbol lbl_end}\n`;
   `{emit_symbol lbl_end}:\n`;
   let lbl_end = Compilenv.make_symbol (Some "data_end") in
@@ -1005,6 +1023,7 @@ let end_assembly () =
       efa_data_label = (fun lbl ->
                        `	.type	{emit_label lbl}, %object\n`;
                        `	.quad	{emit_label lbl}\n`);
+      efa_8 = (fun n -> `	.byte	{emit_int n}\n`);
       efa_16 = (fun n -> `	.short	{emit_int n}\n`);
       efa_32 = (fun n -> `	.long	{emit_int32 n}\n`);
       efa_word = (fun n -> `	.quad	{emit_int n}\n`);

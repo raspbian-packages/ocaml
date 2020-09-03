@@ -19,6 +19,8 @@
 
 val all_modules : Variables.t
 
+val arch : Variables.t
+
 val binary_modules : Variables.t
 
 val bytecc_libs : Variables.t
@@ -72,6 +74,7 @@ val nativecc_libs : Variables.t
 (** Libraries to link with for native code *)
 
 val objext : Variables.t
+val asmext : Variables.t
 
 val ocamlc_byte : Variables.t
 val ocamlopt_byte : Variables.t

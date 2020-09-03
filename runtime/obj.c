@@ -28,6 +28,7 @@
 #include "caml/misc.h"
 #include "caml/mlvalues.h"
 #include "caml/prims.h"
+#include "caml/signals.h"
 #include "caml/spacetime.h"
 
 /* [size] is a value encoding a number of bytes */
@@ -72,6 +73,13 @@ CAMLprim value caml_obj_set_tag (value arg, value new_tag)
   return Val_unit;
 }
 
+CAMLprim value caml_obj_make_forward (value blk, value fwd)
+{
+  caml_modify(&Field(blk, 0), fwd);
+  Tag_val (blk) = Forward_tag;
+  return Val_unit;
+}
+
 /* [size] is a value encoding a number of blocks */
 CAMLprim value caml_obj_block(value tag, value size)
 {
@@ -90,16 +98,16 @@ CAMLprim value caml_obj_block(value tag, value size)
 }
 
 /* Spacetime profiling assumes that this function is only called from OCaml. */
-CAMLprim value caml_obj_dup(value arg)
+CAMLprim value caml_obj_with_tag(value new_tag_v, value arg)
 {
-  CAMLparam1 (arg);
+  CAMLparam2 (new_tag_v, arg);
   CAMLlocal1 (res);
   mlsize_t sz, i;
   tag_t tg;
 
   sz = Wosize_val(arg);
-  if (sz == 0) CAMLreturn (arg);
-  tg = Tag_val(arg);
+  tg = (tag_t)Long_val(new_tag_v);
+  if (sz == 0) CAMLreturn (Atom(tg));
   if (tg >= No_scan_tag) {
     res = caml_alloc(sz, tg);
     memcpy(Bp_val(res), Bp_val(arg), sz * sizeof(value));
@@ -111,8 +119,16 @@ CAMLprim value caml_obj_dup(value arg)
   } else {
     res = caml_alloc_shr(sz, tg);
     for (i = 0; i < sz; i++) caml_initialize(&Field(res, i), Field(arg, i));
+    // Give gc a chance to run, and run memprof callbacks
+    caml_process_pending_actions();
   }
   CAMLreturn (res);
+}
+
+/* Spacetime profiling assumes that this function is only called from OCaml. */
+CAMLprim value caml_obj_dup(value arg)
+{
+  return caml_obj_with_tag(Val_long(Tag_val(arg)), arg);
 }
 
 /* Shorten the given block to the given size and return void.
@@ -137,16 +153,17 @@ CAMLprim value caml_obj_truncate (value v, value newsize)
   header_t hd = Hd_val (v);
   tag_t tag = Tag_hd (hd);
   color_t color = Color_hd (hd);
+  color_t frag_color = Is_young(v) ? 0 : Caml_black;
   mlsize_t wosize = Wosize_hd (hd);
   mlsize_t i;
 
-  if (tag == Double_array_tag) new_wosize *= Double_wosize;  /* PR#156 */
+  if (tag == Double_array_tag) new_wosize *= Double_wosize;  /* PR#2520 */
 
   if (new_wosize <= 0 || new_wosize > wosize){
     caml_invalid_argument ("Obj.truncate");
   }
   if (new_wosize == wosize) return Val_unit;
-  /* PR#61: since we're about to lose our references to the elements
+  /* PR#2400: since we're about to lose our references to the elements
      beyond new_wosize in v, erase them explicitly so that the GC
      can darken them as appropriate. */
   if (tag < No_scan_tag) {
@@ -161,7 +178,7 @@ CAMLprim value caml_obj_truncate (value v, value newsize)
      look like a pointer because there may be some references to it in
      ref_table. */
   Field (v, new_wosize) =
-    Make_header (Wosize_whsize (wosize-new_wosize), Abstract_tag, Caml_black);
+    Make_header (Wosize_whsize (wosize-new_wosize), Abstract_tag, frag_color);
   Hd_val (v) =
     Make_header_with_profinfo (new_wosize, tag, color, Profinfo_val(v));
   return Val_unit;

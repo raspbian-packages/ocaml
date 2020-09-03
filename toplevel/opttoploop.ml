@@ -31,16 +31,16 @@ let _dummy = (Ok (Obj.magic 0), Err "")
 
 external ndl_run_toplevel: string -> string -> res
   = "caml_natdynlink_run_toplevel"
-external ndl_loadsym: string -> Obj.t = "caml_natdynlink_loadsym"
 
 let global_symbol id =
   let sym = Compilenv.symbol_for_global id in
-  try ndl_loadsym sym
-  with _ -> fatal_error ("Opttoploop.global_symbol " ^ (Ident.unique_name id))
+  match Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym with
+  | None ->
+    fatal_error ("Opttoploop.global_symbol " ^ (Ident.unique_name id))
+  | Some obj -> obj
 
 let need_symbol sym =
-  try ignore (ndl_loadsym sym); false
-  with _ -> true
+  Option.is_none (Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym)
 
 let dll_run dll entry =
   match (try Result (Obj.magic (ndl_run_toplevel dll entry))
@@ -83,8 +83,8 @@ let close_phrase lam =
     let glb, pos = toplevel_value id in
     let glob =
       Lprim (Pfield pos,
-             [Lprim (Pgetglobal glb, [], Location.none)],
-             Location.none)
+             [Lprim (Pgetglobal glb, [], Loc_unknown)],
+             Loc_unknown)
     in
     Llet(Strict, Pgenval, id, glob, l)
   ) (free_variables lam) lam
@@ -187,7 +187,7 @@ let parse_mod_use_file name lb =
   [ Ptop_def
       [ Str.module_
           (Mb.mk
-             (Location.mknoloc modname)
+             (Location.mknoloc (Some modname))
              (Mod.structure items)
           )
        ]
@@ -241,26 +241,31 @@ let backend = (module Backend : Backend_intf.S)
 
 let load_lambda ppf ~module_ident ~required_globals lam size =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
-  let slam = Simplif.simplify_lambda "//toplevel//" lam in
+  let slam = Simplif.simplify_lambda lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
 
   let dll =
     if !Clflags.keep_asm_file then !phrase_name ^ ext_dll
     else Filename.temp_file ("caml" ^ !phrase_name) ext_dll
   in
-  let fn = Filename.chop_extension dll in
-  if not Config.flambda then
-    Asmgen.compile_implementation_clambda
-      ~toplevel:need_symbol fn ~ppf_dump:ppf
-      { Lambda.code=slam ; main_module_block_size=size;
-        module_ident; required_globals }
-  else
-    Asmgen.compile_implementation_flambda
-      ~required_globals ~backend ~toplevel:need_symbol fn ~ppf_dump:ppf
-      (Middle_end.middle_end ~ppf_dump:ppf ~prefixname:"" ~backend ~size
-         ~module_ident ~module_initializer:slam ~filename:"toplevel");
-  Asmlink.call_linker_shared [fn ^ ext_obj] dll;
-  Sys.remove (fn ^ ext_obj);
+  let filename = Filename.chop_extension dll in
+  let program =
+    { Lambda.
+      code = slam;
+      main_module_block_size = size;
+      module_ident;
+      required_globals;
+    }
+  in
+  let middle_end =
+    if Config.flambda then Flambda_middle_end.lambda_to_clambda
+    else Closure_middle_end.lambda_to_clambda
+  in
+  Asmgen.compile_implementation ~toplevel:need_symbol
+    ~backend ~filename ~prefixname:filename
+    ~middle_end ~ppf_dump:ppf program;
+  Asmlink.call_linker_shared [filename ^ ext_obj] dll;
+  Sys.remove (filename ^ ext_obj);
 
   let dll =
     if Filename.is_implicit dll
@@ -330,8 +335,7 @@ let execute_phrase print_outcome ppf phr =
       let (str, sg, names, newenv) = Typemod.type_toplevel_phrase oldenv sstr in
       if !Clflags.dump_typedtree then Printtyped.implementation ppf str;
       let sg' = Typemod.Signature_names.simplify newenv names sg in
-      (* Why is this done? *)
-      ignore (Includemod.signatures oldenv sg sg');
+      ignore (Includemod.signatures oldenv ~mark:Mark_positive sg sg');
       Typecore.force_delayed_checks ();
       let module_ident, res, required_globals, size =
         if Config.flambda then
@@ -355,7 +359,7 @@ let execute_phrase print_outcome ppf phr =
           | Result _ ->
               if Config.flambda then
                 (* CR-someday trefis: *)
-                ()
+                Env.register_import_as_opaque (Ident.name module_ident)
               else
                 Compilenv.record_global_approx_toplevel ();
               if print_outcome then
@@ -437,9 +441,6 @@ let preprocess_phrase ppf phr =
         let str =
           Pparse.apply_rewriters_str ~restore:true ~tool_name:"ocaml" str
         in
-        let str =
-          Pparse.ImplementationHooks.apply_hooks
-            { Misc.sourcefile = "//toplevel//" } str in
         Ptop_def str
     | phr -> phr
   in
@@ -447,43 +448,66 @@ let preprocess_phrase ppf phr =
   if !Clflags.dump_source then Pprintast.top_phrase ppf phr;
   phr
 
-let use_file ppf wrap_mod name =
-  try
-    let (filename, ic, must_close) =
-      if name = "" then
-        ("(stdin)", stdin, false)
-      else begin
-        let filename = Load_path.find name in
-        let ic = open_in_bin filename in
-        (filename, ic, true)
-      end
-    in
-    let lb = Lexing.from_channel ic in
-    Location.init lb filename;
-    (* Skip initial #! line if any *)
-    Lexer.skip_hash_bang lb;
-    let success =
-      protect_refs [ R (Location.input_name, filename) ] (fun () ->
-        try
-          List.iter
-            (fun ph ->
-              let ph = preprocess_phrase ppf ph in
-              if not (execute_phrase !use_print_results ppf ph) then raise Exit)
-            (if wrap_mod then
-               parse_mod_use_file name lb
-             else
-               !parse_use_file lb);
-          true
-        with
-        | Exit -> false
-        | Sys.Break -> fprintf ppf "Interrupted.@."; false
-        | x -> Location.report_exception ppf x; false) in
-    if must_close then close_in ic;
-    success
-  with Not_found -> fprintf ppf "Cannot find file %s.@." name; false
+let use_channel ppf ~wrap_in_module ic name filename =
+  let lb = Lexing.from_channel ic in
+  Location.init lb filename;
+  (* Skip initial #! line if any *)
+  Lexer.skip_hash_bang lb;
+  let success =
+    protect_refs [ R (Location.input_name, filename) ] (fun () ->
+      try
+        List.iter
+          (fun ph ->
+            let ph = preprocess_phrase ppf ph in
+            if not (execute_phrase !use_print_results ppf ph) then raise Exit)
+          (if wrap_in_module then
+             parse_mod_use_file name lb
+           else
+             !parse_use_file lb);
+        true
+      with
+      | Exit -> false
+      | Sys.Break -> fprintf ppf "Interrupted.@."; false
+      | x -> Location.report_exception ppf x; false) in
+  success
 
-let mod_use_file ppf name = use_file ppf true name
-let use_file ppf name = use_file ppf false name
+let use_output ppf command =
+  let fn = Filename.temp_file "ocaml" "_toploop.ml" in
+  Misc.try_finally ~always:(fun () ->
+      try Sys.remove fn with Sys_error _ -> ())
+    (fun () ->
+       match
+         Printf.ksprintf Sys.command "%s > %s"
+           command
+           (Filename.quote fn)
+       with
+       | 0 ->
+         let ic = open_in_bin fn in
+         Misc.try_finally ~always:(fun () -> close_in ic)
+           (fun () ->
+              use_channel ppf ~wrap_in_module:false ic "" "(command-output)")
+       | n ->
+         fprintf ppf "Command exited with code %d.@." n;
+         false)
+
+let use_file ppf ~wrap_in_module name =
+  match name with
+  | "" ->
+    use_channel ppf ~wrap_in_module stdin name "(stdin)"
+  | _ ->
+    match Load_path.find name with
+    | filename ->
+      let ic = open_in_bin filename in
+      Misc.try_finally ~always:(fun () -> close_in ic)
+        (fun () -> use_channel ppf ~wrap_in_module ic name filename)
+    | exception Not_found ->
+      fprintf ppf "Cannot find file %s.@." name;
+      false
+
+let mod_use_file ppf name =
+  use_file ppf ~wrap_in_module:true name
+let use_file ppf name =
+  use_file ppf ~wrap_in_module:false name
 
 let use_silently ppf name =
   protect_refs [ R (use_print_results, false) ] (fun () -> use_file ppf name)
@@ -538,9 +562,36 @@ let refill_lexbuf buffer len =
 
 let _ =
   Sys.interactive := true;
-  Compmisc.init_path true;
+  Compmisc.init_path ();
   Clflags.dlcode := true;
   ()
+
+let find_ocamlinit () =
+  let ocamlinit = ".ocamlinit" in
+  if Sys.file_exists ocamlinit then Some ocamlinit else
+  let getenv var = match Sys.getenv var with
+    | exception Not_found -> None | "" -> None | v -> Some v
+  in
+  let exists_in_dir dir file = match dir with
+    | None -> None
+    | Some dir ->
+        let file = Filename.concat dir file in
+        if Sys.file_exists file then Some file else None
+  in
+  let home_dir () = getenv "HOME" in
+  let config_dir () =
+    if Sys.win32 then None else
+    match getenv "XDG_CONFIG_HOME" with
+    | Some _ as v -> v
+    | None ->
+        match home_dir () with
+        | None -> None
+        | Some dir -> Some (Filename.concat dir ".config")
+  in
+  let init_ml = Filename.concat "ocaml" "init.ml" in
+  match exists_in_dir (config_dir ()) init_ml with
+  | Some _ as v -> v
+  | None -> exists_in_dir (home_dir ()) ocamlinit
 
 let load_ocamlinit ppf =
   if !Clflags.noinit then ()
@@ -548,11 +599,9 @@ let load_ocamlinit ppf =
   | Some f -> if Sys.file_exists f then ignore (use_silently ppf f)
               else fprintf ppf "Init file not found: \"%s\".@." f
   | None ->
-     if Sys.file_exists ".ocamlinit" then ignore (use_silently ppf ".ocamlinit")
-     else try
-       let home_init = Filename.concat (Sys.getenv "HOME") ".ocamlinit" in
-       if Sys.file_exists home_init then ignore (use_silently ppf home_init)
-     with Not_found -> ()
+      match find_ocamlinit () with
+      | None -> ()
+      | Some file -> ignore (use_silently ppf file)
 ;;
 
 let set_paths () =
@@ -610,22 +659,18 @@ let loop ppf =
     | x -> Location.report_exception ppf x; Btype.backtrack snap
   done
 
-(* Execute a script.  If [name] is "", read the script from stdin. *)
+external caml_sys_modify_argv : string array -> unit =
+  "caml_sys_modify_argv"
 
-let override_sys_argv args =
-  let len = Array.length args in
-  if Array.length Sys.argv < len then invalid_arg "Toploop.override_sys_argv";
-  Array.blit args 0 Sys.argv 0 len;
-  Obj.truncate (Obj.repr Sys.argv) len;
+let override_sys_argv new_argv =
+  caml_sys_modify_argv new_argv;
   Arg.current := 0
 
+(* Execute a script.  If [name] is "", read the script from stdin. *)
+
 let run_script ppf name args =
-  let len = Array.length args in
-  if Array.length Sys.argv < len then invalid_arg "Toploop.run_script";
-  Array.blit args 0 Sys.argv 0 len;
-  Obj.truncate (Obj.repr Sys.argv) len;
-  Arg.current := 0;
-  Compmisc.init_path ~dir:(Filename.dirname name) true;
+  override_sys_argv args;
+  Compmisc.init_path ~dir:(Filename.dirname name) ();
                    (* Note: would use [Filename.abspath] here, if we had it. *)
   toplevel_env := Compmisc.initial_env();
   Sys.interactive := false;

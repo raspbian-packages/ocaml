@@ -28,6 +28,48 @@ val omegas : int -> pattern list
 val omega_list : 'a list -> pattern list
 (** [List.map (fun _ -> omega)] *)
 
+module Pattern_head : sig
+  type desc =
+    | Any
+    | Construct of constructor_description
+    | Constant of constant
+    | Tuple of int
+    | Record of label_description list
+    | Variant of
+        { tag: label; has_arg: bool;
+          cstr_row: row_desc ref;
+          type_row : unit -> row_desc; }
+          (* the row of the type may evolve if [close_variant] is called,
+             hence the (unit -> ...) delay *)
+    | Array of int
+    | Lazy
+
+  type t
+
+  val desc : t -> desc
+  val env : t -> Env.t
+  val loc : t -> Location.t
+  val typ : t -> Types.type_expr
+
+  (** [deconstruct p] returns the head of [p] and the list of sub patterns.
+
+      @raises [Invalid_arg _] if [p] is an or- or an exception-pattern.  *)
+  val deconstruct : pattern -> t * pattern list
+
+  (** reconstructs a pattern, putting wildcards as sub-patterns. *)
+  val to_omega_pattern : t -> pattern
+
+  val make
+    :  loc:Location.t
+    -> typ:Types.type_expr
+    -> env:Env.t
+    -> desc
+    -> t
+
+  val omega : t
+
+end
+
 val normalize_pat : pattern -> pattern
 (** Keep only the "head" of a pattern: all arguments are replaced by [omega], so
     are variables. *)
@@ -48,7 +90,7 @@ val le_pats : pattern list -> pattern list -> bool
 (** Exported compatibility functor, abstracted over constructor equality *)
 module Compat :
   functor
-    (Constr: sig
+    (_ : sig
       val equal :
           Types.constructor_description ->
             Types.constructor_description ->
@@ -82,26 +124,52 @@ val pat_of_constr : pattern -> constructor_description -> pattern
 val complete_constrs :
     pattern -> constructor_tag list -> constructor_description  list
 
-(** [ppat_of_type] builds an untyped or-pattern from its expected type.
-     May raise [Empty] when [type_expr] is an empty variant *)
-val ppat_of_type :
-    Env.t -> type_expr ->
-    Parsetree.pattern *
-    (string, constructor_description) Hashtbl.t *
-    (string, label_description) Hashtbl.t
+(** [ppat_of_type] builds an untyped pattern from its expected type,
+    for explosion of wildcard patterns in Typecore.type_pat.
 
-val pressure_variants: Env.t -> pattern list -> unit
+    There are four interesting cases:
+    - the type is empty ([PT_empty])
+    - no further explosion is necessary ([PT_any])
+    - a single pattern is generated, from a record or tuple type
+      or a single-variant type ([PE_single])
+    - an or-pattern is generated, in the case that all branches
+      are GADT constructors ([PE_gadt_cases]).
+ *)
+type pat_explosion = PE_single | PE_gadt_cases
+type ppat_of_type =
+  | PT_empty
+  | PT_any
+  | PT_pattern of
+      pat_explosion *
+      Parsetree.pattern *
+      (string, constructor_description) Hashtbl.t *
+      (string, label_description) Hashtbl.t
+
+val ppat_of_type: Env.t -> type_expr -> ppat_of_type
+
+val pressure_variants:
+  Env.t -> pattern list -> unit
+val pressure_variants_in_computation_pattern:
+  Env.t -> computation general_pattern list -> unit
+
+(** [check_partial pred loc caselist] and [check_unused refute pred caselist]
+    are called with a function [pred] which will be given counter-example
+    candidates: they may be partially ill-typed, and have to be type-checked
+    to extract a valid counter-example.
+    [pred] returns a valid counter-example or [None].
+    [refute] indicates that [check_unused] was called on a refutation clause.
+ *)
 val check_partial:
     ((string, constructor_description) Hashtbl.t ->
      (string, label_description) Hashtbl.t ->
      Parsetree.pattern -> pattern option) ->
-    Location.t -> case list -> partial
+    Location.t -> value case list -> partial
 val check_unused:
     (bool ->
      (string, constructor_description) Hashtbl.t ->
      (string, label_description) Hashtbl.t ->
      Parsetree.pattern -> pattern option) ->
-    case list -> unit
+    value case list -> unit
 
 (* Irrefutability tests *)
 val irrefutable : pattern -> bool
@@ -113,7 +181,7 @@ val irrefutable : pattern -> bool
 val inactive : partial:partial -> pattern -> bool
 
 (* Ambiguous bindings *)
-val check_ambiguous_bindings : case list -> unit
+val check_ambiguous_bindings : value case list -> unit
 
 (* The tag used for open polymorphic variant types with an abstract row *)
 val some_private_tag : label

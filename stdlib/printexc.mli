@@ -22,6 +22,12 @@ val to_string: exn -> string
 (** [Printexc.to_string e] returns a string representation of
    the exception [e]. *)
 
+val to_string_default: exn -> string
+(** [Printexc.to_string_default e] returns a string representation of the
+    exception [e], ignoring all registered exception printers.
+    @since 4.09
+*)
+
 val print: ('a -> 'b) -> 'a -> 'b
 (** [Printexc.print fn x] applies [fn] to [x] and returns the result.
    If the evaluation of [fn x] raises any exception, the
@@ -95,6 +101,12 @@ val register_printer: (exn -> string option) -> unit
     @since 3.11.2
 *)
 
+val use_printers: exn -> string option
+(** [Printexc.use_printers e] returns [None] if there are no registered
+    printers and [Some s] with else as the resulting string otherwise.
+    @since 4.09
+*)
+
 (** {1 Raw backtraces} *)
 
 type raw_backtrace
@@ -145,7 +157,7 @@ external raise_with_backtrace: exn -> raw_backtrace -> 'a
 
 (** {1 Current call stack} *)
 
-val get_callstack: int -> raw_backtrace
+external get_callstack: int -> raw_backtrace = "caml_get_current_callstack"
 (** [Printexc.get_callstack n] returns a description of the top of the
     call stack on the current program point (for the current thread),
     with at most [n] entries.  (Note: this function is not related to
@@ -156,10 +168,17 @@ val get_callstack: int -> raw_backtrace
 
 (** {1 Uncaught exceptions} *)
 
+val default_uncaught_exception_handler: exn -> raw_backtrace -> unit
+(** [Printexc.default_uncaught_exception_handler] prints the exception and
+    backtrace on standard error output.
+
+    @since 4.11
+*)
+
 val set_uncaught_exception_handler: (exn -> raw_backtrace -> unit) -> unit
 (** [Printexc.set_uncaught_exception_handler fn] registers [fn] as the handler
-    for uncaught exceptions. The default handler prints the exception and
-    backtrace on standard error output.
+    for uncaught exceptions. The default handler is
+    {!Printexc.default_uncaught_exception_handler}.
 
     Note that when [fn] is called all the functions registered with
     {!Stdlib.at_exit} have already been called. Because of this you must
@@ -248,6 +267,16 @@ module Slot : sig
       compiled with debug information ([-g])
 
       @since 4.02
+  *)
+
+  val name : t -> string option
+  (** [name slot] returns the name of the function or definition
+      enclosing the location referred to by the slot.
+
+      [name slot] returns None if the name is unavailable, which
+      may happen for the same reasons as [location] returning None.
+
+      @since 4.11
   *)
 
   val format : int -> t -> string option

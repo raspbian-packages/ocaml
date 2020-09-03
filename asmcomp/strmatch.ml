@@ -24,7 +24,7 @@ module VP = Backend_var.With_provenance
 module type I = sig
   val string_block_length : Cmm.expression -> Cmm.expression
   val transl_switch :
-      Location.t -> Cmm.expression -> int -> int ->
+      Debuginfo.t -> Cmm.expression -> int -> int ->
         (int * Cmm.expression) list -> Cmm.expression ->
           Cmm.expression
 end
@@ -77,7 +77,7 @@ module Make(I:I) = struct
     let dbg = Debuginfo.none in
     let cell =
       Cop(Cload (Word_int, Asttypes.Mutable),
-        [Cop(Cadda,[str;Cconst_int(Arch.size_int*ind)], dbg)],
+        [Cop(Cadda,[str;Cconst_int(Arch.size_int*ind, dbg)], dbg)],
         dbg) in
     Clet(id, cell, body)
 
@@ -88,9 +88,9 @@ module Make(I:I) = struct
   let mk_cmp_gen cmp_op id nat ifso ifnot =
     let dbg = Debuginfo.none in
     let test =
-      Cop (Ccmpi cmp_op, [ Cvar id; Cconst_natpointer nat ], dbg)
+      Cop (Ccmpi cmp_op, [ Cvar id; Cconst_natpointer (nat, dbg) ], dbg)
     in
-    Cifthenelse (test, ifso, ifnot)
+    Cifthenelse (test, dbg, ifso, dbg, ifnot, dbg)
 
   let mk_lt = mk_cmp_gen Clt
   let mk_eq = mk_cmp_gen Ceq
@@ -353,8 +353,7 @@ module Make(I:I) = struct
             (len,act))
           (by_size cases) in
       let id = gen_size_id () in
-      let loc = Debuginfo.to_location dbg in
-      let switch = I.transl_switch loc (Cvar id) 1 max_int size_cases default in
+      let switch = I.transl_switch dbg (Cvar id) 1 max_int size_cases default in
       mk_let_size (VP.create id) str switch
 
 (*
@@ -377,11 +376,11 @@ module Make(I:I) = struct
 
 (* Module entry point *)
 
-    let catch arg k = match arg with
+    let catch dbg arg k = match arg with
     | Cexit (_e,[]) ->  k arg
     | _ ->
         let e =  next_raise_count () in
-        ccatch (e,[],k (Cexit (e,[])),arg)
+        ccatch (e,[],k (Cexit (e,[])),arg,dbg)
 
     let compile dbg str default cases =
 (* We do not attempt to really optimise default=None *)
@@ -393,6 +392,6 @@ module Make(I:I) = struct
         List.rev_map
           (fun (s,act) -> pat_of_string s,act)
           cases in
-      catch default (fun default -> top_compile dbg str default cases)
+      catch dbg default (fun default -> top_compile dbg str default cases)
 
   end

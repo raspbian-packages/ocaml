@@ -20,7 +20,31 @@
 @rem Do not call setlocal!
 @echo off
 
-goto %1
+if "%1" neq "install" goto %1
+setlocal enabledelayedexpansion
+echo AppVeyor Environment
+for %%K in (ACCOUNT_NAME ACS_DEPLOYMENT_UPGRADE_MODE API_URL
+            ARTIFACT_UPLOAD_TIMEOUT BUILD_FOLDER BUILD_ID BUILD_NUMBER
+            BUILD_VERSION BUILD_WORKER_IMAGE BUILD_WORKER_IMAGE
+            CACHE_ENTRY_UPLOAD_DOWNLOAD_TIMEOUT CACHE_SKIP_RESTORE
+            CACHE_SKIP_SAVE FILE_DOWNLOAD_TIMEOUT FORCED_BUILD
+            IGNORE_COMMIT_FILTERING_ON_TAG JOB_ID JOB_NAME JOB_NUMBER PROJECT_ID
+            PROJECT_NAME PROJECT_SLUG PULL_REQUEST_HEAD_COMMIT
+            PULL_REQUEST_HEAD_REPO_BRANCH PULL_REQUEST_HEAD_REPO_NAME
+            PULL_REQUEST_NUMBER PULL_REQUEST_TITLE RE_BUILD REPO_BRANCH
+            REPO_COMMIT_AUTHOR REPO_COMMIT_AUTHOR_EMAIL REPO_COMMIT
+            REPO_COMMIT_MESSAGE REPO_COMMIT_MESSAGE_EXTENDED
+            REPO_COMMIT_TIMESTAMP REPO_NAME REPO_PROVIDER REPO_SCM
+            REPOSITORY_SHALLOW_CLONE_TIMEOUT REPO_TAG_NAME REPO_TAG
+            RE_RUN_INCOMPLETE SAVE_CACHE_ON_ERROR SCHEDULED_BUILD
+            SKIP_FINALIZE_ON_EXIT APPVEYOR URL WAP_ARTIFACT_NAME
+            WAP_SKIP_ACLS) do echo APPVEYOR_%%K=!APPVEYOR_%%K!
+echo CI=%CI%
+echo CONFIGURATION=%CONFIGURATION%
+echo PLATFORM=%PLATFORM%
+endlocal
+
+goto install
 
 goto :EOF
 
@@ -58,8 +82,8 @@ if "%PORT%" equ "mingw32" (
 )
 
 cd "%APPVEYOR_BUILD_FOLDER%"
-appveyor DownloadFile "https://github.com/alainfrisch/flexdll/archive/0.37.tar.gz" -FileName "flexdll.tar.gz" || exit /b 1
-appveyor DownloadFile "https://github.com/alainfrisch/flexdll/releases/download/0.37/flexdll-bin-0.37.zip" -FileName "flexdll.zip" || exit /b 1
+appveyor DownloadFile "https://github.com/alainfrisch/flexdll/archive/%FLEXDLL_VERSION%.tar.gz" -FileName "flexdll.tar.gz" || exit /b 1
+appveyor DownloadFile "https://github.com/alainfrisch/flexdll/releases/download/%FLEXDLL_VERSION%/flexdll-bin-%FLEXDLL_VERSION%.zip" -FileName "flexdll.zip" || exit /b 1
 rem flexdll.zip is processed here, rather than in appveyor_build.sh because the
 rem unzip command comes from MSYS2 (via Git for Windows) and it has to be
 rem invoked via cmd /c in a bash script which is weird(er).
@@ -85,7 +109,7 @@ set CYGWIN_UPGRADE_REQUIRED=0
 for %%P in (%CYGWIN_PACKAGES%) do call :CheckPackage %%P
 call :UpgradeCygwin
 
-"%CYG_ROOT%\bin\bash.exe" -lec "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh install" || exit /b 1
+"%CYG_ROOT%\bin\bash.exe" -lc "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh install" || exit /b 1
 
 goto :EOF
 
@@ -95,18 +119,18 @@ if "%PORT%" equ "msvc64" (
   call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64\vcvars64.bat"
 )
 rem Do the main build (either msvc64 or mingw32)
-"%CYG_ROOT%\bin\bash.exe" -lec "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh" || exit /b 1
+"%CYG_ROOT%\bin\bash.exe" -lc "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh" || exit /b 1
 
 if "%PORT%" neq "msvc64" goto :EOF
 
 rem Reconfigure the environment and run the msvc32 partial build
 endlocal
 call "C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.cmd" /x86
-"%CYG_ROOT%\bin\bash.exe" -lec "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh msvc32-only" || exit /b 1
+"%CYG_ROOT%\bin\bash.exe" -lc "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh msvc32-only" || exit /b 1
 goto :EOF
 
 :test
 rem Reconfigure the environment for the msvc64 build
 call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\amd64\vcvars64.bat"
-"%CYG_ROOT%\bin\bash.exe" -lec "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh test" || exit /b 1
+"%CYG_ROOT%\bin\bash.exe" -lc "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh test" || exit /b 1
 goto :EOF

@@ -112,10 +112,13 @@ val x : 'a option -> unit = <fun>
 val y : 'a list -> unit = <fun>
 |}];;
 
-(* this is accepted as all fields are overridden *)
+(* used to be accepted, see PR#7696 *)
 let rec x = { x with contents = 3 }  [@ocaml.warning "-23"];;
 [%%expect{|
-val x : int ref = {contents = 3}
+Line 1, characters 12-35:
+1 | let rec x = { x with contents = 3 }  [@ocaml.warning "-23"];;
+                ^^^^^^^^^^^^^^^^^^^^^^^
+Error: This kind of expression is not allowed as right-hand side of `let rec'
 |}];;
 
 (* this is rejected as `c` will be dereferenced during the copy,
@@ -172,7 +175,7 @@ let rec x =
   done
 and y = x; ();;
 [%%expect{|
-Line 2, characters 2-52:
+Lines 2-4, characters 2-6:
 2 | ..for i = 0 to 1 do
 3 |     let z = y in ignore z
 4 |   done
@@ -185,7 +188,7 @@ let rec x =
   done
 and y = 10;;
 [%%expect{|
-Line 2, characters 2-33:
+Lines 2-4, characters 2-6:
 2 | ..for i = 0 to y do
 3 |     ()
 4 |   done
@@ -198,7 +201,7 @@ let rec x =
   done
 and y = 0;;
 [%%expect{|
-Line 2, characters 2-34:
+Lines 2-4, characters 2-6:
 2 | ..for i = y to 10 do
 3 |     ()
 4 |   done
@@ -211,7 +214,7 @@ let rec x =
   done
 and y = x; ();;
 [%%expect{|
-Line 2, characters 2-49:
+Lines 2-4, characters 2-6:
 2 | ..while false do
 3 |     let y = x in ignore y
 4 |   done
@@ -224,7 +227,7 @@ let rec x =
   done
 and y = false;;
 [%%expect{|
-Line 2, characters 2-26:
+Lines 2-4, characters 2-6:
 2 | ..while y do
 3 |     ()
 4 |   done
@@ -237,7 +240,7 @@ let rec x =
   done
 and y = false;;
 [%%expect{|
-Line 2, characters 2-45:
+Lines 2-4, characters 2-6:
 2 | ..while y do
 3 |     let y = x in ignore y
 4 |   done
@@ -320,7 +323,7 @@ let rec x =
 and y = match x with
   z -> ("y", z);;
 [%%expect{|
-Line 2, characters 2-85:
+Lines 2-4, characters 2-30:
 2 | ..match let _ = y in raise Not_found with
 3 |     _ -> "x"
 4 |   | exception Not_found -> "z"
@@ -346,7 +349,7 @@ let rec wrong =
   and y = ref wrong
   in ref ("foo" ^ ! ! !x);;
 [%%expect{|
-Line 10, characters 2-65:
+Lines 10-12, characters 2-25:
 10 | ..let rec x = ref y
 11 |   and y = ref wrong
 12 |   in ref ("foo" ^ ! ! !x)..

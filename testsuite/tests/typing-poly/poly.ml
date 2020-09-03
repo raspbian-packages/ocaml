@@ -47,7 +47,7 @@ match px with
 | {pv=true::_} -> "bool"
 ;;
 [%%expect {|
-Line 1, characters 0-77:
+Lines 1-4, characters 0-24:
 1 | match px with
 2 | | {pv=[]} -> "OK"
 3 | | {pv=5::_} -> "int"
@@ -64,7 +64,7 @@ match px with
 | {pv=5::_} -> "int"
 ;;
 [%%expect {|
-Line 1, characters 0-77:
+Lines 1-4, characters 0-20:
 1 | match px with
 2 | | {pv=[]} -> "OK"
 3 | | {pv=true::_} -> "bool"
@@ -555,7 +555,7 @@ class id4 () = object
 end
 ;;
 [%%expect {|
-Line 4, characters 12-79:
+Lines 4-7, characters 12-17:
 4 | ............x =
 5 |     match r with
 6 |       None -> r <- Some x; x
@@ -778,7 +778,7 @@ class o = object method x : 'a. ([> `A] as 'a) t -> unit = fun _ -> () end
 ;;
 [%%expect {|
 type 'a t = unit
-class o : object method x : [> `A ] t -> unit end
+class o : object method x : unit -> unit end
 |}];;
 
 class c = object method m = new d () end and d ?(x=0) () = object end;;
@@ -845,7 +845,7 @@ val f :
   (< p : int * 'c > as 'c) -> unit = <fun>
 |}];;
 
-(* PR#1374 *)
+(* PR#3643 *)
 
 type 'a t= [`A of 'a];;
 class c = object (self)
@@ -893,7 +893,7 @@ type ('a, 'b) list_visitor = < caseCons : 'b -> 'b list -> 'a; caseNil : 'a >
 type 'b alist = < visit : 'a. ('a, 'b) list_visitor -> 'a >
 |}];;
 
-(* PR#1607 *)
+(* PR#8074 *)
 class type ct = object ('s)
   method fold : ('b -> 's -> 'b) -> 'b -> 'b
 end
@@ -903,7 +903,7 @@ class type ct = object ('a) method fold : ('b -> 'a -> 'b) -> 'b -> 'b end
 type t = { f : 'a 'b. ('b -> (#ct as 'a) -> 'b) -> 'b; }
 |}];;
 
-(* PR#1663 *)
+(* PR#8124 *)
 type t = u and u = t;;
 [%%expect {|
 Line 1, characters 0-10:
@@ -913,7 +913,7 @@ Error: The definition of t contains a cycle:
        u
 |}];;
 
-(* PR#1731 *)
+(* PR#8188 *)
 class ['t] a = object constraint 't = [> `A of 't a] end
 type t = [ `A of t a ];;
 [%%expect {|
@@ -972,10 +972,17 @@ type 'a u = < m : 'a v > and 'a v = 'a list u;;
 Line 1, characters 0-24:
 1 | type 'a u = < m : 'a v > and 'a v = 'a list u;;
     ^^^^^^^^^^^^^^^^^^^^^^^^
-Error: In the definition of v, type 'a list u should be 'a u
+Error: This recursive type is not regular.
+       The type constructor u is defined as
+         type 'a u
+       but it is used as
+         'a list u
+       after the following expansion(s):
+         'a v = 'a list u
+       All uses need to match the definition for the recursive type to be regular.
 |}];;
 
-(* PR#1744: Ctype.matches *)
+(* PR#8198: Ctype.matches *)
 type 'a t = 'a
 type 'a u = A of 'a t;;
 [%%expect {|
@@ -1008,7 +1015,7 @@ Error: The definition of a contains a cycle:
        [> `B of ('a, 'b) b as 'b ] as 'a
 |}];;
 
-(* PR#1917: expanding may change original in Ctype.unify2 *)
+(* PR#8359: expanding may change original in Ctype.unify2 *)
 (* Note: since 3.11, the abbreviations are not used when printing
    a type where they occur recursively inside. *)
 class type ['a, 'b] a = object
@@ -1109,8 +1116,10 @@ Line 2, characters 3-4:
 Error: This expression has type < m : 'a. 'a * < m : 'a * 'b > > as 'b
        but an expression was expected of type
          < m : 'a. 'a * (< m : 'a * < m : 'c. 'c * 'd > > as 'd) >
-       The method m has type 'a. 'a * 'd, but the expected method type was
-       'c. 'c * 'd
+       The method m has type
+       'a. 'a * (< m : 'a * < m : 'c. 'c * 'b > > as 'b),
+       but the expected method type was
+       'c. 'c * < m : 'a * < m : 'c. 'b > > as 'b
        The universal variable 'a would escape its scope
 |}];;
 
@@ -1222,7 +1231,7 @@ let f5 x =
 let f6 x =
   (x : <m:'a. [< `A of < > ] as 'a> :> <m:'a. [< `A of <p:int> ] as 'a>);;
 [%%expect {|
-Line 2, characters 2-88:
+Lines 2-3, characters 2-47:
 2 | ..(x : <m:'a. (<p:int;..> as 'a) -> int>
 3 |     :> <m:'b. (<p:int;q:int;..> as 'b) -> int>)..
 Error: Type < m : 'a. (< p : int; .. > as 'a) -> int > is not a subtype of
@@ -1336,11 +1345,13 @@ val f : 'a -> int = <fun>
 val g : 'a -> int = <fun>
 type 'a t = Leaf of 'a | Node of ('a * 'a) t
 val depth : 'a t -> int = <fun>
-Line 6, characters 2-42:
-6 |   function Leaf _ -> 1 | Node x -> 1 + d x
-      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This definition has type 'a t -> int which is less general than
-         'a0. 'a0 t -> int
+val depth : 'a t -> int = <fun>
+val d : ('a * 'a) t -> int = <fun>
+Line 9, characters 2-46:
+9 |   function Leaf x -> x | Node x -> 1 + depth x;; (* fails *)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This definition has type int t -> int which is less general than
+         'a. 'a t -> int
 |}];;
 
 (* compare with records (should be the same) *)
@@ -1357,7 +1368,8 @@ Line 4, characters 16-22:
                     ^^^^^^
 Error: This expression has type [> `Int of int ]
        but an expression was expected of type [< `Int of int ]
-       Types for tag `Int are incompatible
+       The second variant type is bound to the universal type variable 'a,
+       it may not allow the tag(s) `Int
 |}];;
 
 (* Yet another example *)
@@ -1446,7 +1458,12 @@ type 'x t = < f : 'y. 'y t >;;
 Line 1, characters 0-28:
 1 | type 'x t = < f : 'y. 'y t >;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: In the definition of t, type 'y t should be 'x t
+Error: This recursive type is not regular.
+       The type constructor t is defined as
+         type 'x t
+       but it is used as
+         'y t.
+       All uses need to match the definition for the recursive type to be regular.
 |}];;
 
 (* PR#6056, PR#6057 *)
@@ -1578,7 +1595,7 @@ let c (f : u -> u) =
 [%%expect{|
 type u
 type 'a t = u
-val c : (u -> u) -> < apply : 'a. 'a t -> 'a t > = <fun>
+val c : (u -> u) -> < apply : 'a. u -> u > = <fun>
 |}]
 
 (* PR#7496 *)
@@ -1733,4 +1750,129 @@ Error: The type of this class,
        class ['a] r :
          object constraint 'a = '_weak2 list ref method get : 'a end,
        contains type variables that cannot be generalized
+|}]
+
+(* #8701 *)
+type 'a t = 'a constraint 'a = 'b list;;
+type 'a s = 'a list;;
+let id x = x;;
+[%%expect{|
+type 'a t = 'a constraint 'a = 'b list
+type 'a s = 'a list
+val id : 'a -> 'a = <fun>
+|}]
+
+let x : [ `Foo of _ s | `Foo of 'a t ] = id (`Foo []);;
+[%%expect{|
+val x : [ `Foo of 'a s ] = `Foo []
+|}]
+let x : [ `Foo of 'a t | `Foo of _ s ] = id (`Foo []);;
+[%%expect{|
+val x : [ `Foo of 'a list t ] = `Foo []
+|}]
+
+(* generalize spine of inherited methods too *)
+
+class c = object (self) method m ?(x=0) () = x method n = self#m () end;;
+class d = object (self) inherit c method n' = self#m () end;;
+[%%expect{|
+class c : object method m : ?x:int -> unit -> int method n : int end
+class d :
+  object method m : ?x:int -> unit -> int method n : int method n' : int end
+|}]
+
+(* #1132 *)
+let rec foo : 'a . 'a -> 'd = fun x -> x
+[%%expect{|
+Line 1, characters 30-40:
+1 | let rec foo : 'a . 'a -> 'd = fun x -> x
+                                  ^^^^^^^^^^
+Error: This definition has type 'b -> 'b which is less general than
+         'a. 'a -> 'c
+|}]
+
+(* #7741 *)
+type 'a s = S
+
+class type ['x] c = object
+  method x : 'x list
+end
+[%%expect{|
+type 'a s = S
+class type ['x] c = object method x : 'x list end
+|}]
+
+let x : 'a c = object
+  method x : 'b . 'b s list = [S]
+end
+[%%expect{|
+Lines 1-3, characters 15-3:
+1 | ...............object
+2 |   method x : 'b . 'b s list = [S]
+3 | end
+Error: This expression has type < x : 'b. 'b s list >
+       but an expression was expected of type 'a c
+       The method x has type 'b. 'b s list, but the expected method type was
+       'a list
+       The universal variable 'b would escape its scope
+|}]
+
+type u = < m : 'a. 'a s list * (< m : 'b. 'a s list * 'c > as 'c) >
+type v = < m : 'a. 'a s list * 'c > as 'c
+[%%expect{|
+type u = < m : 'a. 'a s list * (< m : 'a s list * 'b > as 'b) >
+type v = < m : 'a. 'a s list * 'b > as 'b
+|}]
+let f (x : u) = (x : v)
+[%%expect{|
+Line 1, characters 17-18:
+1 | let f (x : u) = (x : v)
+                     ^
+Error: This expression has type u but an expression was expected of type v
+       The method m has type 'a s list * < m : 'b > as 'b,
+       but the expected method type was 'a. 'a s list * < m : 'a. 'b > as 'b
+       The universal variable 'a would escape its scope
+|}]
+
+type 'a s = private int
+[%%expect{|
+type 'a s = private int
+|}]
+let x : 'a c = object
+  method x : 'b . 'b s list = []
+end
+[%%expect{|
+Lines 1-3, characters 15-3:
+1 | ...............object
+2 |   method x : 'b . 'b s list = []
+3 | end
+Error: This expression has type < x : 'b. 'b s list >
+       but an expression was expected of type 'a c
+       The method x has type 'b. 'b s list, but the expected method type was
+       'a list
+       The universal variable 'b would escape its scope
+|}]
+
+(* #9856 *)
+let f x =
+  let ref : type a . a option ref = ref None in
+  ref := Some x;
+  Option.get !ref
+[%%expect{|
+Line 2, characters 6-44:
+2 |   let ref : type a . a option ref = ref None in
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This definition has type 'a option ref which is less general than
+         'a0. 'a0 option ref
+|}]
+
+type pr = { foo : 'a. 'a option ref }
+let x = { foo = ref None }
+[%%expect{|
+type pr = { foo : 'a. 'a option ref; }
+Line 2, characters 16-24:
+2 | let x = { foo = ref None }
+                    ^^^^^^^^
+Error: This field value has type 'b option ref which is less general than
+         'a. 'a option ref
 |}]

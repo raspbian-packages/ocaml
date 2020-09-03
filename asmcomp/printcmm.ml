@@ -72,10 +72,6 @@ let chunk = function
   | Double -> "float64"
   | Double_u -> "float64u"
 
-let raise_kind fmt = function
-  | Raise_withtrace -> Format.fprintf fmt "raise_withtrace"
-  | Raise_notrace -> Format.fprintf fmt "raise_notrace"
-
 let phantom_defining_expr ppf defining_expr =
   match defining_expr with
   | Cphantom_const_int i -> Targetint.print ppf i
@@ -99,13 +95,17 @@ let phantom_defining_expr_opt ppf defining_expr =
   | None -> Format.pp_print_string ppf "()"
   | Some defining_expr -> phantom_defining_expr ppf defining_expr
 
+let location d =
+  if not !Clflags.locations then ""
+  else Debuginfo.to_string d
+
 let operation d = function
-  | Capply _ty -> "app" ^ Debuginfo.to_string d
+  | Capply _ty -> "app" ^ location d
   | Cextcall(lbl, _ty, _alloc, _) ->
-      Printf.sprintf "extcall \"%s\"%s" lbl (Debuginfo.to_string d)
+      Printf.sprintf "extcall \"%s\"%s" lbl (location d)
   | Cload (c, Asttypes.Immutable) -> Printf.sprintf "load %s" (chunk c)
   | Cload (c, Asttypes.Mutable) -> Printf.sprintf "load_mut %s" (chunk c)
-  | Calloc -> "alloc" ^ Debuginfo.to_string d
+  | Calloc -> "alloc" ^ location d
   | Cstore (c, init) ->
     let init =
       match init with
@@ -139,20 +139,20 @@ let operation d = function
   | Cfloatofint -> "floatofint"
   | Cintoffloat -> "intoffloat"
   | Ccmpf c -> Printf.sprintf "%sf" (float_comparison c)
-  | Craise k -> Format.asprintf "%a%s" raise_kind k (Debuginfo.to_string d)
-  | Ccheckbound -> "checkbound" ^ Debuginfo.to_string d
+  | Craise k -> Lambda.raise_kind k ^ location d
+  | Ccheckbound -> "checkbound" ^ location d
 
 let rec expr ppf = function
-  | Cconst_int n -> fprintf ppf "%i" n
-  | Cconst_natint n ->
+  | Cconst_int (n, _dbg) -> fprintf ppf "%i" n
+  | Cconst_natint (n, _dbg) ->
     fprintf ppf "%s" (Nativeint.to_string n)
   | Cblockheader(n, d) ->
     fprintf ppf "block-hdr(%s)%s"
-      (Nativeint.to_string n) (Debuginfo.to_string d)
-  | Cconst_float n -> fprintf ppf "%F" n
-  | Cconst_symbol s -> fprintf ppf "\"%s\"" s
-  | Cconst_pointer n -> fprintf ppf "%ia" n
-  | Cconst_natpointer n -> fprintf ppf "%sa" (Nativeint.to_string n)
+      (Nativeint.to_string n) (location d)
+  | Cconst_float (n, _dbg) -> fprintf ppf "%F" n
+  | Cconst_symbol (s, _dbg) -> fprintf ppf "\"%s\"" s
+  | Cconst_pointer (n, _dbg) -> fprintf ppf "%ia" n
+  | Cconst_natpointer (n, _dbg) -> fprintf ppf "%sa" (Nativeint.to_string n)
   | Cvar id -> V.print ppf id
   | Clet(id, def, (Clet(_, _, _) as body)) ->
       let print_binding id ppf def =
@@ -170,6 +170,10 @@ let rec expr ppf = function
      fprintf ppf
       "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
       VP.print id expr def sequence body
+  | Clet_mut(id, kind, def, body) ->
+    fprintf ppf
+      "@[<2>(let_mut@ @[<2>%a: %a@ %a@]@ %a)@]"
+      VP.print id machtype kind expr def sequence body
   | Cphantom_let(var, def, (Cphantom_let(_, _, _) as body)) ->
       let print_binding var ppf def =
         fprintf ppf "@[<2>%a@ %a@]" VP.print var
@@ -211,7 +215,7 @@ let rec expr ppf = function
       fprintf ppf ")@]"
   | Csequence(e1, e2) ->
       fprintf ppf "@[<2>(seq@ %a@ %a)@]" sequence e1 sequence e2
-  | Cifthenelse(e1, e2, e3) ->
+  | Cifthenelse(e1, _e2_dbg, e2, _e3_dbg, e3, _dbg) ->
       fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" expr e1 expr e2 expr e3
   | Cswitch(e1, index, cases, _dbg) ->
       let print_case i ppf =
@@ -220,13 +224,11 @@ let rec expr ppf = function
         done in
       let print_cases ppf =
        for i = 0 to Array.length cases - 1 do
-        fprintf ppf "@ @[<2>%t@ %a@]" (print_case i) sequence cases.(i)
+        fprintf ppf "@ @[<2>%t@ %a@]" (print_case i) sequence (fst cases.(i))
        done in
       fprintf ppf "@[<v 0>@[<2>(switch@ %a@ @]%t)@]" expr e1 print_cases
-  | Cloop e ->
-      fprintf ppf "@[<2>(loop@ %a)@]" sequence e
   | Ccatch(flag, handlers, e1) ->
-      let print_handler ppf (i, ids, e2) =
+      let print_handler ppf (i, ids, e2, _dbg) =
         fprintf ppf "(%d%a)@ %a"
           i
           (fun ppf ids ->
@@ -249,7 +251,7 @@ let rec expr ppf = function
       fprintf ppf "@[<2>(exit %d" i;
       List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
       fprintf ppf ")@]"
-  | Ctrywith(e1, id, e2) ->
+  | Ctrywith(e1, id, e2, _dbg) ->
       fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a@ %a)@]"
              sequence e1 VP.print id sequence e2
 
@@ -268,7 +270,7 @@ let fundecl ppf f =
        fprintf ppf "%a: %a" VP.print id machtype ty)
      cases in
   fprintf ppf "@[<1>(function%s %s@;<1 4>@[<1>(%a)@]@ @[%a@])@]@."
-         (Debuginfo.to_string f.fun_dbg) f.fun_name
+         (location f.fun_dbg) f.fun_name
          print_cases f.fun_args sequence f.fun_body
 
 let data_item ppf = function

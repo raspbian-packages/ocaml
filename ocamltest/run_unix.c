@@ -248,8 +248,8 @@ static int handle_process_termination(
   if (WIFEXITED(status)) return WEXITSTATUS(status);
 
   if ( !WIFSIGNALED(status) )
-    error("Process %d neither terminated normally nor received a" \
-          "signal!?", pid);
+    error("Process %lld neither terminated normally nor received a" \
+          "signal!?", (long long) pid);
 
   /* From here we know that the process terminated due to a signal */
   signal = WTERMSIG(status);
@@ -258,8 +258,8 @@ static int handle_process_termination(
 #endif /* WCOREDUMP */
   corestr = core ? "" : "no ";
   fprintf(stderr,
-    "Process %d got signal %d(%s), %score dumped\n",
-    pid, signal, strsignal(signal), corestr
+    "Process %lld got signal %d(%s), %score dumped\n",
+    (long long) pid, signal, strsignal(signal), corestr
   );
 
   if (core)
@@ -267,13 +267,19 @@ static int handle_process_termination(
     if ( access(COREFILENAME, F_OK) == -1)
       fprintf(stderr, "Could not find core file.\n");
     else {
-      char corefile[strlen(corefilename_prefix) + 128];
-      snprintf(corefile, sizeof(corefile),
-        "%s.%d.core", corefilename_prefix, pid);
-      if ( rename(COREFILENAME, corefile) == -1)
-        fprintf(stderr, "The core file exists but could not be renamed.\n");
-      else
-        fprintf(stderr,"The core file has been renamed to %s\n", corefile);
+      size_t corefile_len = strlen(corefilename_prefix) + 128;
+      char * corefile = malloc(corefile_len);
+      if (corefile == NULL)
+        fprintf(stderr, "Out of memory while processing core file.\n");
+      else {
+        snprintf(corefile, corefile_len,
+          "%s.%lld.core", corefilename_prefix, (long long) pid);
+        if ( rename(COREFILENAME, corefile) == -1)
+          fprintf(stderr, "The core file exists but could not be renamed.\n");
+        else
+          fprintf(stderr,"The core file has been renamed to %s\n", corefile);
+        free(corefile);
+      }
     }
   }
 

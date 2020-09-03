@@ -204,17 +204,9 @@ excluding the filename.
 Show absolute filenames in error messages.
 .TP
 .B \-annot
-Dump detailed information about the compilation (types, bindings,
-tail-calls, etc).  The information for file
-.IR src .ml
-is put into file
-.IR src .annot.
-In case of a type error, dump all the information inferred by the
-type-checker before the error. The
-.IR src .annot
-file can be used with the emacs commands given in
-.B emacs/caml\-types.el
-to display types and other annotations interactively.
+Deprecated since 4.11. Please use
+.BR \-bin-annot
+instead.
 .TP
 .B \-bin\-annot
 Dump detailed information about the compilation (types, bindings,
@@ -582,15 +574,6 @@ contents of the object files a.cmo, b.cmo and c.cmo.  These
 contents can be referenced as P.A, P.B and P.C in the remainder
 of the program.
 .TP
-.BI \-plugin \ plugin
-Dynamically load the code of the given
-.I plugin
-(a .cmo, .cma or .cmxs file) in the compiler. The plugin must exist in
-the same kind of code as the compiler (ocamlc.byte must load bytecode
-plugins, while ocamlc.opt must load native code plugins), and
-extension adaptation is done automatically for .cma files (to .cmxs files
-if the compiler is compiled in native code).
-.TP
 .BI \-pp \ command
 Cause the compiler to call the given
 .I command
@@ -703,11 +686,6 @@ invocations of the C compiler and linker in
 .B \-custom
 mode.  Useful to debug C library problems.
 .TP
-.B \-vmthread
-Deprecated since OCaml 4.08.0. Compile or link multithreaded programs,
-in combination with the VM-level threads library described in
-.IR The\ OCaml\ user's\ manual .
-.TP
 .BR \-vnum \ or\  \-version
 Print the version number of the compiler in short form (e.g. "3.11.0"),
 then exit.
@@ -719,7 +697,7 @@ Enable, disable, or mark as fatal the warnings specified by the argument
 Each warning can be
 .IR enabled \ or\  disabled ,
 and each warning can be
-.IR fatal or
+.IR fatal \ or
 .IR non-fatal .
 If a warning is disabled, it isn't displayed and doesn't affect
 compilation in any way (even if it is fatal).  If a warning is enabled,
@@ -812,7 +790,7 @@ function type and is ignored.
 \ \ \ Label omitted in function application.
 
 7
-\ \ \ Method overridden without using the "method!" keyword
+\ \ \ Method overridden without using the "method!" keyword.
 
 8
 \ \ \ Partial match: missing cases in pattern-matching.
@@ -965,19 +943,22 @@ mutually recursive types.
 \ \ Unannotated unboxable type in primitive declaration.
 
 62
-\ \ Type constraint on GADT type declaration
+\ \ Type constraint on GADT type declaration.
 
 63
-\ \ Erroneous printed signature
+\ \ Erroneous printed signature.
 
 64
-\ \ -unsafe used with a preprocessor returning a syntax tree
+\ \ -unsafe used with a preprocessor returning a syntax tree.
 
 65
-\ \ Type declaration defining a new '()' constructor
+\ \ Type declaration defining a new '()' constructor.
 
 66
 \ \ Unused open! statement.
+
+67
+\ \ Unused functor parameter.
 
 The letters stand for the following sets of warnings.  Any letter not
 mentioned here corresponds to the empty set.
@@ -1032,7 +1013,7 @@ mentioned here corresponds to the empty set.
 
 .IP
 The default setting is
-.BR \-w\ +a\-4\-6\-7\-9\-27\-29\-32..42\-44\-45\-48\-50\-60\-66 .
+.BR \-w\ +a\-4\-6\-7\-9\-27\-29\-30\-32..42\-44\-45\-48\-50\-60\-66 .
 Note that warnings
 .BR 5 \ and \ 10
 are not always triggered, depending on the internals of the type checker.
@@ -1069,6 +1050,13 @@ Show the description of all available warning numbers.
 .TP
 .B \-where
 Print the location of the standard library, then exit.
+.TP
+.B \-with-runtime
+Include the runtime system in the generated program. This is the default.
+.TP
+.B \-without-runtime
+The compiler does not include the runtime system (nor a reference to it) in the
+generated program; it must be supplied separately.
 .TP
 .BI \- \ file
 Process

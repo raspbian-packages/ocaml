@@ -19,7 +19,8 @@
 type environment
 
 val env_add
-   : Backend_var.With_provenance.t
+   : ?mut:Asttypes.mutable_flag
+  -> Backend_var.With_provenance.t
   -> Reg.t array
   -> environment
   -> environment
@@ -88,11 +89,12 @@ class virtual selector_generic : object
        Can be overridden if float values are stored as pairs of
        integer registers. *)
   method insert_op :
-    Mach.operation -> Reg.t array -> Reg.t array -> Reg.t array
+    environment -> Mach.operation -> Reg.t array -> Reg.t array -> Reg.t array
     (* Can be overridden to deal with 2-address instructions
        or instructions with hardwired input/output registers *)
   method insert_op_debug :
-    Mach.operation -> Debuginfo.t -> Reg.t array -> Reg.t array -> Reg.t array
+    environment -> Mach.operation -> Debuginfo.t -> Reg.t array
+      -> Reg.t array -> Reg.t array
     (* Can be overridden to deal with 2-address instructions
        or instructions with hardwired input/output registers *)
   method emit_extcall_args :
@@ -106,7 +108,7 @@ class virtual selector_generic : object
   method mark_call : unit
   (* informs the code emitter that the current function is non-leaf:
      it may perform a (non-tail) call; by default, sets
-     [Proc.contains_calls := true] *)
+     [contains_calls := true] *)
 
   method mark_tailcall : unit
   (* informs the code emitter that the current function may end with
@@ -120,7 +122,7 @@ class virtual selector_generic : object
      (which is the main purpose of tracking leaf functions) but some
      architectures still need to ensure that the stack is properly
      aligned when the C function is called. This is achieved by
-     overloading this method to set [Proc.contains_calls := true] *)
+     overloading this method to set [contains_calls := true] *)
 
   method mark_instr : Mach.instruction_desc -> unit
   (* dispatches on instructions to call one of the marking function
@@ -136,15 +138,17 @@ class virtual selector_generic : object
      are not always applied to "self", but ideally they should be private. *)
   method extract : Mach.instruction
   method extract_core : end_instr:Mach.instruction -> Mach.instruction
-  method insert : Mach.instruction_desc -> Reg.t array -> Reg.t array -> unit
-  method insert_debug : Mach.instruction_desc -> Debuginfo.t ->
-                                        Reg.t array -> Reg.t array -> unit
-  method insert_move : Reg.t -> Reg.t -> unit
-  method insert_move_args : Reg.t array -> Reg.t array -> int -> unit
-  method insert_move_results : Reg.t array -> Reg.t array -> int -> unit
-  method insert_moves : Reg.t array -> Reg.t array -> unit
-  method adjust_type : Reg.t -> Reg.t -> unit
-  method adjust_types : Reg.t array -> Reg.t array -> unit
+  method insert :
+    environment -> Mach.instruction_desc -> Reg.t array -> Reg.t array -> unit
+  method insert_debug :
+    environment -> Mach.instruction_desc -> Debuginfo.t ->
+      Reg.t array -> Reg.t array -> unit
+  method insert_move : environment -> Reg.t -> Reg.t -> unit
+  method insert_move_args :
+    environment -> Reg.t array -> Reg.t array -> int -> unit
+  method insert_move_results :
+    environment -> Reg.t array -> Reg.t array -> int -> unit
+  method insert_moves : environment -> Reg.t array -> Reg.t array -> unit
   method emit_expr :
     environment -> Cmm.expression -> Reg.t array option
   method emit_tail : environment -> Cmm.expression -> unit
@@ -163,6 +167,7 @@ class virtual selector_generic : object
      : environment
     -> Mach.instruction_desc
     -> Reg.t array
+    -> Debuginfo.t
     -> Reg.t array option
   method initial_env : unit -> environment
   method insert_prologue
@@ -175,6 +180,10 @@ class virtual selector_generic : object
 
   val mutable instr_seq : Mach.instruction
 
+  (* [contains_calls] is declared as a reference instance variable,
+     instead of a mutable boolean instance variable,
+     because the traversal uses functional object copies. *)
+  val contains_calls : bool ref
 end
 
 val reset : unit -> unit
