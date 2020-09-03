@@ -10,10 +10,10 @@ build of ppxlib.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/runtime/backtrace_byt.c b/runtime/backtrace_byt.c
-index 8ea94ee..d82816c 100644
+index 28fe44c..88e10fc 100644
 --- a/runtime/backtrace_byt.c
 +++ b/runtime/backtrace_byt.c
-@@ -342,7 +342,7 @@ static void read_main_debug_info(struct debug_info *di)
+@@ -378,7 +378,7 @@ static void read_main_debug_info(struct debug_info *di)
  
    fd = caml_attempt_open(&exec_name, &trail, 1);
    if (fd < 0){

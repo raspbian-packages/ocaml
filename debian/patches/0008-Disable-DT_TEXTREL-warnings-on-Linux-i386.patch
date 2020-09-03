@@ -8,12 +8,12 @@ Bug: https://github.com/ocaml/ocaml/issues/9800
  1 file changed, 10 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index 82172d7..0f22211 100644
+index 069fe96..ab1e188 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -952,6 +952,16 @@ AS_CASE(["$arch,$system"],
-   [power,netbsd], [profiling=true],
-   [profiling=false])
+@@ -1018,6 +1018,16 @@ AS_CASE([$arch],
+        [common_cflags="-no-pie $common_cflags"],
+     [])])
  
 +# Disable DT_TEXTREL warnings on Linux i386
 +# See https://github.com/ocaml/ocaml/issues/9800
@@ -27,4 +27,4 @@ index 82172d7..0f22211 100644
 +
  # Assembler
  
- AS_CASE([$host],
+ AS_IF([test -n "$host_alias"], [toolpref="${host_alias}-"], [toolpref=""])

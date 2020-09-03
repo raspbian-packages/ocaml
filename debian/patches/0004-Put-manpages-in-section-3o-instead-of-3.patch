@@ -7,10 +7,10 @@ Subject: Put manpages in section 3o instead of 3
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/ocamldoc/Makefile b/ocamldoc/Makefile
-index f8b8cf6..d2cdcab 100644
+index 6b7093b..026d409 100644
 --- a/ocamldoc/Makefile
 +++ b/ocamldoc/Makefile
-@@ -407,7 +407,7 @@ stdlib_man/Stdlib.3o: $(OCAMLDOC) $(DOC_ALL)
+@@ -416,7 +416,7 @@ stdlib_man/Stdlib.3o: $(OCAMLDOC) $(DOC_ALL)
  	$(OCAMLDOC_RUN) -man -d stdlib_man -nostdlib \
  	-hide Stdlib -lib Stdlib $(DOC_ALL_INCLUDES) \
  	-pp "$(AWK) -v ocamldoc=true -f $(SRC)/stdlib/expand_module_aliases.awk" \

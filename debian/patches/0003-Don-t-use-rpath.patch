@@ -7,7 +7,7 @@ Subject: Don't use rpath
  1 file changed, 5 insertions(+)
 
 diff --git a/tools/ocamlmklib.ml b/tools/ocamlmklib.ml
-index b5c0aee..b4e45d1 100644
+index d5bb84c..ab3ca2b 100644
 --- a/tools/ocamlmklib.ml
 +++ b/tools/ocamlmklib.ml
 @@ -58,6 +58,11 @@ and rpath = ref []          (* rpath options *)
