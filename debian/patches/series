@@ -5,3 +5,4 @@
 0005-read_main_debug_info-do-not-die-in-custom-executable.patch
 0006-Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
 0007-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
+0008-Statically-link-lib-bfd-iberty.patch
