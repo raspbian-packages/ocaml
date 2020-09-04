@@ -1680,6 +1680,10 @@ AS_IF([test x"$with_bfd" != "xno"],
     'ocamlobjinfo' will be unable to display info on .cmxs files.
     ]))])
 
+## Statically link libbfd and libiberty to avoid a versioned dependency
+## too constrained on libbinutils
+bfd_ldlibs="$(echo $bfd_ldlibs | sed 's/-lbfd/-Wl,-Bstatic -lbfd -liberty -Wl,-Bdynamic -lz -ldl/')"
+
 ## Does the assembler support debug prefix map and CFI directives
 as_has_debug_prefix_map=false
 asm_cfi_supported=false
