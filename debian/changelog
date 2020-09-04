@@ -1,6 +1,11 @@
 ocaml (4.11.1-1) UNRELEASED; urgency=medium
 
   * New upstream release
+    - Add riscv64 to native-archs
+    - Trigger -output-complete-exe on -custom with an environment variable
+      (OCAML_CUSTOM_USE_OUTPUT_COMPLETE_EXE)
+    - Re-enable testpreempt test
+    - Re-enable most of tool-debugger tests
 
  -- Stéphane Glondu <glondu@debian.org>  Thu, 03 Sep 2020 14:53:10 +0200
 
