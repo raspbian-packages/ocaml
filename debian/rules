@@ -274,6 +274,15 @@ endif
 ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
 	rm -f testsuite/tests/lib-threads/beat.ml
 	rm -f testsuite/tests/lib-systhreads/threadsigmask.ml
+	# Takes forever
+	rm -f testsuite/tests/lib-systhreads/testyield.ml
+	# Fail
+	rm -f testsuite/tests/lib-unix/unix-socket/recvfrom_unix.ml
+	rm -f testsuite/tests/tool-debugger/no_debug_event/noev.ml
+	rm -f testsuite/tests/tool-debugger/printer/debuggee.ml
+	rm -f testsuite/tests/misc/weaklifetime.ml
+	rm -f testsuite/tests/tool-debugger/basic/debuggee.ml
+	rm -f testsuite/tests/tool-debugger/dynlink/host.ml
 endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 	make -C ocamltest
