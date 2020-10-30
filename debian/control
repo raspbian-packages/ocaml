@@ -117,6 +117,7 @@ Package: ocaml
 Architecture: any
 Depends:
  ocaml-base-nox,
+ ocaml-nox,
  ${misc:Depends},
  ${ocaml:Depends},
  libx11-dev
