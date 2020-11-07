@@ -1,0 +1,2 @@
+ocaml-base-nox: no-manual-page usr/bin/ocamlrund
+ocaml-base-nox: no-manual-page usr/bin/ocamlruni
