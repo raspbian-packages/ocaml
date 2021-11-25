@@ -2205,7 +2205,7 @@ ocaml (3.00-4) unstable; urgency=low
 
   * added debhelper to the Build-depends :((((
 
- -- Sven Luther <luther@debian.org>  Tue, 10 Jan 2001 18:25:32 +0100
+ -- Sven Luther <luther@debian.org>  Wed, 10 Jan 2001 18:25:32 +0100
 
 ocaml (3.00-3) unstable; urgency=low
 
@@ -2355,7 +2355,7 @@ ocaml (2.01-5) unstable; urgency=low
   * fixed the ocamlmktop bug, by removing the $PREFIX stuff from
     tools/Makefile. It is not needed there.
 
- -- Sven Luther <luther@debian.org>  Wed, 26 Feb 1999 07:40:35 +0100
+ -- Sven Luther <luther@debian.org>  Fri, 26 Feb 1999 07:40:35 +0100
 
 ocaml (2.01-4) unstable; urgency=low
 
@@ -2387,7 +2387,7 @@ ocaml (2.01-1) unstable; urgency=low
 
   * New upstream release.
 
- -- Sven Luther <luther@debian.org>  Tue, 11 Feb 1999 13:51:35 +0100
+ -- Sven Luther <luther@debian.org>  Thu, 11 Feb 1999 13:51:35 +0100
 
 ocaml (2.00-2) unstable; urgency=low
 
