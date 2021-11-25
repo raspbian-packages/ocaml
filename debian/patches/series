@@ -6,3 +6,4 @@
 0006-Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
 0007-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
 0008-Statically-link-lib-bfd-iberty.patch
+0009-Do-not-error-on-warnings-in-autoconf.patch
