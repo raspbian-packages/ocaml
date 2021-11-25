@@ -1,3 +1,11 @@
+ocaml (4.11.1-5) unstable; urgency=medium
+
+  * Do not error on warnings in autoconf (Closes: #978875)
+  * Bump Standards-Version to 4.6.0
+  * Update debian/watch
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 25 Nov 2021 15:45:31 +0100
+
 ocaml (4.11.1-4) unstable; urgency=medium
 
   [ Pino Toscano ]
