@@ -1,6 +1,6 @@
 0001-Don-t-use-rpath.patch
-0003-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
-0004-Check-for-definition-of-AT_SECURE-before-using-it.patch
-0006-Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
-0007-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
-0009-Do-not-error-on-warnings-in-autoconf.patch
+0002-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
+0003-Check-for-definition-of-AT_SECURE-before-using-it.patch
+0004-Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
+0005-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
+0006-Do-not-error-on-warnings-in-autoconf.patch
