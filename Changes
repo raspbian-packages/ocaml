@@ -1,3 +1,49 @@
+OCaml 4.12.1 (24 September 2021)
+--------------------------------
+
+### Bug fixes:
+
+- #10107: Ensure modules compiled with -afl-instrument can still link on
+  platforms without AFL support.
+  (David Allsopp, review by Xavier Leroy)
+
+- #10294, #10295: fix an assert-failure in pattern-matching compilation
+  (Gabriel Scherer, review by Thomas Refis and Luc Maranget,
+   report by Nicolás Ojeda Bär)
+
+- #10310: configure's --enable-spacetime option now causes an error rather than
+  being silently ignored.
+  (David Allsopp, review by Gabriel Scherer)
+
+- #10351: Fix DLL loading with binutils 2.36+ on mingw-w64
+  (David Allsopp, review by Nicolás Ojeda Bär)
+
+- #10442, #10446: Fix regression in the toplevel to #directory caused by
+  corrections and improvements to the Load_path in #9611. #directory now
+  adds the path to the start of the load path again (so files in the newly
+  added directory take priority).
+  (David Allsopp, report by Vasile Rotaru, review by Florian Angeletti
+   and Nicolás Ojeda Bär)
+
+- #10449: Fix major GC work accounting (the GC was running too fast).
+  (Damien Doligez, report by Stephen Dolan, review by Nicolás Ojeda Bär
+   and Sadiq Jaffer)
+
+- #10478: Fix segfault under Windows due to a mistaken initialization of thread
+  ID when a thread starts.
+  (David Allsopp, Nicolás Ojeda Bär, review by Xavier Leroy)
+
+- #10626, #10628: Wrong reloading of the x86-64 instruction for
+  integer multiplication by a constant, causing the assembler to
+  reject the ocamlopt-generated code.
+  (Xavier Leroy, report by Dave Aitken, review by Vincent Laviron)
+
+### Manual and documentation
+
+- #10497: Styling changes in the post-processed HTML manual (webman)
+  (Wiktor Kuchta, review by Florian Angeletti)
+
+
 OCaml 4.12.0 (24 February 2021)
 -------------------------------
 
@@ -236,7 +282,7 @@ OCaml 4.12.0 (24 February 2021)
   (David Allsopp, review by Guillaume Munch-Maccagnoni and
   Jacques-Henri Jourdan)
 
-- #9508: Remove support for FreeBSD prior to 4.0R, that required explicit
+- #9506: Remove support for FreeBSD prior to 4.0R, that required explicit
   floating-point initialization to behave like IEEE standard
   (Hannes Mehnert, review by David Allsopp)
 
