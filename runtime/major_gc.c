@@ -56,6 +56,7 @@ struct mark_stack {
 };
 
 uintnat caml_percent_free;
+static uintnat marked_words, heap_wsz_at_cycle_start;
 uintnat caml_major_heap_increment;
 CAMLexport char *caml_heap_start;
 char *caml_gc_sweep_hp;
@@ -72,7 +73,7 @@ extern value caml_fl_merge;  /* Defined in freelist.c. */
   redarkening required */
 static char *redarken_first_chunk = NULL;
 
-static char *sweep_chunk, *sweep_limit;
+static char *sweep_chunk;
 static double p_backlog = 0.0; /* backlog for the gc speedup parameter */
 
 int caml_gc_subphase;     /* Subphase_{mark_roots,mark_main,mark_final} */
@@ -125,6 +126,10 @@ double caml_gc_clock = 0.0;
 
 #ifdef DEBUG
 static unsigned long major_gc_counter = 0;
+#endif
+
+#ifdef NAKED_POINTERS_CHECKER
+int caml_naked_pointers_detected = 0;
 #endif
 
 void (*caml_major_gc_hook)(void) = NULL;
@@ -300,6 +305,7 @@ void caml_darken (value v, value *p)
     if (Is_white_hd (h)){
       ephe_list_pure = 0;
       Hd_val (v) = Blackhd_hd (h);
+      marked_words += Whsize_hd (h);
       if (t < No_scan_tag){
         mark_stack_push(Caml_state->mark_stack, v, 0, NULL);
       }
@@ -322,7 +328,7 @@ void caml_shrink_mark_stack () {
 
   caml_gc_message (0x08, "Shrinking mark stack to %"
                   ARCH_INTNAT_PRINTF_FORMAT "uk bytes\n",
-                  init_stack_bsize);
+                  init_stack_bsize / 1024);
 
   shrunk_stack = (mark_entry*) caml_stat_resize_noexc ((char*) stk->stack,
                                               init_stack_bsize);
@@ -376,8 +382,10 @@ static void start_cycle (void)
   CAMLassert (Caml_state->mark_stack->count == 0);
   CAMLassert (redarken_first_chunk == NULL);
   caml_gc_message (0x01, "Starting new major GC cycle\n");
+  marked_words = 0;
   caml_darken_all_roots_start ();
   caml_gc_phase = Phase_mark;
+  heap_wsz_at_cycle_start = Caml_state->stat_heap_wsz;
   caml_gc_subphase = Subphase_mark_roots;
   ephe_list_pure = 1;
   ephes_checked_if_pure = &caml_ephe_list_head;
@@ -397,7 +405,6 @@ static void init_sweep_phase(void)
   caml_gc_phase = Phase_sweep;
   sweep_chunk = caml_heap_start;
   caml_gc_sweep_hp = sweep_chunk;
-  sweep_limit = sweep_chunk + Chunk_size (sweep_chunk);
   caml_fl_wsz_at_phase_change = caml_fl_cur_wsz;
   if (caml_major_gc_hook) (*caml_major_gc_hook)();
 }
@@ -568,6 +575,7 @@ static void mark_slice (intnat work)
   caml_gc_message (0x40, "Marking %"ARCH_INTNAT_PRINTF_FORMAT"d words\n", work);
   caml_gc_message (0x40, "Subphase = %d\n", caml_gc_subphase);
 
+  marked_words += work;
   while (1){
     int can_mark = 0;
 
@@ -617,7 +625,9 @@ static void mark_slice (intnat work)
       }
     } else if (caml_gc_subphase == Subphase_mark_roots) {
       CAML_EV_BEGIN(EV_MAJOR_MARK_ROOTS);
+      marked_words -= work;
       work = caml_darken_all_roots_slice (work);
+      marked_words += work;
       CAML_EV_END(EV_MAJOR_MARK_ROOTS);
       if (work > 0){
         caml_gc_subphase = Subphase_mark_main;
@@ -656,6 +666,7 @@ static void mark_slice (intnat work)
           /* Initialise the sweep phase. */
           init_sweep_phase();
         }
+        marked_words -= work;
         work = 0;
         CAML_EV_END(EV_MAJOR_MARK_FINAL);
       }
@@ -664,6 +675,7 @@ static void mark_slice (intnat work)
       }
     }
   }
+  marked_words -= work;  /* work may be negative */
   CAML_EV_COUNTER(EV_C_MAJOR_MARK_SLICE_FIELDS, slice_fields);
   CAML_EV_COUNTER(EV_C_MAJOR_MARK_SLICE_POINTERS, slice_pointers);
 }
@@ -698,21 +710,24 @@ static void clean_slice (intnat work)
 
 static void sweep_slice (intnat work)
 {
-  char *hp;
+  char *hp, *sweep_hp, *limit;
   header_t hd;
 
   caml_gc_message (0x40, "Sweeping %"
                    ARCH_INTNAT_PRINTF_FORMAT "d words\n", work);
+  sweep_hp = caml_gc_sweep_hp;
+  limit = sweep_chunk + Chunk_size(sweep_chunk);
   while (work > 0){
-    if (caml_gc_sweep_hp < sweep_limit){
-      hp = caml_gc_sweep_hp;
+    if (sweep_hp < limit){
+      caml_prefetch(sweep_hp + 4000);
+      hp = sweep_hp;
       hd = Hd_hp (hp);
       work -= Whsize_hd (hd);
-      caml_gc_sweep_hp += Bhsize_hd (hd);
+      sweep_hp += Bhsize_hd (hd);
       switch (Color_hd (hd)){
       case Caml_white:
-        caml_gc_sweep_hp =
-            (char *)caml_fl_merge_block(Val_hp (hp), sweep_limit);
+        caml_gc_sweep_hp = sweep_hp;
+        sweep_hp = (char *) caml_fl_merge_block (Val_hp (hp), limit);
         break;
       case Caml_blue:
         /* Only the blocks of the free-list are blue.  See [freelist.c]. */
@@ -723,21 +738,23 @@ static void sweep_slice (intnat work)
         Hd_hp (hp) = Whitehd_hd (hd);
         break;
       }
-      CAMLassert (caml_gc_sweep_hp <= sweep_limit);
+      CAMLassert (sweep_hp <= limit);
     }else{
       sweep_chunk = Chunk_next (sweep_chunk);
       if (sweep_chunk == NULL){
         /* Sweeping is done. */
+        caml_gc_sweep_hp = sweep_hp;
         ++ Caml_state->stat_major_collections;
         work = 0;
         caml_gc_phase = Phase_idle;
         caml_request_minor_gc ();
       }else{
-        caml_gc_sweep_hp = sweep_chunk;
-        sweep_limit = sweep_chunk + Chunk_size (sweep_chunk);
+        sweep_hp = sweep_chunk;
+        limit = sweep_chunk + Chunk_size (sweep_chunk);
       }
     }
   }
+  caml_gc_sweep_hp = sweep_hp;
 }
 
 /* The main entry point for the major GC. Called about once for each
@@ -937,8 +954,25 @@ void caml_major_collection_slice (intnat howmuch)
   }
 
   if (caml_gc_phase == Phase_idle){
+    double previous_overhead; // overhead at the end of the previous cycle
+
     CAML_EV_BEGIN(EV_MAJOR_CHECK_AND_COMPACT);
-    caml_compact_heap_maybe ();
+    caml_gc_message (0x200, "marked words = %"
+                     ARCH_INTNAT_PRINTF_FORMAT "u words\n",
+                     marked_words);
+    caml_gc_message (0x200, "heap size at start of cycle = %"
+                     ARCH_INTNAT_PRINTF_FORMAT "u words\n",
+                     heap_wsz_at_cycle_start);
+    if (marked_words == 0){
+      previous_overhead = 1000000.;
+      caml_gc_message (0x200, "overhead at start of cycle = +inf\n");
+    }else{
+      previous_overhead =
+        100.0 * (heap_wsz_at_cycle_start - marked_words) / marked_words;
+      caml_gc_message (0x200, "overhead at start of cycle = %.0f%%\n",
+                       previous_overhead);
+    }
+    caml_compact_heap_maybe (previous_overhead);
     CAML_EV_END(EV_MAJOR_CHECK_AND_COMPACT);
   }
 
@@ -1085,14 +1119,13 @@ void caml_finalise_heap (void)
   caml_gc_phase = Phase_sweep;
   sweep_chunk = caml_heap_start;
   caml_gc_sweep_hp = sweep_chunk;
-  sweep_limit = sweep_chunk + Chunk_size (sweep_chunk);
   while (caml_gc_phase == Phase_sweep)
     sweep_slice (LONG_MAX);
 }
 
 #if defined(NAKED_POINTERS_CHECKER) && defined(NATIVE_CODE)
 
-#ifdef _WIN32
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
@@ -1111,7 +1144,7 @@ Caml_inline int safe_load(volatile header_t * p, header_t * result)
   return 1;
 }
 
-#else
+#elif defined(TARGET_amd64)
 
 Caml_inline int safe_load (header_t * addr, /*out*/ header_t * contents)
 {
@@ -1135,6 +1168,32 @@ Caml_inline int safe_load (header_t * addr, /*out*/ header_t * contents)
   return ok;
 }
 
+#elif defined(TARGET_arm64)
+
+Caml_inline int safe_load (header_t * addr, /*out*/ header_t * contents)
+{
+  int ok;
+  header_t h;
+  intnat tmp;
+
+  asm volatile(
+      "adr %[tmp], 1f \n\t"
+      "str %[tmp], [%[handler]] \n\t"
+      "mov %w[ok], #0 \n\t"
+      "ldr %[h], [%[addr]] \n\t"
+      "mov %w[ok], #1 \n\t"
+  "1: \n\t"
+      "mov %[tmp], #0 \n\t"
+      "str %[tmp], [%[handler]]"
+      : [tmp] "=&r" (tmp), [ok] "=&r" (ok), [h] "=&r" (h)
+      : [addr] "r" (addr),
+        [handler] "r" (&(Caml_state->checking_pointer_pc)));
+  *contents = h;
+  return ok;
+}
+
+#else
+#error "NAKED_POINTERS_CHECKER not supported on this platform"
 #endif
 
 static void is_naked_pointer_safe (value v, value *p)
@@ -1160,6 +1219,7 @@ static void is_naked_pointer_safe (value v, value *p)
   if (Is_black_hd(h) && Wosize_hd(h) < (INT64_LITERAL(1) << 40))
     return;
 
+  caml_naked_pointers_detected = 1;
   if (!Is_black_hd(h)) {
     fprintf (stderr, "Out-of-heap pointer at %p of value %p has "
                      "non-black head (tag=%d)\n", p, (void*)v, t);
@@ -1172,6 +1232,7 @@ static void is_naked_pointer_safe (value v, value *p)
   return;
 
  on_segfault:
+  caml_naked_pointers_detected = 1;
   fprintf (stderr, "Out-of-heap pointer at %p of value %p. "
            "Cannot read head.\n", p, (void*)v);
 }

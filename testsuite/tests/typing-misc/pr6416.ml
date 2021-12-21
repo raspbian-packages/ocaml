@@ -83,11 +83,13 @@ Error: Signature mismatch:
          sig module A : functor (X : s) -> sig end end
        In module A:
        Modules do not match:
-         functor (X : s/1) -> sig end
+         functor (X : s/1) -> ...
        is not included in
-         functor (X : s/2) -> sig end
-       At position module A(X : <here>) : ...
-       Modules do not match: s/2 is not included in s/1
+         functor (X : s/2) -> ...
+       Module types do not match:
+         s/1
+       does not include
+         s/2
        Line 5, characters 6-19:
          Definition of module type s/1
        Line 2, characters 2-15:
@@ -307,7 +309,7 @@ Error: Signature mismatch:
        does not match
          class type c = object method m : t/1 end
        The method m has type t/2 but is expected to have type t/1
-       Type t/2 is not compatible with type t/1 = K.t
+       Type t/2 is not equal to type t/1 = K.t
        Line 12, characters 4-10:
          Definition of type t/1
        Line 9, characters 2-8:

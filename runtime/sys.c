@@ -49,6 +49,7 @@
 #include "caml/debugger.h"
 #include "caml/fail.h"
 #include "caml/gc_ctrl.h"
+#include "caml/major_gc.h"
 #include "caml/io.h"
 #include "caml/misc.h"
 #include "caml/mlvalues.h"
@@ -112,10 +113,8 @@ static void caml_sys_check_path(value name)
   }
 }
 
-CAMLprim value caml_sys_exit(value retcode_v)
+CAMLexport void caml_do_exit(int retcode)
 {
-  int retcode = Int_val(retcode_v);
-
   if ((caml_verb_gc & 0x400) != 0) {
     /* cf caml_gc_counters */
     double minwords = Caml_state->stat_minor_words
@@ -160,7 +159,19 @@ CAMLprim value caml_sys_exit(value retcode_v)
 #ifdef _WIN32
   caml_restore_win32_terminal();
 #endif
+#ifdef NAKED_POINTERS_CHECKER
+  if (retcode == 0 && caml_naked_pointers_detected) {
+    fprintf (stderr, "\nOut-of-heap pointers were detected by the runtime.\n"
+                     "The process would otherwise have terminated normally.\n");
+    retcode = 70; /* EX_SOFTWARE; see sysexits.h */
+  }
+#endif
   exit(retcode);
+}
+
+CAMLprim value caml_sys_exit(value retcode)
+{
+  caml_do_exit(Int_val(retcode));
 }
 
 #ifndef O_BINARY
@@ -528,7 +539,7 @@ double caml_sys_time_include_children_unboxed(value include_children)
   #else
     /* clock() is standard ANSI C. We have no way of getting
        subprocess times in this branch. */
-    return (double)clock() / CLOCKS_PER_SEC;
+    return (double)clock_os() / CLOCKS_PER_SEC;
   #endif
 #endif
 }

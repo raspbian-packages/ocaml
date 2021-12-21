@@ -24,10 +24,8 @@
 #include <process.h>
 #include <sys/types.h>
 #include <winsock2.h>
-#ifdef HAS_IPV6
 #include <ws2tcpip.h>
 #include <wspiapi.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,6 +57,7 @@ extern int win_CRT_fd_of_filedescr(value handle);
 
 extern void win32_maperr(DWORD errcode);
 extern value unix_error_of_code (int errcode);
+extern int code_of_unix_error (value error);
 
 CAMLnoreturn_start
 extern void unix_error (int errcode, const char * cmdname, value arg)

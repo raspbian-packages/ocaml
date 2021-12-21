@@ -1329,6 +1329,9 @@ let check_bound safety access_size dbg length a2 k =
       in
       Csequence(make_checkbound dbg [max_or_zero a1 dbg; a2], k)
 
+let opaque e dbg =
+  Cop(Copaque, [e], dbg)
+
 let unaligned_set size ptr idx newval dbg =
   match (size : Clambda_primitives.memory_access_size) with
   | Sixteen -> unaligned_set_16 ptr idx newval dbg
@@ -1862,7 +1865,7 @@ let send_function arity =
   let cache = cache in
   let fun_name = "caml_send" ^ Int.to_string arity in
   let fun_args =
-    [obj, typ_val; tag, typ_int; cache, typ_val]
+    [obj, typ_val; tag, typ_int; cache, typ_addr]
     @ List.map (fun id -> (id, typ_val)) (List.tl args) in
   let fun_dbg = placeholder_fun_dbg ~human_name:fun_name in
   Cfunction

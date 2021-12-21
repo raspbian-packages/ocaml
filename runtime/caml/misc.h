@@ -113,6 +113,17 @@ CAMLdeprecated_typedef(addr, char *);
 #error "How do I align values on this platform?"
 #endif
 
+/* Prefetching */
+
+#ifdef CAML_INTERNALS
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+#define caml_prefetch(p) __builtin_prefetch((p), 1, 3)
+/* 1 = intent to write; 3 = all cache levels */
+#else
+#define caml_prefetch(p)
+#endif
+#endif
+
 /* CAMLunused is preserved for compatibility reasons.
    Instead of the legacy GCC/Clang-only
      CAMLunused foo;
@@ -283,6 +294,8 @@ extern double caml_log1p(double);
 #define mktemp_os _wmktemp
 #define fopen_os _wfopen
 
+#define clock_os caml_win32_clock
+
 #define caml_stat_strdup_os caml_stat_wcsdup
 #define caml_stat_strconcat_os caml_stat_wcsconcat
 
@@ -318,6 +331,8 @@ extern double caml_log1p(double);
 #define strcpy_os strcpy
 #define mktemp_os mktemp
 #define fopen_os fopen
+
+#define clock_os clock
 
 #define caml_stat_strdup_os caml_stat_strdup
 #define caml_stat_strconcat_os caml_stat_strconcat
