@@ -101,7 +101,7 @@
 #endif
 #endif
 
-#ifdef __MINGW32__
+#if defined(__MINGW32__) && !__USE_MINGW_ANSI_STDIO
   #define ARCH_INT64_TYPE long long
   #define ARCH_UINT64_TYPE unsigned long long
   #define ARCH_INT64_PRINTF_FORMAT "I64"
@@ -179,7 +179,7 @@ typedef uint64_t uintnat;
    as first-class values (GCC 2.x). */
 
 #if defined(__GNUC__) && __GNUC__ >= 2 && !defined(DEBUG) \
-    && !defined (SHRINKED_GNUC) && !defined(CAML_JIT)
+    && !defined (SHRINKED_GNUC)
 #define THREADED_CODE
 #endif
 

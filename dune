@@ -45,7 +45,7 @@
    ;; UTILS
    config build_path_prefix_map misc identifiable numbers arg_helper clflags
    profile terminfo ccomp warnings consistbl strongly_connected_components
-   targetint load_path int_replace_polymorphic_compare
+   targetint load_path int_replace_polymorphic_compare binutils local_store
 
    ;; PARSING
    location longident docstrings syntaxerr ast_helper camlinternalMenhirLib
@@ -59,7 +59,8 @@
    cmi_format persistent_env env type_immediacy
    typedtree printtyped ctype printtyp includeclass mtype envaux includecore
    tast_iterator tast_mapper cmt_format untypeast includemod
-   typetexp printpat parmatch stypes typedecl typeopt rec_check typecore
+   typetexp patterns printpat parmatch stypes typedecl typeopt rec_check
+   typecore
    typeclass typemod typedecl_variance typedecl_properties typedecl_immediacy
    typedecl_unboxed typedecl_separability cmt2annot
    ; manual update: mli only files
@@ -151,7 +152,7 @@
    CSE CSEgen
    deadcode domainstate emit emitaux interf interval linear linearize linscan
    liveness mach printcmm printlinear printmach proc reg reload reloadgen
-   schedgen scheduling selectgen selection spacetime_profiling spill split
+   schedgen scheduling selectgen selection spill split
    strmatch x86_ast x86_dsl x86_gas x86_masm x86_proc
 
    ;; asmcomp/debug/

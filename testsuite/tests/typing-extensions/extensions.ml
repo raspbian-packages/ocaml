@@ -198,7 +198,7 @@ type 'a inline += X of { x : 'a; }
 
 let _ = X {x = 1};;
 [%%expect {|
-- : int inline = X {x = <poly>}
+- : int inline = X {x = 1}
 |}]
 
 let must_be_polymorphic = fun x -> X {x};;

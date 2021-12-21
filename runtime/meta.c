@@ -120,13 +120,13 @@ CAMLprim value caml_reify_bytecode(value ls_prog,
 #ifdef THREADED_CODE
   caml_thread_code((code_t) prog, len);
 #endif
-  caml_prepare_bytecode((code_t) prog, len);
 
   /* Notify debugger after fragment gets added and reified. */
   caml_debugger(CODE_LOADED, Val_long(fragnum));
 
-  clos = caml_alloc_small (1, Closure_tag);
+  clos = caml_alloc_small (2, Closure_tag);
   Code_val(clos) = (code_t) prog;
+  Closinfo_val(clos) = Make_closinfo(0, 2);
   bytecode = caml_alloc_small (2, Abstract_tag);
   Bytecode_val(bytecode)->prog = prog;
   Bytecode_val(bytecode)->len = len;
@@ -137,17 +137,14 @@ CAMLprim value caml_reify_bytecode(value ls_prog,
 }
 
 /* signal to the interpreter machinery that a bytecode is no more
-   needed (before freeing it) - this might be useful for a JIT
-   implementation */
+   needed (before freeing it) */
 
 CAMLprim value caml_static_release_bytecode(value bc)
 {
   code_t prog;
-  asize_t len;
   struct code_fragment *cf;
 
   prog = Bytecode_val(bc)->prog;
-  len = Bytecode_val(bc)->len;
   caml_remove_debug_info(prog);
 
   cf = caml_find_code_fragment_by_pc((char *) prog);
@@ -158,11 +155,6 @@ CAMLprim value caml_static_release_bytecode(value bc)
 
   caml_remove_code_fragment(cf);
 
-#ifndef NATIVE_CODE
-  caml_release_bytecode(prog, len);
-#else
-  caml_failwith("Meta.static_release_bytecode impossible with native code");
-#endif
   caml_stat_free(prog);
   return Val_unit;
 }
@@ -231,7 +223,7 @@ CAMLprim value caml_invoke_traced_function(value codeptr, value env, value arg)
   Caml_state->extern_sp -= 4;
   nsp = Caml_state->extern_sp;
   for (i = 0; i < 7; i++) nsp[i] = osp[i];
-  nsp[7] = codeptr;
+  nsp[7] = (value) Nativeint_val(codeptr);
   nsp[8] = env;
   nsp[9] = Val_int(0);
   nsp[10] = arg;

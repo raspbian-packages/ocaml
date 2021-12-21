@@ -1,18 +1,15 @@
 (* TEST
    flags = "-g -w -5"
-   compare_programs = "false"
 
-   * no-spacetime
+   * flat-float-array
+     reference = "${test_source_directory}/callstacks.flat-float-array.reference"
+   ** native
+   ** bytecode
 
-   ** flat-float-array
-      reference = "${test_source_directory}/callstacks.flat-float-array.reference"
-   *** native
-   *** bytecode
-
-   ** no-flat-float-array
-      reference = "${test_source_directory}/callstacks.no-flat-float-array.reference"
-   *** native
-   *** bytecode
+   * no-flat-float-array
+     reference = "${test_source_directory}/callstacks.no-flat-float-array.reference"
+   ** native
+   ** bytecode
 *)
 
 open Gc.Memprof

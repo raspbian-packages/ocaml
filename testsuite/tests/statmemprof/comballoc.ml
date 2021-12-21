@@ -1,11 +1,9 @@
 (* TEST
    flags = "-g"
-   * no-spacetime
-   ** bytecode
-      reference = "${test_source_directory}/comballoc.byte.reference"
-   ** native
-      reference = "${test_source_directory}/comballoc.opt.reference"
-      compare_programs = "false"
+   * bytecode
+     reference = "${test_source_directory}/comballoc.byte.reference"
+   * native
+     reference = "${test_source_directory}/comballoc.opt.reference"
 *)
 
 open Gc.Memprof
