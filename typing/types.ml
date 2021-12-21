@@ -34,11 +34,11 @@ and type_desc =
   | Tfield of string * field_kind * type_expr * type_expr
   | Tnil
   | Tlink of type_expr
-  | Tsubst of type_expr         (* for copying *)
+  | Tsubst of type_expr * type_expr option
   | Tvariant of row_desc
   | Tunivar of string option
   | Tpoly of type_expr * type_expr list
-  | Tpackage of Path.t * Longident.t list * type_expr list
+  | Tpackage of Path.t * (Longident.t * type_expr) list
 
 and row_desc =
     { row_fields: (label * row_field) list;
@@ -79,6 +79,12 @@ module TypeOps = struct
   let equal t1 t2 = t1 == t2
 end
 
+module Private_type_expr = struct
+  let create desc ~level ~scope ~id = {desc; level; scope; id}
+  let set_desc ty d = ty.desc <- d
+  let set_level ty lv = ty.level <- lv
+  let set_scope ty sc = ty.scope <- sc
+end
 (* *)
 
 module Uid = struct
@@ -179,7 +185,7 @@ module Variance = struct
     if b then v lor single x else  v land (lnot (single x))
   let mem x = subset (single x)
   let null = 0
-  let may_inv = 7
+  let unknown = 7
   let full = 127
   let covariant = single May_pos lor single Pos lor single Inj
   let swap f1 f2 v =
@@ -187,6 +193,9 @@ module Variance = struct
   let conjugate v = swap May_pos May_neg (swap Pos Neg v)
   let get_upper v = (mem May_pos v, mem May_neg v)
   let get_lower v = (mem Pos v, mem Neg v, mem Inv v, mem Inj v)
+  let unknown_signature ~injective ~arity =
+    let v = if injective then set Inj true unknown else unknown in
+    Misc.replicate_list v arity
 end
 
 module Separability = struct
@@ -212,7 +221,7 @@ module Separability = struct
 
   let default_signature ~arity =
     let default_mode = if Config.flat_float_array then Deepsep else Ind in
-    List.init arity (fun _ -> default_mode)
+    Misc.replicate_list default_mode arity
 end
 
 (* Type definitions *)
@@ -220,7 +229,7 @@ end
 type type_declaration =
   { type_params: type_expr list;
     type_arity: int;
-    type_kind: type_kind;
+    type_kind: type_decl_kind;
     type_private: private_flag;
     type_manifest: type_expr option;
     type_variance: Variance.t list;
@@ -230,14 +239,16 @@ type type_declaration =
     type_loc: Location.t;
     type_attributes: Parsetree.attributes;
     type_immediate: Type_immediacy.t;
-    type_unboxed: unboxed_status;
+    type_unboxed_default: bool;
     type_uid: Uid.t;
  }
 
-and type_kind =
+and type_decl_kind = (label_declaration, constructor_declaration) type_kind
+
+and ('lbl, 'cstr) type_kind =
     Type_abstract
-  | Type_record of label_declaration list  * record_representation
-  | Type_variant of constructor_declaration list
+  | Type_record of 'lbl list * record_representation
+  | Type_variant of 'cstr list * variant_representation
   | Type_open
 
 and record_representation =
@@ -246,6 +257,10 @@ and record_representation =
   | Record_unboxed of bool    (* Unboxed single-field record, inlined or not *)
   | Record_inlined of int               (* Inlined record *)
   | Record_extension of Path.t          (* Inlined record under extension *)
+
+and variant_representation =
+    Variant_regular          (* Constant or boxed constructors *)
+  | Variant_unboxed          (* One unboxed single-field constructor *)
 
 and label_declaration =
   {
@@ -270,17 +285,6 @@ and constructor_declaration =
 and constructor_arguments =
   | Cstr_tuple of type_expr list
   | Cstr_record of label_declaration list
-
-and unboxed_status =
-  {
-    unboxed: bool;
-    default: bool; (* False if the unboxed field was set from an attribute. *)
-  }
-
-let unboxed_false_default_false = {unboxed = false; default = false}
-let unboxed_false_default_true = {unboxed = false; default = true}
-let unboxed_true_default_false = {unboxed = true; default = false}
-let unboxed_true_default_true = {unboxed = true; default = true}
 
 type extension_constructor =
   { ext_type_path: Path.t;
@@ -431,9 +435,14 @@ let equal_tag t1 t2 =
       Path.same path1 path2 && b1 = b2
   | (Cstr_constant _|Cstr_block _|Cstr_unboxed|Cstr_extension _), _ -> false
 
-let may_equal_constr c1 c2 = match c1.cstr_tag,c2.cstr_tag with
-| Cstr_extension _,Cstr_extension _ -> c1.cstr_arity = c2.cstr_arity
-| tag1,tag2 -> equal_tag tag1 tag2
+let may_equal_constr c1 c2 =
+  c1.cstr_arity = c2.cstr_arity
+  && (match c1.cstr_tag,c2.cstr_tag with
+     | Cstr_extension _,Cstr_extension _ ->
+         (* extension constructors may be rebindings of each other *)
+         true
+     | tag1, tag2 ->
+         equal_tag tag1 tag2)
 
 type label_description =
   { lbl_name: string;                   (* Short name *)

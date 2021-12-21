@@ -241,6 +241,7 @@ let execvpe prog args env =
 
 external waitpid : wait_flag list -> int -> int * process_status
                  = "win_waitpid"
+external _exit : int -> 'a = "unix_exit"
 external getpid : unit -> int = "unix_getpid"
 
 let fork () = invalid_arg "Unix.fork not implemented"
@@ -363,6 +364,23 @@ external isatty : file_descr -> bool = "unix_isatty"
 external unlink : string -> unit = "unix_unlink"
 external rename : string -> string -> unit = "unix_rename"
 external link : ?follow:bool -> string -> string -> unit = "unix_link"
+external realpath : string -> string = "unix_realpath"
+
+let realpath p =
+  let cleanup p = (* Remove any \\?\ prefix. *)
+    if String.length p <= 4 then p else
+    if p.[0] = '\\' && p.[1] = '\\' && p.[2] = '?' && p.[3] = '\\'
+    then (String.sub p 4 (String.length p - 4))
+    else p
+  in
+  try cleanup (realpath p) with
+  | (Unix_error (EACCES, _, _)) as e ->
+      (* On Windows this can happen on *files* on which you don't have
+         access. POSIX realpath(3) works in this case, we emulate this. *)
+      try
+        let dir = cleanup (realpath (Filename.dirname p)) in
+        Filename.concat dir (Filename.basename p)
+      with _ -> raise e
 
 (* Operations on large files *)
 
@@ -566,8 +584,10 @@ type tm =
     tm_yday : int;
     tm_isdst : bool }
 
-external time : unit -> float = "unix_time"
-external gettimeofday : unit -> float = "unix_gettimeofday"
+external time : unit -> (float [@unboxed]) =
+  "unix_time" "unix_time_unboxed" [@@noalloc]
+external gettimeofday : unit -> (float [@unboxed]) =
+  "unix_gettimeofday" "unix_gettimeofday_unboxed" [@@noalloc]
 external gmtime : float -> tm = "unix_gmtime"
 external localtime : float -> tm = "unix_localtime"
 external mktime : tm -> float * tm = "unix_mktime"
@@ -733,6 +753,7 @@ type socket_bool_option =
   | SO_ACCEPTCONN
   | TCP_NODELAY
   | IPV6_ONLY
+  | SO_REUSEPORT
 
 type socket_int_option =
     SO_SNDBUF

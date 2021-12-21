@@ -23,7 +23,7 @@
 *)
 
 val add_dir : string -> unit
-(** Add a directory to the load path *)
+(** Add a directory to the end of the load path (i.e. at lowest priority.) *)
 
 val remove_dir : string -> unit
 (** Remove a directory from the load path *)
@@ -35,8 +35,7 @@ val init : string list -> unit
 (** [init l] is the same as [reset (); List.iter add_dir (List.rev l)] *)
 
 val get_paths : unit -> string list
-(** Return the list of directories passed to [add_dir] so far, in
-    reverse order. *)
+(** Return the list of directories passed to [add_dir] so far. *)
 
 val find : string -> string
 (** Locate a file in the load path. Raise [Not_found] if the file
@@ -61,7 +60,16 @@ module Dir : sig
       sub-directories of this directory. *)
 end
 
-val add : Dir.t -> unit
+val[@deprecated] add : Dir.t -> unit
+(** Old name for {!append_dir} *)
+
+val append_dir : Dir.t -> unit
+(** [append_dir d] adds [d] to the end of the load path (i.e. at lowest
+    priority. *)
+
+val prepend_dir : Dir.t -> unit
+(** [prepend_dir d] adds [d] to the start of the load path (i.e. at highest
+    priority. *)
 
 val get : unit -> Dir.t list
 (** Same as [get_paths ()], except that it returns a [Dir.t list]. *)

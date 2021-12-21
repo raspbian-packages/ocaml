@@ -46,12 +46,9 @@ type is_safe =
   | Unsafe
 
 type primitive =
-  | Pidentity
   | Pbytes_to_string
   | Pbytes_of_string
   | Pignore
-  | Prevapply
-  | Pdirapply
     (* Globals *)
   | Pgetglobal of Ident.t
   | Psetglobal of Ident.t
@@ -198,10 +195,15 @@ val equal_boxed_integer : boxed_integer -> boxed_integer -> bool
 
 type structured_constant =
     Const_base of constant
-  | Const_pointer of int
   | Const_block of int * structured_constant list
   | Const_float_array of string list
   | Const_immstring of string
+
+type tailcall_attribute =
+  | Tailcall_expectation of bool
+    (* [@tailcall] and [@tailcall true] have [true],
+       [@tailcall false] has [false] *)
+  | Default_tailcall (* no [@tailcall] attribute *)
 
 type inline_attribute =
   | Always_inline (* [@inline] or [@inline always] *)
@@ -229,7 +231,7 @@ type local_attribute =
 
 type function_kind = Curried | Tupled
 
-type let_kind = Strict | Alias | StrictOpt | Variable
+type let_kind = Strict | Alias | StrictOpt
 (* Meaning of kinds for let x = e in e':
     Strict: e may have side-effects; always evaluate e first
       (If e is a simple expression, e.g. a variable or constant,
@@ -238,7 +240,6 @@ type let_kind = Strict | Alias | StrictOpt | Variable
       in e'
     StrictOpt: e does not have side-effects, but depend on the store;
       we can discard e if x does not appear in e'
-    Variable: the variable x is assigned later in e'
  *)
 
 type meth_kind = Self | Public | Cached
@@ -259,10 +260,12 @@ type scoped_location = Debuginfo.Scoped_location.t
 
 type lambda =
     Lvar of Ident.t
+  | Lmutvar of Ident.t
   | Lconst of structured_constant
   | Lapply of lambda_apply
   | Lfunction of lfunction
   | Llet of let_kind * value_kind * Ident.t * lambda * lambda
+  | Lmutlet of value_kind * Ident.t * lambda * lambda
   | Lletrec of (Ident.t * lambda) list * lambda
   | Lprim of primitive * lambda list * scoped_location
   | Lswitch of lambda * lambda_switch * scoped_location
@@ -296,7 +299,7 @@ and lambda_apply =
   { ap_func : lambda;
     ap_args : lambda list;
     ap_loc : scoped_location;
-    ap_should_be_tailcall : bool;       (* true if [@tailcall] was specified *)
+    ap_tailcall : tailcall_attribute;
     ap_inlined : inline_attribute; (* specified with the [@inlined] attribute *)
     ap_specialised : specialise_attribute; }
 
@@ -341,6 +344,7 @@ type program =
 val make_key: lambda -> lambda option
 
 val const_unit: structured_constant
+val const_int : int -> structured_constant
 val lambda_unit: lambda
 val name_lambda: let_kind -> lambda -> (Ident.t -> lambda) -> lambda
 val name_lambda_list: lambda list -> (lambda list -> lambda) -> lambda
@@ -375,20 +379,29 @@ val transl_class_path: scoped_location -> Env.t -> Path.t -> lambda
 
 val make_sequence: ('a -> lambda) -> 'a list -> lambda
 
-val subst: (Ident.t -> Types.value_description -> Env.t -> Env.t) ->
+val subst:
+  (Ident.t -> Types.value_description -> Env.t -> Env.t) ->
+  ?freshen_bound_variables:bool ->
   lambda Ident.Map.t -> lambda -> lambda
-(** [subst env_update_fun s lt] applies a substitution [s] to the lambda-term
-    [lt].
+(** [subst update_env ?freshen_bound_variables s lt]
+    applies a substitution [s] to the lambda-term [lt].
 
     Assumes that the image of the substitution is out of reach
     of the bound variables of the lambda-term (no capture).
 
-    [env_update_fun] is used to refresh the environment contained in debug
-    events.  *)
+    [update_env] is used to refresh the environment contained in debug
+    events.
+
+    [freshen_bound_variables], which defaults to [false], freshens
+    the bound variables within [lt].
+ *)
 
 val rename : Ident.t Ident.Map.t -> lambda -> lambda
 (** A version of [subst] specialized for the case where we're just renaming
     idents. *)
+
+val duplicate : lambda -> lambda
+(** Duplicate a term, freshening all locally-bound identifiers. *)
 
 val map : (lambda -> lambda) -> lambda -> lambda
   (** Bottom-up rewriting, applying the function on
@@ -411,6 +424,12 @@ val default_function_attribute : function_attribute
 val default_stub_attribute : function_attribute
 
 val function_is_curried : lfunction -> bool
+
+val max_arity : unit -> int
+  (** Maximal number of parameters for a function, or in other words,
+      maximal length of the [params] list of a [lfunction] record.
+      This is unlimited ([max_int]) for bytecode, but limited
+      (currently to 126) for native code. *)
 
 (***********************)
 (* For static failures *)

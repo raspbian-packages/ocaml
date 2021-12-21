@@ -128,36 +128,18 @@ let compile_file ?output ?(opt="") ?stable_name name =
   then display_msvc_output file name;
   exit
 
-let macos_create_empty_archive ~quoted_archive =
-  let result =
-    command (Printf.sprintf "%s rc %s /dev/null" Config.ar quoted_archive)
-  in
-  if result <> 0 then result
-  else
-    let result =
-      command (Printf.sprintf "%s %s 2> /dev/null" Config.ranlib quoted_archive)
-    in
-    if result <> 0 then result
-    else
-      command (Printf.sprintf "%s d %s /dev/null" Config.ar quoted_archive)
-
 let create_archive archive file_list =
   Misc.remove_file archive;
   let quoted_archive = Filename.quote archive in
-  match Config.ccomp_type with
-    "msvc" ->
-      command(Printf.sprintf "link /lib /nologo /out:%s %s"
-                             quoted_archive (quote_files file_list))
-  | _ ->
-      assert(String.length Config.ar > 0);
-      let is_macosx =
-        match Config.system with
-        | "macosx" -> true
-        | _ -> false
-      in
-      if is_macosx && file_list = [] then  (* PR#6550 *)
-        macos_create_empty_archive ~quoted_archive
-      else
+  if file_list = [] then
+    0 (* Don't call the archiver: #6550/#1094/#9011 *)
+  else
+    match Config.ccomp_type with
+      "msvc" ->
+        command(Printf.sprintf "link /lib /nologo /out:%s %s"
+                               quoted_archive (quote_files file_list))
+    | _ ->
+        assert(String.length Config.ar > 0);
         let r1 =
           command(Printf.sprintf "%s rc %s %s"
                   Config.ar quoted_archive (quote_files file_list)) in
@@ -165,17 +147,16 @@ let create_archive archive file_list =
         then r1
         else command(Config.ranlib ^ " " ^ quoted_archive)
 
-let expand_libname name =
-  if String.length name < 2 || String.sub name 0 2 <> "-l"
-  then name
-  else begin
-    let libname =
-      "lib" ^ String.sub name 2 (String.length name - 2) ^ Config.ext_lib in
-    try
-      Load_path.find libname
-    with Not_found ->
-      libname
-  end
+let expand_libname cclibs =
+  cclibs |> List.map (fun cclib ->
+    if String.starts_with ~prefix:"-l" cclib then
+      let libname =
+        "lib" ^ String.sub cclib 2 (String.length cclib - 2) ^ Config.ext_lib in
+      try
+        Load_path.find libname
+      with Not_found ->
+        libname
+    else cclib)
 
 type link_mode =
   | Exe
@@ -195,10 +176,10 @@ let call_linker mode output_name files extra =
   Profile.record_call "c-linker" (fun () ->
     let cmd =
       if mode = Partial then
-        let l_prefix =
+        let (l_prefix, files) =
           match Config.ccomp_type with
-          | "msvc" -> "/libpath:"
-          | _ -> "-L"
+          | "msvc" -> ("/libpath:", expand_libname files)
+          | _ -> ("-L", files)
         in
         Printf.sprintf "%s%s %s %s %s"
           Config.native_pack_linker
@@ -224,3 +205,9 @@ let call_linker mode output_name files extra =
     in
     command cmd
   )
+
+let linker_is_flexlink =
+  (* Config.mkexe, Config.mkdll and Config.mkmaindll are all flexlink
+     invocations for the native Windows ports and for Cygwin, if shared library
+     support is enabled. *)
+  Sys.win32 || Config.supports_shared_libraries && Sys.cygwin

@@ -55,7 +55,7 @@ open Asttypes
 
     Note on mutability: TBD.
  *)
-type type_expr =
+type type_expr = private
   { mutable desc: type_desc;
     mutable level: int;
     mutable scope: int;
@@ -108,10 +108,13 @@ and type_desc =
   | Tlink of type_expr
   (** Indirection used by unification engine. *)
 
-  | Tsubst of type_expr         (* for copying *)
+  | Tsubst of type_expr * type_expr option
   (** [Tsubst] is used temporarily to store information in low-level
       functions manipulating representation of types, such as
       instantiation or copy.
+      The first argument contains a copy of the original node.
+      The second is available only when the first is the row variable of
+      a polymorphic variant.  It then contains a copy of the whole variant.
       This constructor should not appear outside of these cases. *)
 
   | Tvariant of row_desc
@@ -126,7 +129,7 @@ and type_desc =
       where 'a1 ... 'an are names given to types in tyl
       and occurrences of those types in ty. *)
 
-  | Tpackage of Path.t * Longident.t list * type_expr list
+  | Tpackage of Path.t * (Longident.t * type_expr) list
   (** Type of a first-class module (a.k.a package). *)
 
 (** [  `X | `Y ]       (row_closed = true)
@@ -233,6 +236,13 @@ and commutable =
   | Cunknown
   | Clink of commutable ref
 
+module Private_type_expr : sig
+  val create : type_desc -> level: int -> scope: int -> id: int -> type_expr
+  val set_desc : type_expr -> type_desc -> unit
+  val set_level : type_expr -> int -> unit
+  val set_scope : type_expr -> int -> unit
+end
+
 module TypeOps : sig
   type t = type_expr
   val compare : t -> t -> int
@@ -287,11 +297,18 @@ and value_kind =
 
 module Variance : sig
   type t
-  type f = May_pos | May_neg | May_weak | Inj | Pos | Neg | Inv
-  val null : t                          (* no occurrence *)
-  val full : t                          (* strictly invariant *)
-  val covariant : t                     (* strictly covariant *)
-  val may_inv : t                       (* maybe invariant *)
+  type f =
+      May_pos                (* allow positive occurrences *)
+    | May_neg                (* allow negative occurrences *)
+    | May_weak               (* allow occurrences under a negative position *)
+    | Inj                    (* type is injective in this parameter *)
+    | Pos                    (* there is a positive occurrence *)
+    | Neg                    (* there is a negative occurrence *)
+    | Inv                    (* both negative and positive occurrences *)
+  val null : t               (* no occurrence *)
+  val full : t               (* strictly invariant (all flags) *)
+  val covariant : t          (* strictly covariant (May_pos, Pos and Inj) *)
+  val unknown : t            (* allow everything, guarantee nothing *)
   val union  : t -> t -> t
   val inter  : t -> t -> t
   val subset : t -> t -> bool
@@ -301,6 +318,8 @@ module Variance : sig
   val conjugate : t -> t                (* exchange positive and negative *)
   val get_upper : t -> bool * bool                  (* may_pos, may_neg   *)
   val get_lower : t -> bool * bool * bool * bool    (* pos, neg, inv, inj *)
+  val unknown_signature : injective:bool -> arity:int -> t list
+  (** The most pessimistic variance for a completely unknown type. *)
 end
 
 module Separability : sig
@@ -340,7 +359,7 @@ end
 type type_declaration =
   { type_params: type_expr list;
     type_arity: int;
-    type_kind: type_kind;
+    type_kind: type_decl_kind;
     type_private: private_flag;
     type_manifest: type_expr option;
     type_variance: Variance.t list;
@@ -351,14 +370,17 @@ type type_declaration =
     type_loc: Location.t;
     type_attributes: Parsetree.attributes;
     type_immediate: Type_immediacy.t;
-    type_unboxed: unboxed_status;
+    type_unboxed_default: bool;
+    (* true if the unboxed-ness of this type was chosen by a compiler flag *)
     type_uid: Uid.t;
   }
 
-and type_kind =
+and type_decl_kind = (label_declaration, constructor_declaration) type_kind
+
+and ('lbl, 'cstr) type_kind =
     Type_abstract
-  | Type_record of label_declaration list  * record_representation
-  | Type_variant of constructor_declaration list
+  | Type_record of 'lbl list  * record_representation
+  | Type_variant of 'cstr list * variant_representation
   | Type_open
 
 and record_representation =
@@ -367,6 +389,10 @@ and record_representation =
   | Record_unboxed of bool    (* Unboxed single-field record, inlined or not *)
   | Record_inlined of int               (* Inlined record *)
   | Record_extension of Path.t          (* Inlined record under extension *)
+
+and variant_representation =
+    Variant_regular          (* Constant or boxed constructors *)
+  | Variant_unboxed          (* One unboxed single-field constructor *)
 
 and label_declaration =
   {
@@ -391,20 +417,6 @@ and constructor_declaration =
 and constructor_arguments =
   | Cstr_tuple of type_expr list
   | Cstr_record of label_declaration list
-
-and unboxed_status = private
-  (* This type must be private in order to ensure perfect sharing of the
-     four possible values. Otherwise, ocamlc.byte and ocamlc.opt produce
-     different executables. *)
-  {
-    unboxed: bool;
-    default: bool; (* True for unannotated unboxable types. *)
-  }
-
-val unboxed_false_default_false : unboxed_status
-val unboxed_false_default_true : unboxed_status
-val unboxed_true_default_false : unboxed_status
-val unboxed_true_default_true : unboxed_status
 
 type extension_constructor =
   {

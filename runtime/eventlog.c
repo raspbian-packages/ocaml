@@ -96,6 +96,7 @@ static int64_t time_counter(void)
 
 #elif defined(HAS_MACH_ABSOLUTE_TIME)
   static mach_timebase_info_data_t time_base = {0};
+  uint64_t now;
 
   if (time_base.denom == 0) {
     if (mach_timebase_info (&time_base) != KERN_SUCCESS)
@@ -105,7 +106,7 @@ static int64_t time_counter(void)
       return 0;
   }
 
-  uint64_t now = mach_absolute_time ();
+  now = mach_absolute_time ();
   return (int64_t)((now * time_base.numer) / time_base.denom);
 
 #elif defined(HAS_POSIX_MONOTONIC_CLOCK)
@@ -139,12 +140,12 @@ static void setup_eventlog_file()
   eventlog_filename = caml_secure_getenv(T("OCAML_EVENTLOG_PREFIX"));
 
   if (eventlog_filename) {
-    int ret = snprintf_os(output_file, OUTPUT_FILE_LEN, T("%s.%d.eventlog"),
+    int ret = snprintf_os(output_file, OUTPUT_FILE_LEN, T("%s.%ld.eventlog"),
                          eventlog_filename, Caml_state->eventlog_startup_pid);
     if (ret > OUTPUT_FILE_LEN)
       caml_fatal_error("eventlog: specified OCAML_EVENTLOG_PREFIX is too long");
   } else {
-    snprintf_os(output_file, OUTPUT_FILE_LEN, T("caml-%d.eventlog"),
+    snprintf_os(output_file, OUTPUT_FILE_LEN, T("caml-%ld.eventlog"),
                Caml_state->eventlog_startup_pid);
   }
 
