@@ -1,9 +1,6 @@
 0001-Don-t-use-rpath.patch
-0002-Put-manpages-in-section-3o-instead-of-3.patch
 0003-Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
 0004-Check-for-definition-of-AT_SECURE-before-using-it.patch
-0005-read_main_debug_info-do-not-die-in-custom-executable.patch
 0006-Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
 0007-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
-0008-Statically-link-lib-bfd-iberty.patch
 0009-Do-not-error-on-warnings-in-autoconf.patch

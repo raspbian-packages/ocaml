@@ -8,10 +8,10 @@ Bug: https://github.com/ocaml/ocaml/issues/9800
  1 file changed, 10 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index 069fe96..ab1e188 100644
+index ac8a080..9ac019f 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1018,6 +1018,16 @@ AS_CASE([$arch],
+@@ -1183,6 +1183,16 @@ AS_CASE([$arch],
         [common_cflags="-no-pie $common_cflags"],
      [])])
  
@@ -27,4 +27,4 @@ index 069fe96..ab1e188 100644
 +
  # Assembler
  
- AS_IF([test -n "$host_alias"], [toolpref="${host_alias}-"], [toolpref=""])
+ AS_IF([test -n "$target_alias"],

@@ -7,21 +7,21 @@ Subject: Trigger -output-complete-exe on -custom with an environment variable
  1 file changed, 9 insertions(+), 1 deletion(-)
 
 diff --git a/driver/main_args.ml b/driver/main_args.ml
-index 5c28ded..81f203d 100644
+index 3c6faac..a208056 100644
 --- a/driver/main_args.ml
 +++ b/driver/main_args.ml
-@@ -1962,7 +1962,6 @@ third-party libraries such as Lwt, but with a different API."
+@@ -1976,7 +1976,6 @@ third-party libraries such as Lwt, but with a different API."
      include Core
      include Compiler
      let _compat_32 = set bytecode_compatible_32
 -    let _custom = set custom_runtime
      let _dcamlprimc = set keep_camlprimc_file
      let _dinstr = set dump_instr
-     let _dllib s = defer (ProcessDLLs (Misc.rev_split_words s))
-@@ -1981,6 +1980,15 @@ third-party libraries such as Lwt, but with a different API."
+     let _dllib s = Compenv.defer (ProcessDLLs (Misc.rev_split_words s))
+@@ -1995,6 +1994,15 @@ third-party libraries such as Lwt, but with a different API."
      let _use_runtime s = use_runtime := s
-     let _v () = print_version_and_library "compiler"
-     let _vmthread () = fatal vmthread_removed_message
+     let _v () = Compenv.print_version_and_library "compiler"
+     let _vmthread () = Compenv.fatal vmthread_removed_message
 +    let _custom () =
 +      if
 +        match Sys.getenv_opt "OCAML_CUSTOM_USE_OUTPUT_COMPLETE_EXE" with
