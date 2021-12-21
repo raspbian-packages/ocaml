@@ -177,6 +177,7 @@ let () =
     [
       "camlinternalOO"; "camlinternalMod"; "camlinternalLazy";
       "camlinternalFormatBasics"; "camlinternalFormat";
+      "camlinternalAtomic";
       "topdirs";
       "unix"; "unixLabels";
       "str"; "camlstr";
@@ -202,9 +203,14 @@ let process_static x =
   | Some pkg -> push pkg x
   | None -> Some x
 
+let find_base base =
+  match SMap.find_opt base !base_map with
+  | Some x -> Some x
+  | None -> SMap.find_opt (String.capitalize_ascii base) !base_map
+
 let process_file x =
   let base = get_base x in
-  match SMap.find_opt base !base_map with
+  match find_base base with
   | Some set ->
      if List.exists (fun y -> endswith y x) exts_dev then (
        push (snd set) x

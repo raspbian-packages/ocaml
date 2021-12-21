@@ -1,6 +1,6 @@
 include /usr/share/dpkg/architecture.mk
 
-OCAMLMAJOR := 4.11
+OCAMLMAJOR := 4.13
 OCAMLMINOR := 1
 
 OCAML_ABI := $(OCAMLMAJOR).$(OCAMLMINOR)
