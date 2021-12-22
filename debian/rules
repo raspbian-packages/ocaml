@@ -140,15 +140,13 @@ ifeq ($(BUILDCACHE),)
 	$(MAKE) world
 	$(MAKE) bootstrap
 	$(MAKE) -C tools dumpobj
-ifeq (,$(OCAML_OPT_ARCH))
-# As of 3.11.0, manpages are made only in `make opt.opt'
-	make -C ocamldoc manpages \
-	  OCAMLDOC_RUN="../boot/ocamlrun -I ../otherlibs/unix -I ../otherlibs/str ./ocamldoc"
-else
+ifneq (,$(OCAML_OPT_ARCH))
 	@echo "Building native compilers"
 	$(MAKE) opt opt.opt
 	touch opt-built-stamp
 endif
+	@echo "Building manpages"
+	$(MAKE) manpages
 else
 	@echo "===> WARNING: $(BUILDCACHE) detected, compilation skipped! <==="
 	rsync -a --exclude=debian --exclude=.git $(BUILDCACHE)/ .
