@@ -67,6 +67,11 @@ ifeq (,$(OCAML_OPT_ARCH))
 CONFIGURE_OPTS += --disable-native-compiler
 endif
 
+# fma does not work on m68k, enable emulation as instructed by configure script
+ifeq (m68k,$(DEB_BUILD_ARCH))
+CONFIGURE_OPTS += --enable-imprecise-c99-float-ops
+endif
+
 # To avoid Lintian's file-references-package-build-path
 export BUILD_PATH_PREFIX_MAP=.=$(CURDIR)
 
