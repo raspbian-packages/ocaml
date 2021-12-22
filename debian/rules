@@ -70,6 +70,9 @@ endif
 # fma does not work on m68k, enable emulation as instructed by configure script
 ifeq (m68k,$(DEB_BUILD_ARCH))
 CONFIGURE_OPTS += --enable-imprecise-c99-float-ops
+IGNORE_TESTS_FAILURE := || true
+else
+IGNORE_TESTS_FAILURE :=
 endif
 
 # To avoid Lintian's file-references-package-build-path
@@ -289,7 +292,7 @@ ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
 endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 	make -C ocamltest
-	make -C testsuite all
+	make -C testsuite all $(IGNORE_TESTS_FAILURE)
 endif
 endif
 
