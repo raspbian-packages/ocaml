@@ -4,3 +4,4 @@
 0004-Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
 0005-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
 0006-Do-not-error-on-warnings-in-autoconf.patch
+0007-Put-manpages-in-section-3o-instead-of-3.patch
