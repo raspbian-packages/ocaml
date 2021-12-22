@@ -1,3 +1,13 @@
+ocaml (4.13.1-2) experimental; urgency=medium
+
+  * Put transitional packages in section oldlibs
+  * Fix building of manpages on bytecode architectures
+  * Restore patch putting manpages in section 3o
+  * Enable fma emulation on m68k
+  * Ignore tests failure on m68k
+
+ -- Stéphane Glondu <glondu@debian.org>  Wed, 22 Dec 2021 08:17:13 +0100
+
 ocaml (4.13.1-1) experimental; urgency=medium
 
   * New upstream release
