@@ -163,6 +163,7 @@ Description: OCaml interpreter and standard libraries (lib manpages)
  provided by OCaml.
 
 Package: ocaml-base-nox
+Section: oldlibs
 Architecture: all
 Depends:
  ocaml-base,
@@ -177,6 +178,7 @@ Description: transitional package for ocaml-base
  This is a transitional package and can be safely removed.
 
 Package: ocaml-nox
+Section: oldlibs
 Architecture: all
 Depends:
  ocaml,
