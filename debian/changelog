@@ -1,3 +1,10 @@
+ocaml (4.13.1-3) UNRELEASED; urgency=medium
+
+  * Adapt maintainer scripts to new binary package structure
+  * Do no longer provide /usr/include/caml symlink
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 30 Dec 2021 09:34:19 +0100
+
 ocaml (4.13.1-2) experimental; urgency=medium
 
   * Put transitional packages in section oldlibs
