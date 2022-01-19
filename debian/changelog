@@ -1,9 +1,10 @@
-ocaml (4.13.1-3) UNRELEASED; urgency=medium
+ocaml (4.13.1-3) unstable; urgency=medium
 
+  * Upload to unstable
   * Adapt maintainer scripts to new binary package structure
   * Do no longer provide /usr/include/caml symlink
 
- -- Stéphane Glondu <glondu@debian.org>  Thu, 30 Dec 2021 09:34:19 +0100
+ -- Stéphane Glondu <glondu@debian.org>  Wed, 19 Jan 2022 11:14:42 +0100
 
 ocaml (4.13.1-2) experimental; urgency=medium
 
