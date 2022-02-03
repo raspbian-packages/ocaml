@@ -1,6 +1,6 @@
 (*
   Description: called from debian/rules, generates debhelper's .install files
-  Copyright © 2019 Stéphane Glondu <glondu@debian.org>
+  Copyright © 2019-2021 Stéphane Glondu <glondu@debian.org>
 *)
 
 let rev_filter_map f xs =
@@ -45,14 +45,13 @@ let get_base str =
   |> try_prefix "stdlib__"
 
 module SMap = Map.Make (String)
+module SSet = Set.Make (String)
 
-let ocaml_base_nox = ref [ "debian/ld.conf usr/lib/ocaml" ]
-let ocaml_base = ref []
-let ocaml_nox =
+let ocaml_base = ref [ "debian/ld.conf usr/lib/ocaml" ]
+let ocaml =
   ref [
       "debian/native-archs usr/lib/ocaml";
     ]
-let ocaml = ref []
 let ocaml_compiler_libs = ref []
 let ocaml_interp =
   ref [
@@ -62,17 +61,12 @@ let ocaml_interp =
 let ocaml_man = ref []
 
 let pkgs = [
-    ocaml_base_nox, "ocaml-base-nox";
     ocaml_base, "ocaml-base";
-    ocaml_nox, "ocaml-nox";
     ocaml, "ocaml";
     ocaml_compiler_libs, "ocaml-compiler-libs";
     ocaml_interp, "ocaml-interp";
     ocaml_man, "ocaml-man";
   ]
-
-let set_nox = ocaml_base_nox, ocaml_nox
-let set_x = ocaml_base, ocaml
 
 let installed_files = rev_read_lines "debian/installed-files"
 
@@ -93,90 +87,91 @@ let static_map = ref SMap.empty
 let () =
   List.iter (fun (file, pkg) -> static_map := SMap.add file pkg !static_map)
     [
-      "usr/bin/ocamllex", ocaml_nox;
-      "usr/bin/ocamlopt", ocaml_nox;
-      "usr/bin/ocamloptp", ocaml_nox;
-      "usr/bin/ocamlcp", ocaml_nox;
-      "usr/bin/ocamlc", ocaml_nox;
-      "usr/bin/ocamldep", ocaml_nox;
-      "usr/bin/ocamlobjinfo", ocaml_nox;
-      "usr/bin/ocamlmklib", ocaml_nox;
-      "usr/bin/ocamlprof", ocaml_nox;
-      "usr/bin/ocamlmktop", ocaml_nox;
-      "usr/lib/ocaml/camlheader", ocaml_nox;
-      "usr/lib/ocaml/camlheaderd", ocaml_nox;
-      "usr/lib/ocaml/camlheaderi", ocaml_nox;
-      "usr/lib/ocaml/eventlog_metadata", ocaml_nox;
-      "usr/lib/ocaml/Makefile.config", ocaml_nox;
-      "usr/lib/ocaml/extract_crc", ocaml_nox;
-      "usr/lib/ocaml/camlheader_ur", ocaml_nox;
-      "usr/lib/ocaml/expunge", ocaml_nox;
-      "usr/lib/ocaml/VERSION", ocaml_base_nox;
-      "usr/lib/ocaml/target_camlheaderd", ocaml_nox;
-      "usr/lib/ocaml/objinfo_helper", ocaml_nox;
-      "usr/lib/ocaml/target_camlheaderi", ocaml_nox;
-      "usr/bin/ocamlmklib.opt", ocaml_nox;
-      "usr/bin/ocamllex.byte", ocaml_nox;
-      "usr/bin/ocamldebug", ocaml_nox;
-      "usr/bin/ocamlobjinfo.byte", ocaml_nox;
-      "usr/bin/ocamlprof.byte", ocaml_nox;
-      "usr/bin/ocamloptp.opt", ocaml_nox;
-      "usr/bin/ocamlmklib.byte", ocaml_nox;
-      "usr/bin/ocamlrund", ocaml_base_nox;
-      "usr/bin/ocamlcp.byte", ocaml_nox;
-      "usr/bin/ocamldep.opt", ocaml_nox;
-      "usr/bin/ocamldoc.opt", ocaml_nox;
-      "usr/bin/ocamlobjinfo.opt", ocaml_nox;
-      "usr/bin/ocamlyacc", ocaml_nox;
-      "usr/bin/ocaml-instr-graph", ocaml_nox;
-      "usr/bin/ocamlcmt", ocaml_nox;
-      "usr/bin/ocamlmktop.byte", ocaml_nox;
-      "usr/bin/ocamldoc", ocaml_nox;
+      "usr/bin/ocamllex", ocaml;
+      "usr/bin/ocamlopt", ocaml;
+      "usr/bin/ocamloptp", ocaml;
+      "usr/bin/ocamlcp", ocaml;
+      "usr/bin/ocamlc", ocaml;
+      "usr/bin/ocamldep", ocaml;
+      "usr/bin/ocamlobjinfo", ocaml;
+      "usr/bin/ocamlmklib", ocaml;
+      "usr/bin/ocamlprof", ocaml;
+      "usr/bin/ocamlmktop", ocaml;
+      "usr/lib/ocaml/camlheader", ocaml;
+      "usr/lib/ocaml/camlheaderd", ocaml;
+      "usr/lib/ocaml/camlheaderi", ocaml;
+      "usr/lib/ocaml/eventlog_metadata", ocaml;
+      "usr/lib/ocaml/Makefile.config", ocaml;
+      "usr/lib/ocaml/extract_crc", ocaml;
+      "usr/lib/ocaml/camlheader_ur", ocaml;
+      "usr/lib/ocaml/expunge", ocaml;
+      "usr/lib/ocaml/VERSION", ocaml_base;
+      "usr/lib/ocaml/target_camlheaderd", ocaml;
+      "usr/lib/ocaml/objinfo_helper", ocaml;
+      "usr/lib/ocaml/target_camlheaderi", ocaml;
+      "usr/bin/ocamlmklib.opt", ocaml;
+      "usr/bin/ocamllex.byte", ocaml;
+      "usr/bin/ocamldebug", ocaml;
+      "usr/bin/ocamlobjinfo.byte", ocaml;
+      "usr/bin/ocamlprof.byte", ocaml;
+      "usr/bin/ocamloptp.opt", ocaml;
+      "usr/bin/ocamlmklib.byte", ocaml;
+      "usr/bin/ocamlrund", ocaml_base;
+      "usr/bin/ocamlcp.byte", ocaml;
+      "usr/bin/ocamldep.opt", ocaml;
+      "usr/bin/ocamldoc.opt", ocaml;
+      "usr/bin/ocamlobjinfo.opt", ocaml;
+      "usr/bin/ocamlyacc", ocaml;
+      "usr/bin/ocaml-instr-graph", ocaml;
+      "usr/bin/ocamlcmt", ocaml;
+      "usr/bin/ocamlmktop.byte", ocaml;
+      "usr/bin/ocamldoc", ocaml;
       "usr/bin/ocaml", ocaml_interp;
-      "usr/bin/ocamlcp.opt", ocaml_nox;
-      "usr/bin/ocaml-instr-report", ocaml_nox;
-      "usr/bin/ocamldep.byte", ocaml_nox;
-      "usr/bin/ocamloptp.byte", ocaml_nox;
-      "usr/bin/ocamlprof.opt", ocaml_nox;
-      "usr/bin/ocamlc.byte", ocaml_nox;
-      "usr/bin/ocamlruni", ocaml_base_nox;
-      "usr/bin/ocamllex.opt", ocaml_nox;
-      "usr/bin/ocamlopt.opt", ocaml_nox;
-      "usr/bin/ocamlmktop.opt", ocaml_nox;
-      "usr/bin/ocamlopt.byte", ocaml_nox;
-      "usr/bin/ocamlrun", ocaml_base_nox;
-      "usr/bin/ocamlc.opt", ocaml_nox;
+      "usr/bin/ocamlcp.opt", ocaml;
+      "usr/bin/ocaml-instr-report", ocaml;
+      "usr/bin/ocamldep.byte", ocaml;
+      "usr/bin/ocamloptp.byte", ocaml;
+      "usr/bin/ocamlprof.opt", ocaml;
+      "usr/bin/ocamlc.byte", ocaml;
+      "usr/bin/ocamlruni", ocaml_base;
+      "usr/bin/ocamllex.opt", ocaml;
+      "usr/bin/ocamlopt.opt", ocaml;
+      "usr/bin/ocamlmktop.opt", ocaml;
+      "usr/bin/ocamlopt.byte", ocaml;
+      "usr/bin/ocamlrun", ocaml_base;
+      "usr/bin/ocamlc.opt", ocaml;
       "usr/share/man/man1/ocaml.1", ocaml_interp;
-      "usr/share/man/man1/ocamllex.1", ocaml_nox;
-      "usr/share/man/man1/ocamlyacc.1", ocaml_nox;
-      "usr/share/man/man1/ocamlrun.1", ocaml_base_nox;
-      "usr/share/man/man1/ocamldoc.1", ocaml_nox;
-      "usr/share/man/man1/ocamlcp.1", ocaml_nox;
-      "usr/share/man/man1/ocamloptp.1", ocaml_nox;
-      "usr/share/man/man1/ocamlc.1", ocaml_nox;
-      "usr/share/man/man1/ocamldep.1", ocaml_nox;
-      "usr/share/man/man1/ocamlmktop.1", ocaml_nox;
-      "usr/share/man/man1/ocamlopt.1", ocaml_nox;
-      "usr/share/man/man1/ocamlprof.1", ocaml_nox;
-      "usr/share/man/man1/ocamldebug.1", ocaml_nox;
+      "usr/share/man/man1/ocamllex.1", ocaml;
+      "usr/share/man/man1/ocamlyacc.1", ocaml;
+      "usr/share/man/man1/ocamlrun.1", ocaml_base;
+      "usr/share/man/man1/ocamldoc.1", ocaml;
+      "usr/share/man/man1/ocamlcp.1", ocaml;
+      "usr/share/man/man1/ocamloptp.1", ocaml;
+      "usr/share/man/man1/ocamlc.1", ocaml;
+      "usr/share/man/man1/ocamldep.1", ocaml;
+      "usr/share/man/man1/ocamlmktop.1", ocaml;
+      "usr/share/man/man1/ocamlopt.1", ocaml;
+      "usr/share/man/man1/ocamlprof.1", ocaml;
+      "usr/share/man/man1/ocamldebug.1", ocaml;
     ]
 
-let base_map = ref SMap.empty
+let base_set = ref SSet.empty
 
 let () =
   List.iter (fun x ->
       try
         let x = chop_prefix "usr/lib/ocaml/stdlib__" x in
         let i = String.index x '.' in
-        base_map := SMap.add (String.sub x 0 i) set_nox !base_map
+        base_set := SSet.add (String.sub x 0 i) !base_set
       with _ -> ()
     ) installed_files
 
 let () =
-  List.iter (fun x -> base_map := SMap.add x set_nox !base_map)
+  List.iter (fun x -> base_set := SSet.add x !base_set)
     [
       "camlinternalOO"; "camlinternalMod"; "camlinternalLazy";
       "camlinternalFormatBasics"; "camlinternalFormat";
+      "camlinternalAtomic";
       "topdirs";
       "unix"; "unixLabels";
       "str"; "camlstr";
@@ -186,11 +181,6 @@ let () =
       "asmrun"; "asmrund"; "asmruni"; "asmrunp"; "asmrun_shared"; "asmrun_pic";
       "raw_spacetime_lib";
     ]
-
-let () =
-  List.iter (fun x -> base_map := SMap.add x set_x !base_map)
-    [ "graphics"; "graphicsX11" ]
-
 
 let exts_dev = [ ".ml"; ".mli"; ".cmi"; ".cmt"; ".cmti"; ".cmx"; ".cmxa"; ".a"; ".cmo"; ".o" ]
 let exts_run = [ ".cma"; ".cmxs"; ".so" ]
@@ -202,26 +192,31 @@ let process_static x =
   | Some pkg -> push pkg x
   | None -> Some x
 
+let find_base base =
+  match SSet.mem base !base_set with
+  | true -> true
+  | false -> SSet.mem (String.capitalize_ascii base) !base_set
+
 let process_file x =
   let base = get_base x in
-  match SMap.find_opt base !base_map with
-  | Some set ->
+  match find_base base with
+  | true ->
      if List.exists (fun y -> endswith y x) exts_dev then (
-       push (snd set) x
+       push ocaml x
      ) else if List.exists (fun y -> endswith y x) exts_run then (
-       push (fst set) x
+       push ocaml_base x
      ) else Some x
-  | None -> Some x
+  | false -> Some x
 
 let remaining =
   installed_files
-  |> move_all_to ocaml_nox (startswith "usr/lib/ocaml/caml/")
-  |> move_all_to ocaml_nox (startswith "usr/lib/ocaml/ocamldoc/")
-  |> move_all_to ocaml_nox (startswith "usr/lib/ocaml/vmthreads/")
-  |> move_all_to ocaml_nox (startswith "usr/lib/ocaml/threads/")
-  |> move_all_to ocaml_nox (startswith "usr/lib/ocaml/std_exit.")
-  |> move_all_to ocaml_nox (startswith "usr/lib/ocaml/stdlib.")
-  |> move_all_to ocaml_nox (startswith "usr/lib/ocaml/dynlink")
+  |> move_all_to ocaml (startswith "usr/lib/ocaml/caml/")
+  |> move_all_to ocaml (startswith "usr/lib/ocaml/ocamldoc/")
+  |> move_all_to ocaml (startswith "usr/lib/ocaml/vmthreads/")
+  |> move_all_to ocaml (startswith "usr/lib/ocaml/threads/")
+  |> move_all_to ocaml (startswith "usr/lib/ocaml/std_exit.")
+  |> move_all_to ocaml (startswith "usr/lib/ocaml/stdlib.")
+  |> move_all_to ocaml (startswith "usr/lib/ocaml/dynlink")
   |> move_all_to ocaml_compiler_libs (startswith "usr/lib/ocaml/compiler-libs/")
   |> move_all_to ocaml_man (endswith ".3o")
   |> rev_filter_map process_static

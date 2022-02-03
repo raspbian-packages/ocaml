@@ -1,0 +1,8 @@
+ocaml: script-not-executable .@OCamlStdlibDir@/camlheader
+ocaml: script-not-executable .@OCamlStdlibDir@/target_camlheaderd
+ocaml: script-not-executable .@OCamlStdlibDir@/target_camlheaderi
+ocaml: unusual-interpreter .@OCamlStdlibDir@/target_camlheaderd #!/usr/bin/ocamlrund
+ocaml: unusual-interpreter .@OCamlStdlibDir@/target_camlheaderi #!/usr/bin/ocamlruni
+ocaml: no-manual-page usr/bin/ocaml*.byte
+ocaml: no-manual-page usr/bin/ocaml*.opt
+ocaml: ocaml-dangling-cmx .@OCamlStdlibDir@/ocamldoc/odoc*.cmx

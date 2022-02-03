@@ -67,6 +67,14 @@ ifeq (,$(OCAML_OPT_ARCH))
 CONFIGURE_OPTS += --disable-native-compiler
 endif
 
+# fma does not work on m68k, enable emulation as instructed by configure script
+ifeq (m68k,$(DEB_BUILD_ARCH))
+CONFIGURE_OPTS += --enable-imprecise-c99-float-ops
+IGNORE_TESTS_FAILURE := || true
+else
+IGNORE_TESTS_FAILURE :=
+endif
+
 # To avoid Lintian's file-references-package-build-path
 export BUILD_PATH_PREFIX_MAP=.=$(CURDIR)
 
@@ -140,15 +148,13 @@ ifeq ($(BUILDCACHE),)
 	$(MAKE) world
 	$(MAKE) bootstrap
 	$(MAKE) -C tools dumpobj
-ifeq (,$(OCAML_OPT_ARCH))
-# As of 3.11.0, manpages are made only in `make opt.opt'
-	make -C ocamldoc manpages \
-	  OCAMLDOC_RUN="../boot/ocamlrun -I ../otherlibs/unix -I ../otherlibs/str ./ocamldoc"
-else
+ifneq (,$(OCAML_OPT_ARCH))
 	@echo "Building native compilers"
 	$(MAKE) opt opt.opt
 	touch opt-built-stamp
 endif
+	@echo "Building manpages"
+	$(MAKE) manpages
 else
 	@echo "===> WARNING: $(BUILDCACHE) detected, compilation skipped! <==="
 	rsync -a --exclude=debian --exclude=.git $(BUILDCACHE)/ .
@@ -192,18 +198,18 @@ install-stamp-arch: install-stamp
 # Beware: dh_install does not handle renamings, please pay attention
 	set -e; for u in dumpobj; do \
 	  if [ -f tools/$$u ]; then \
-	    cp tools/$$u debian/ocaml-nox/usr/bin/ocaml$$u; \
+	    cp tools/$$u debian/ocaml/usr/bin/ocaml$$u; \
 	  fi \
 	done
 # Install the seq compatibility package (OCaml >= 4.07)
-	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq
-	cp debian/META.seq debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/seq/META
+	mkdir -p debian/ocaml-base$(OCAML_STDLIB_DIR)/seq
+	cp debian/META.seq debian/ocaml-base$(OCAML_STDLIB_DIR)/seq/META
 # Install the uchar compatibility package (OCaml >= 4.03)
-	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/uchar
-	cp debian/META.uchar debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/uchar/META
+	mkdir -p debian/ocaml-base$(OCAML_STDLIB_DIR)/uchar
+	cp debian/META.uchar debian/ocaml-base$(OCAML_STDLIB_DIR)/uchar/META
 # Install the stdlib-shims compatibility package (OCaml >= 4.07)
-	mkdir -p debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/stdlib-shims
-	cp debian/META.stdlib-shims debian/ocaml-base-nox$(OCAML_STDLIB_DIR)/stdlib-shims/META
+	mkdir -p debian/ocaml-base$(OCAML_STDLIB_DIR)/stdlib-shims
+	cp debian/META.stdlib-shims debian/ocaml-base$(OCAML_STDLIB_DIR)/stdlib-shims/META
 # Remaining stuff
 	touch $@
 
@@ -238,15 +244,15 @@ override_dh_gencontrol:
 	  echo 'F:OCamlABI=$(OCAML_ABI)' >> debian/$$u.substvars; \
 	done
 ifeq (,$(OCAML_OPT_ARCH))
-	echo 'F:NativeProvides=' >> debian/ocaml-nox.substvars
+	echo 'F:NativeProvides=' >> debian/ocaml.substvars
 else
-	echo 'F:NativeProvides=ocaml-native-compilers (= $${binary:Version})' >> debian/ocaml-nox.substvars
+	echo 'F:NativeProvides=ocaml-native-compilers (= $${binary:Version})' >> debian/ocaml.substvars
 endif
 # Create .md5sums files and compute dependencies. Use $(OCAML_ABI)
 # because we know that OCaml ABI represents best dependencies for
 # OCaml package.
 	dh_ocaml -Xcompiler-libs \
-	 --runtime-map ocaml-nox:ocaml-base-nox,ocaml:ocaml-base \
+	 --runtime-map ocaml:ocaml-base \
 	 --checksum $(OCAML_ABI)
 	dh_gencontrol
 # Check that OCAML_ABI is correct
@@ -291,13 +297,13 @@ ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
 endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 	make -C ocamltest
-	make -C testsuite all
+	make -C testsuite all $(IGNORE_TESTS_FAILURE)
 endif
 endif
 
 .PHONY: override_dh_installdocs
 override_dh_installdocs:
-	dh_installdocs --package=ocaml-base-nox --doc-main-package=ocaml
+	dh_installdocs --package=ocaml-base --doc-main-package=ocaml
 	dh_installdocs --remaining-packages
 
 override_dh_autoreconf:

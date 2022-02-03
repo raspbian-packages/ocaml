@@ -74,13 +74,20 @@ CAMLdeprecated_typedef(addr, char *);
   #define Noreturn
 #endif
 
-
-
 /* Export control (to mark primitives and to handle Windows DLL) */
+
+#ifndef CAMLDLLIMPORT
+  #if defined(SUPPORT_DYNAMIC_LINKING) && defined(ARCH_SIXTYFOUR) \
+      && (defined(__CYGWIN__) || defined(__MINGW32__))
+    #define CAMLDLLIMPORT __declspec(dllimport)
+  #else
+    #define CAMLDLLIMPORT
+  #endif
+#endif
 
 #define CAMLexport
 #define CAMLprim
-#define CAMLextern extern
+#define CAMLextern CAMLDLLIMPORT extern
 
 /* Weak function definitions that can be overridden by external libs */
 /* Conservatively restricted to ELF and MacOSX platforms */
@@ -104,6 +111,17 @@ CAMLdeprecated_typedef(addr, char *);
 #define CAMLalign(n) __declspec(align(n))
 #else
 #error "How do I align values on this platform?"
+#endif
+
+/* Prefetching */
+
+#ifdef CAML_INTERNALS
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+#define caml_prefetch(p) __builtin_prefetch((p), 1, 3)
+/* 1 = intent to write; 3 = all cache levels */
+#else
+#define caml_prefetch(p)
+#endif
 #endif
 
 /* CAMLunused is preserved for compatibility reasons.
@@ -259,6 +277,7 @@ extern double caml_log1p(double);
 #define unlink_os _wunlink
 #define rename_os caml_win32_rename
 #define chdir_os _wchdir
+#define mkdir_os(path, perm) _wmkdir(path)
 #define getcwd_os _wgetcwd
 #define system_os _wsystem
 #define rmdir_os _wrmdir
@@ -274,6 +293,8 @@ extern double caml_log1p(double);
 #define strcpy_os wcscpy
 #define mktemp_os _wmktemp
 #define fopen_os _wfopen
+
+#define clock_os caml_win32_clock
 
 #define caml_stat_strdup_os caml_stat_wcsdup
 #define caml_stat_strconcat_os caml_stat_wcsconcat
@@ -294,6 +315,7 @@ extern double caml_log1p(double);
 #define unlink_os unlink
 #define rename_os rename
 #define chdir_os chdir
+#define mkdir_os mkdir
 #define getcwd_os getcwd
 #define system_os system
 #define rmdir_os rmdir
@@ -309,6 +331,8 @@ extern double caml_log1p(double);
 #define strcpy_os strcpy
 #define mktemp_os mktemp
 #define fopen_os fopen
+
+#define clock_os clock
 
 #define caml_stat_strdup_os caml_stat_strdup
 #define caml_stat_strconcat_os caml_stat_strconcat
@@ -334,6 +358,9 @@ extern void caml_ext_table_remove(struct ext_table * tbl, void * data);
 extern void caml_ext_table_free(struct ext_table * tbl, int free_entries);
 extern void caml_ext_table_clear(struct ext_table * tbl, int free_entries);
 
+/* Add to [contents] the (short) names of the files contained in
+   the directory named [dirname].  No entries are added for [.] and [..].
+   Return 0 on success, -1 on error; set errno in the case of error. */
 CAMLextern int caml_read_directory(char_os * dirname,
                                    struct ext_table * contents);
 
@@ -431,18 +458,6 @@ extern int caml_snwprintf(wchar_t * buf,
 #    define CAMLno_asan __attribute__((no_sanitize("address")))
 #  endif
 #endif
-
-/* A table of all code fragments (main program and dynlinked modules) */
-struct code_fragment {
-  char *code_start;
-  char *code_end;
-  unsigned char digest[16];
-  char digest_computed;
-};
-
-extern struct ext_table caml_code_fragments_table;
-
-int caml_find_code_fragment(char *pc, int *index, struct code_fragment **cf);
 
 #endif /* CAML_INTERNALS */
 

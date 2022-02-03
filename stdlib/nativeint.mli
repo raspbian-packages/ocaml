@@ -31,9 +31,9 @@
 
     Literals for native integers are suffixed by n:
     {[
-      let zero: nativeint = 0n
-      let one: nativeint = 1n
-      let m_one: nativeint = -1n
+     let zero: nativeint = 0n
+     let one: nativeint = 1n
+     let m_one: nativeint = -1n
     ]}
 *)
 
@@ -224,6 +224,17 @@ val unsigned_compare: t -> t -> int
 val equal: t -> t -> bool
 (** The equal function for native ints.
     @since 4.03.0 *)
+
+val min: t -> t -> t
+(** Return the smaller of the two arguments.
+    @since 4.13.0
+*)
+
+val max: t -> t -> t
+(** Return the greater of the two arguments.
+    @since 4.13.0
+ *)
+
 
 (**/**)
 

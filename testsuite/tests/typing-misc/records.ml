@@ -171,7 +171,7 @@ let r = { (assert false) with contents = 1 } ;;
 Line 1, characters 8-44:
 1 | let r = { (assert false) with contents = 1 } ;;
             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Warning 23: all the fields are explicitly listed in this record:
+Warning 23 [useless-record-with]: all the fields are explicitly listed in this record:
 the 'with' clause is useless.
 Exception: Assert_failure ("", 1, 10).
 |}]
@@ -248,12 +248,14 @@ Error: This variant or record definition does not match that of type d
        The types are not equal.
 |}]
 
-type unboxed = d = {x:float} [@@unboxed]
+type mono = {foo:int}
+type unboxed = mono = {foo:int} [@@unboxed]
 [%%expect{|
-Line 1, characters 0-40:
-1 | type unboxed = d = {x:float} [@@unboxed]
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This variant or record definition does not match that of type d
+type mono = { foo : int; }
+Line 2, characters 0-43:
+2 | type unboxed = mono = {foo:int} [@@unboxed]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: This variant or record definition does not match that of type mono
        Their internal representations differ:
        this definition uses unboxed representation.
 |}]

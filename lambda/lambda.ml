@@ -40,12 +40,9 @@ type is_safe =
   | Unsafe
 
 type primitive =
-  | Pidentity
   | Pbytes_to_string
   | Pbytes_of_string
   | Pignore
-  | Prevapply
-  | Pdirapply
     (* Globals *)
   | Pgetglobal of Ident.t
   | Psetglobal of Ident.t
@@ -181,14 +178,7 @@ and raise_kind =
   | Raise_reraise
   | Raise_notrace
 
-let equal_boxed_integer x y =
-  match x, y with
-  | Pnativeint, Pnativeint
-  | Pint32, Pint32
-  | Pint64, Pint64 ->
-    true
-  | (Pnativeint | Pint32 | Pint64), _ ->
-    false
+let equal_boxed_integer = Primitive.equal_boxed_integer
 
 let equal_primitive =
   (* Should be implemented like [equal_value_kind] of [equal_boxed_integer],
@@ -207,10 +197,15 @@ let equal_value_kind x y =
 
 type structured_constant =
     Const_base of constant
-  | Const_pointer of int
   | Const_block of int * structured_constant list
   | Const_float_array of string list
   | Const_immstring of string
+
+type tailcall_attribute =
+  | Tailcall_expectation of bool
+    (* [@tailcall] and [@tailcall true] have [true],
+       [@tailcall false] has [false] *)
+  | Default_tailcall (* no [@tailcall] attribute *)
 
 type inline_attribute =
   | Always_inline (* [@inline] or [@inline always] *)
@@ -254,7 +249,7 @@ type local_attribute =
 
 type function_kind = Curried | Tupled
 
-type let_kind = Strict | Alias | StrictOpt | Variable
+type let_kind = Strict | Alias | StrictOpt
 
 type meth_kind = Self | Public | Cached
 
@@ -279,10 +274,12 @@ type scoped_location = Debuginfo.Scoped_location.t
 
 type lambda =
     Lvar of Ident.t
+  | Lmutvar of Ident.t
   | Lconst of structured_constant
   | Lapply of lambda_apply
   | Lfunction of lfunction
   | Llet of let_kind * value_kind * Ident.t * lambda * lambda
+  | Lmutlet of value_kind * Ident.t * lambda * lambda
   | Lletrec of (Ident.t * lambda) list * lambda
   | Lprim of primitive * lambda list * scoped_location
   | Lswitch of lambda * lambda_switch * scoped_location
@@ -312,7 +309,7 @@ and lambda_apply =
   { ap_func : lambda;
     ap_args : lambda list;
     ap_loc : scoped_location;
-    ap_should_be_tailcall : bool;
+    ap_tailcall : tailcall_attribute;
     ap_inlined : inline_attribute;
     ap_specialised : specialise_attribute; }
 
@@ -342,7 +339,9 @@ type program =
     required_globals : Ident.Set.t;
     code : lambda }
 
-let const_unit = Const_pointer 0
+let const_int n = Const_base (Const_int n)
+
+let const_unit = const_int 0
 
 let lambda_unit = Lconst const_unit
 
@@ -375,7 +374,8 @@ let make_key e =
     incr count ;
     if !count > max_raw then raise Not_simple ; (* Too big ! *)
     match e with
-    | Lvar id ->
+    | Lvar id
+    | Lmutvar id ->
       begin
         try Ident.find_same id env
         with Not_found -> e
@@ -398,6 +398,10 @@ let make_key e =
         let ex = tr_rec env ex in
         let y = make_key x in
         Llet (str,k,y,ex,tr_rec (Ident.add x (Lvar y) env) e)
+    | Lmutlet (k,x,ex,e) ->
+        let ex = tr_rec env ex in
+        let y = make_key x in
+        Lmutlet (k,y,ex,tr_rec (Ident.add x (Lmutvar y) env) e)
     | Lprim (p,es,_) ->
         Lprim (p,tr_recs env es, Loc_unknown)
     | Lswitch (e,sw,loc) ->
@@ -472,18 +476,18 @@ let iter_opt f = function
 
 let shallow_iter ~tail ~non_tail:f = function
     Lvar _
+  | Lmutvar _
   | Lconst _ -> ()
   | Lapply{ap_func = fn; ap_args = args} ->
       f fn; List.iter f args
   | Lfunction{body} ->
       f body
-  | Llet(_str, _k, _id, arg, body) ->
+  | Llet(_, _k, _id, arg, body)
+  | Lmutlet(_k, _id, arg, body) ->
       f arg; tail body
   | Lletrec(decl, body) ->
       tail body;
       List.iter (fun (_id, exp) -> f exp) decl
-  | Lprim (Pidentity, [l], _) ->
-      tail l
   | Lprim (Psequand, [l1; l2], _)
   | Lprim (Psequor, [l1; l2], _) ->
       f l1;
@@ -526,14 +530,16 @@ let iter_head_constructor f l =
   shallow_iter ~tail:f ~non_tail:f l
 
 let rec free_variables = function
-  | Lvar id -> Ident.Set.singleton id
+  | Lvar id
+  | Lmutvar id -> Ident.Set.singleton id
   | Lconst _ -> Ident.Set.empty
   | Lapply{ap_func = fn; ap_args = args} ->
       free_variables_list (free_variables fn) args
   | Lfunction{body; params} ->
       Ident.Set.diff (free_variables body)
         (Ident.Set.of_list (List.map fst params))
-  | Llet(_str, _k, id, arg, body) ->
+  | Llet(_, _k, id, arg, body)
+  | Lmutlet(_k, id, arg, body) ->
       Ident.Set.union
         (free_variables arg)
         (Ident.Set.remove id (free_variables body))
@@ -679,79 +685,131 @@ let rec make_sequence fn = function
    Assumes that the image of the substitution is out of reach
    of the bound variables of the lambda-term (no capture). *)
 
-let subst update_env s lam =
-  let rec subst s lam =
-    let remove_list l s =
-      List.fold_left (fun s (id, _kind) -> Ident.Map.remove id s) s l
-    in
+let subst update_env ?(freshen_bound_variables = false) s input_lam =
+  (* [s] contains a partial substitution for the free variables of the
+     input term [input_lam].
+
+     During our traversal of the term we maintain a second environment
+     [l] with all the bound variables of [input_lam] in the current
+     scope, mapped to either themselves or freshened versions of
+     themselves when [freshen_bound_variables] is set. *)
+  let bind id l =
+    let id' = if not freshen_bound_variables then id else Ident.rename id in
+    id', Ident.Map.add id id' l
+  in
+  let bind_many ids l =
+    List.fold_right (fun (id, rhs) (ids', l) ->
+        let id', l = bind id l in
+        ((id', rhs) :: ids' , l)
+      ) ids ([], l)
+  in
+  let rec subst s l lam =
     match lam with
-    | Lvar id as l ->
-        begin try Ident.Map.find id s with Not_found -> l end
+    | Lvar id as lam ->
+        begin match Ident.Map.find id l with
+          | id' -> Lvar id'
+          | exception Not_found ->
+             (* note: as this point we know [id] is not a bound
+                variable of the input term, otherwise it would belong
+                to [l]; it is a free variable of the input term. *)
+             begin try Ident.Map.find id s with Not_found -> lam end
+        end
+    | Lmutvar id as lam ->
+       begin match Ident.Map.find id l with
+          | id' -> Lmutvar id'
+          | exception Not_found ->
+             (* Note: a mutable [id] should not appear in [s].
+                Keeping the behavior of Lvar case for now. *)
+             begin try Ident.Map.find id s with Not_found -> lam end
+        end
     | Lconst _ as l -> l
     | Lapply ap ->
-        Lapply{ap with ap_func = subst s ap.ap_func;
-                      ap_args = subst_list s ap.ap_args}
+        Lapply{ap with ap_func = subst s l ap.ap_func;
+                      ap_args = subst_list s l ap.ap_args}
     | Lfunction lf ->
-        let s =
-          List.fold_right
-            (fun (id, _) s -> Ident.Map.remove id s)
-            lf.params s
-        in
-        Lfunction {lf with body = subst s lf.body}
+        let params, l' = bind_many lf.params l in
+        Lfunction {lf with params; body = subst s l' lf.body}
     | Llet(str, k, id, arg, body) ->
-        Llet(str, k, id, subst s arg, subst (Ident.Map.remove id s) body)
+        let id, l' = bind id l in
+        Llet(str, k, id, subst s l arg, subst s l' body)
+    | Lmutlet(k, id, arg, body) ->
+        let id, l' = bind id l in
+        Lmutlet(k, id, subst s l arg, subst s l' body)
     | Lletrec(decl, body) ->
-        let s =
-          List.fold_left (fun s (id, _) -> Ident.Map.remove id s)
-            s decl
-        in
-        Lletrec(List.map (subst_decl s) decl, subst s body)
-    | Lprim(p, args, loc) -> Lprim(p, subst_list s args, loc)
+        let decl, l' = bind_many decl l in
+        Lletrec(List.map (subst_decl s l') decl, subst s l' body)
+    | Lprim(p, args, loc) -> Lprim(p, subst_list s l args, loc)
     | Lswitch(arg, sw, loc) ->
-        Lswitch(subst s arg,
-                {sw with sw_consts = List.map (subst_case s) sw.sw_consts;
-                        sw_blocks = List.map (subst_case s) sw.sw_blocks;
-                        sw_failaction = subst_opt s sw.sw_failaction; },
+        Lswitch(subst s l arg,
+                {sw with sw_consts = List.map (subst_case s l) sw.sw_consts;
+                        sw_blocks = List.map (subst_case s l) sw.sw_blocks;
+                        sw_failaction = subst_opt s l sw.sw_failaction; },
                 loc)
     | Lstringswitch (arg,cases,default,loc) ->
         Lstringswitch
-          (subst s arg,List.map (subst_strcase s) cases,subst_opt s default,loc)
-    | Lstaticraise (i,args) ->  Lstaticraise (i, subst_list s args)
+          (subst s l arg,
+           List.map (subst_strcase s l) cases,
+           subst_opt s l default,
+           loc)
+    | Lstaticraise (i,args) ->  Lstaticraise (i, subst_list s l args)
     | Lstaticcatch(body, (id, params), handler) ->
-        Lstaticcatch(subst s body, (id, params),
-                    subst (remove_list params s) handler)
+        let params, l' = bind_many params l in
+        Lstaticcatch(subst s l body, (id, params),
+                     subst s l' handler)
     | Ltrywith(body, exn, handler) ->
-        Ltrywith(subst s body, exn, subst (Ident.Map.remove exn s) handler)
-    | Lifthenelse(e1, e2, e3) -> Lifthenelse(subst s e1, subst s e2, subst s e3)
-    | Lsequence(e1, e2) -> Lsequence(subst s e1, subst s e2)
-    | Lwhile(e1, e2) -> Lwhile(subst s e1, subst s e2)
+        let exn, l' = bind exn l in
+        Ltrywith(subst s l body, exn, subst s l' handler)
+    | Lifthenelse(e1, e2, e3) ->
+        Lifthenelse(subst s l e1, subst s l e2, subst s l e3)
+    | Lsequence(e1, e2) -> Lsequence(subst s l e1, subst s l e2)
+    | Lwhile(e1, e2) -> Lwhile(subst s l e1, subst s l e2)
     | Lfor(v, lo, hi, dir, body) ->
-        Lfor(v, subst s lo, subst s hi, dir,
-          subst (Ident.Map.remove v s) body)
+        let v, l' = bind v l in
+        Lfor(v, subst s l lo, subst s l hi, dir, subst s l' body)
     | Lassign(id, e) ->
-        assert(not (Ident.Map.mem id s));
-        Lassign(id, subst s e)
+        assert (not (Ident.Map.mem id s));
+        let id = try Ident.Map.find id l with Not_found -> id in
+        Lassign(id, subst s l e)
     | Lsend (k, met, obj, args, loc) ->
-        Lsend (k, subst s met, subst s obj, subst_list s args, loc)
+        Lsend (k, subst s l met, subst s l obj, subst_list s l args, loc)
     | Levent (lam, evt) ->
-        let lev_env =
-          Ident.Map.fold (fun id _ env ->
-            match Env.find_value (Path.Pident id) evt.lev_env with
-            | exception Not_found -> env
-            | vd -> update_env id vd env
-          ) s evt.lev_env
+        let old_env = evt.lev_env in
+        let env_updates =
+          let find_in_old id = Env.find_value (Path.Pident id) old_env in
+          let rebind id id' new_env =
+            match find_in_old id with
+            | exception Not_found -> new_env
+            | vd -> Env.add_value id' vd new_env
+          in
+          let update_free id new_env =
+            match find_in_old id with
+            | exception Not_found -> new_env
+            | vd -> update_env id vd new_env
+          in
+          Ident.Map.merge (fun id bound free ->
+            match bound, free with
+            | Some id', _ ->
+                if Ident.equal id id' then None else Some (rebind id id')
+            | None, Some _ -> Some (update_free id)
+            | None, None -> None
+          ) l s
         in
-        Levent (subst s lam, { evt with lev_env })
-    | Lifused (v, e) -> Lifused (v, subst s e)
-  and subst_list s l = List.map (subst s) l
-  and subst_decl s (id, exp) = (id, subst s exp)
-  and subst_case s (key, case) = (key, subst s case)
-  and subst_strcase s (key, case) = (key, subst s case)
-  and subst_opt s = function
+        let new_env =
+          Ident.Map.fold (fun _id update env -> update env) env_updates old_env
+        in
+        Levent (subst s l lam, { evt with lev_env = new_env })
+    | Lifused (id, e) ->
+        let id = try Ident.Map.find id l with Not_found -> id in
+        Lifused (id, subst s l e)
+  and subst_list s l li = List.map (subst s l) li
+  and subst_decl s l (id, exp) = (id, subst s l exp)
+  and subst_case s l (key, case) = (key, subst s l case)
+  and subst_strcase s l (key, case) = (key, subst s l case)
+  and subst_opt s l = function
     | None -> None
-    | Some e -> Some (subst s e)
+    | Some e -> Some (subst s l e)
   in
-  subst s lam
+  subst s Ident.Map.empty input_lam
 
 let rename idmap lam =
   let update_env oldid vd env =
@@ -761,16 +819,24 @@ let rename idmap lam =
   let s = Ident.Map.map (fun new_id -> Lvar new_id) idmap in
   subst update_env s lam
 
+let duplicate lam =
+  subst
+    (fun _ _ env -> env)
+    ~freshen_bound_variables:true
+    Ident.Map.empty
+    lam
+
 let shallow_map f = function
   | Lvar _
+  | Lmutvar _
   | Lconst _ as lam -> lam
-  | Lapply { ap_func; ap_args; ap_loc; ap_should_be_tailcall;
+  | Lapply { ap_func; ap_args; ap_loc; ap_tailcall;
              ap_inlined; ap_specialised } ->
       Lapply {
         ap_func = f ap_func;
         ap_args = List.map f ap_args;
         ap_loc;
-        ap_should_be_tailcall;
+        ap_tailcall;
         ap_inlined;
         ap_specialised;
       }
@@ -778,6 +844,8 @@ let shallow_map f = function
       Lfunction { kind; params; return; body = f body; attr; loc; }
   | Llet (str, k, v, e1, e2) ->
       Llet (str, k, v, f e1, f e2)
+  | Lmutlet (k, v, e1, e2) ->
+      Lmutlet (k, v, f e1, f e2)
   | Lletrec (idel, e2) ->
       Lletrec (List.map (fun (v, e) -> (v, f e)) idel, f e2)
   | Lprim (p, el, loc) ->
@@ -891,6 +959,11 @@ let function_is_curried func =
   match func.kind with
   | Curried -> true
   | Tupled -> false
+
+let max_arity () =
+  if !Clflags.native_code then 126 else max_int
+  (* 126 = 127 (the maximal number of parameters supported in C--)
+           - 1 (the hidden parameter containing the environment) *)
 
 let reset () =
   raise_count := 0

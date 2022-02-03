@@ -89,11 +89,15 @@ and 'k pattern_desc =
          *)
   | Tpat_construct :
       Longident.t loc * Types.constructor_description *
-        value general_pattern list ->
+        value general_pattern list * (Ident.t loc list * core_type) option ->
       value pattern_desc
-        (** C                []
-            C P              [P]
-            C (P1, ..., Pn)  [P1; ...; Pn]
+        (** C                             ([], None)
+            C P                           ([P], None)
+            C (P1, ..., Pn)               ([P1; ...; Pn], None)
+            C (P : t)                     ([P], Some ([], t))
+            C (P1, ..., Pn : t)           ([P1; ...; Pn], Some ([], t))
+            C (type a) (P : t)            ([P], Some ([a], t))
+            C (type a) (P1, ..., Pn : t)  ([P1; ...; Pn], Some ([a], t))
           *)
   | Tpat_variant :
       label * value general_pattern option * Types.row_desc ref ->
@@ -490,6 +494,7 @@ and signature_item_desc =
   | Tsig_modsubst of module_substitution
   | Tsig_recmodule of module_declaration list
   | Tsig_modtype of module_type_declaration
+  | Tsig_modtypesubst of module_type_declaration
   | Tsig_open of open_description
   | Tsig_include of include_description
   | Tsig_class of class_description list
@@ -555,8 +560,10 @@ and include_declaration = module_expr include_infos
 and with_constraint =
     Twith_type of type_declaration
   | Twith_module of Path.t * Longident.t loc
+  | Twith_modtype of module_type
   | Twith_typesubst of type_declaration
   | Twith_modsubst of Path.t * Longident.t loc
+  | Twith_modtypesubst of module_type
 
 and core_type =
   { mutable ctyp_desc : core_type_desc;
@@ -622,7 +629,7 @@ and type_declaration =
   {
     typ_id: Ident.t;
     typ_name: string loc;
-    typ_params: (core_type * variance) list;
+    typ_params: (core_type * (variance * injectivity)) list;
     typ_type: Types.type_declaration;
     typ_cstrs: (core_type * core_type * Location.t) list;
     typ_kind: type_kind;
@@ -666,7 +673,7 @@ and type_extension =
   {
     tyext_path: Path.t;
     tyext_txt: Longident.t loc;
-    tyext_params: (core_type * variance) list;
+    tyext_params: (core_type * (variance * injectivity)) list;
     tyext_constructors: extension_constructor list;
     tyext_private: private_flag;
     tyext_loc: Location.t;
@@ -739,7 +746,7 @@ and class_type_declaration =
 
 and 'a class_infos =
   { ci_virt: virtual_flag;
-    ci_params: (core_type * variance) list;
+    ci_params: (core_type * (variance * injectivity)) list;
     ci_id_name : string loc;
     ci_id_class: Ident.t;
     ci_id_class_type : Ident.t;
@@ -751,6 +758,21 @@ and 'a class_infos =
     ci_loc: Location.t;
     ci_attributes: attributes;
    }
+
+type implementation = {
+  structure: structure;
+  coercion: module_coercion;
+  signature: Types.signature
+}
+(** A typechecked implementation including its module structure, its exported
+    signature, and a coercion of the module against that signature.
+
+    If an .mli file is present, the signature will come from that file and be
+    the exported signature of the module.
+
+    If there isn't one, the signature will be inferred from the module
+    structure.
+*)
 
 (* Auxiliary functions over the a.s.t. *)
 
@@ -779,11 +801,6 @@ val iter_pattern: (pattern -> unit) -> pattern -> unit
 type pattern_predicate = { f : 'k . 'k general_pattern -> bool }
 val exists_general_pattern: pattern_predicate -> 'k general_pattern -> bool
 val exists_pattern: (pattern -> bool) -> pattern -> bool
-
-(** bottom-up mapping of patterns: the transformation function is
-    called on the children before being called on the parent *)
-val map_general_pattern:
-  pattern_transformation -> 'k general_pattern -> 'k general_pattern
 
 val let_bound_idents: value_binding list -> Ident.t list
 val let_bound_idents_full:
