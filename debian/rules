@@ -182,9 +182,8 @@ endif
 	-rm -Rf debian/$(SRCTARBALL) $(TESTDIR)
 	find testsuite/tests/ -name '*.o' -delete
 	find testsuite/tests/ -name '*.cmx*' -delete
-	find testsuite/tests/ -name '*.cmi' -delete
 	find testsuite/tests/ -name '*.cmo' -delete
-	rm -f Makefile.common Makefile.config config.log config.status libtool runtime/caml/m.h runtime/caml/s.h testsuite/_log
+	rm -f Makefile.config config.log config.status libtool runtime/caml/m.h runtime/caml/s.h testsuite/_log
 
 .PHONY: override_dh_auto_install-arch override_dh_auto_install-indep
 override_dh_auto_install-arch: install-stamp-arch
