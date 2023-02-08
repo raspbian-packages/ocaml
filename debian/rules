@@ -131,6 +131,7 @@ override_dh_auto_configure: config-stamp ocamlinit-stamp
 
 config-stamp: pre-config-stamp
 	./configure $(CONFIGURE_OPTS)
+	sed -r -i '/^CFLAGS/s/-f(file|debug)-prefix-map=[^ ]* //g' Makefile.config
 	touch $@
 
 ocamlinit-stamp: $(TARBALL_TARGET) config-stamp
