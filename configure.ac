@@ -36,7 +36,7 @@ CONFIGURE_ARGS="$*"
 # rely on $CFLAGS because these cannot be processed by flexlink (and are not
 # passed)
 mkexe_cmd='$(CC)'
-mkexe_cflags='$(OC_CFLAGS) $(CFLAGS)'
+mkexe_cflags='$(OC_CFLAGS) $(filter-out -fdebug-prefix-map=% -ffile-prefix-map=%,\$(CFLAGS))'
 mkexe_extra_flags=''
 mkexe_via_cc_extra_cmd=''
 mkexe_ldflags_prefix=''
@@ -2555,7 +2555,7 @@ AS_IF([test "$ccomptype" != "msvc"],
 
 oc_cflags="$common_cflags $internal_cflags"
 oc_cppflags="$common_cppflags $internal_cppflags"
-ocamlc_cflags="$ocamlc_cflags $common_cflags $sharedlib_cflags $CFLAGS"
+ocamlc_cflags="$ocamlc_cflags $common_cflags $sharedlib_cflags $(printf "%s" "$CFLAGS" | sed -r -e 's/-fdebug-prefix-map=\S+//' -e 's/-ffile-prefix-map=\S+//')"
 ocamlc_cppflags="$common_cppflags $CPPFLAGS"
 
 AS_CASE([$host],
@@ -2652,7 +2652,7 @@ AC_CONFIG_COMMANDS_PRE([
   mkexe_exp="$mkexe_cmd_exp"
   AS_IF([test -n "$mkexe_cflags"],
     [mkexe="$mkexe $mkexe_cflags"
-    mkexe_exp="$mkexe_exp $common_cflags $CFLAGS"])
+    mkexe_exp="$mkexe_exp $common_cflags $(printf "%s" "$CFLAGS" | sed -r -e 's/-fdebug-prefix-map=\S+//' -e 's/-ffile-prefix-map=\S+//')"])
   AS_IF([test -n "$mkexe_extra_flags"],
     [mkexe="$mkexe $mkexe_extra_flags"
     mkexe_exp="$mkexe_exp $mkexe_extra_flags"])
