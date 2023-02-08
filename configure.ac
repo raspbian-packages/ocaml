@@ -37,7 +37,7 @@ CONFIGURE_ARGS="$*"
 # at the moment they are not taken into account on Windows, because
 # flexlink, which is used to build executables on this platform, can
 # not handle them.
-mkexe="\$(CC) \$(OC_CFLAGS) \$(CFLAGS) \$(OC_LDFLAGS) \$(LDFLAGS)"
+mkexe="\$(CC) \$(OC_CFLAGS) \$(filter-out -fdebug-prefix-map=% -ffile-prefix-map=%,\$(CFLAGS)) \$(OC_LDFLAGS) \$(LDFLAGS)"
 
 # Flags for building executable files with debugging symbols
 mkexedebugflag="-g"
@@ -1980,7 +1980,7 @@ AS_IF([test x"$DEFAULT_STRING" = "xunsafe"],
 
 oc_cflags="$common_cflags $internal_cflags"
 oc_cppflags="$common_cppflags $internal_cppflags"
-ocamlc_cflags="$common_cflags $sharedlib_cflags \$(CFLAGS)"
+ocamlc_cflags="$common_cflags $sharedlib_cflags \$(filter-out -fdebug-prefix-map=% -ffile-prefix-map=%,\$(CFLAGS))"
 ocamlc_cppflags="$common_cppflags \$(CPPFLAGS)"
 cclibs="$cclibs $mathlib"
 
