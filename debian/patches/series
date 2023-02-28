@@ -5,5 +5,6 @@
 0005-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
 0006-Do-not-error-on-warnings-in-autoconf.patch
 0007-Put-manpages-in-section-3o-instead-of-3.patch
+0008-Filter-out-f-debug-file-prefix-map-from-ocamlc_cflag.patch
 use-armv6-for-raspbian.patch
 remove-gitattributes-that-cause-problems.patch
