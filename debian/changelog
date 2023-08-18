@@ -1,3 +1,11 @@
+ocaml (4.13.1-5) UNRELEASED; urgency=medium
+
+  * Compute an actual ABI for ocaml-compiler-libs
+  * Bump Standards-Version to 4.6.2
+  * Update lintian overrides
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 18 Aug 2023 16:20:48 +0200
+
 ocaml (4.13.1-4) unstable; urgency=medium
 
   * Avoid build path ending up in binaries (Closes: #1030785)
