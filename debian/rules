@@ -246,9 +246,9 @@ endif
 # Create .md5sums files and compute dependencies. Use $(OCAML_ABI)
 # because we know that OCaml ABI represents best dependencies for
 # OCaml package.
-	dh_ocaml -Xcompiler-libs \
-	 --runtime-map ocaml:ocaml-base \
-	 --checksum $(OCAML_ABI)
+	dh_ocaml \
+	 --nodefined-map ocaml:Topdirs \
+	 --runtime-map ocaml:ocaml-base:$(OCAML_ABI),ocaml-compiler-libs
 	dh_gencontrol
 # Check that OCAML_ABI is correct
 	if [ "$(OCAML_ABI)" != "$(shell boot/ocamlrun ./ocamlc -version | { read a && echo $${a%%_*}; })" ]; then \
