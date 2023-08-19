@@ -14,7 +14,7 @@ Build-Depends:
  libiberty-dev,
  libncurses-dev,
  zlib1g-dev,
- dh-ocaml (>= 1.3)
+ dh-ocaml
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 Vcs-Git: https://salsa.debian.org/ocaml-team/ocaml.git
@@ -26,14 +26,12 @@ Homepage: https://ocaml.org/
 Package: ocaml-base
 Architecture: any
 Depends:
+ libstdlib-ocaml (= ${binary:Version}),
  ${shlibs:Depends},
  ${misc:Depends},
  ${ocaml:Depends}
 Provides:
- libseq-ocaml,
- libuchar-ocaml,
- libstdlib-shims-ocaml,
- ${ocaml:Provides}
+ ocaml-base-${F:OCamlABI}
 Breaks: ocaml-base-nox (<< 4.13)
 Replaces: ocaml-base-nox (<< 4.13)
 Description: Runtime system for OCaml bytecode executables
@@ -56,10 +54,7 @@ Depends:
  ${misc:Depends},
  ${ocaml:Depends}
 Provides:
- libseq-ocaml-dev,
- libuchar-ocaml-dev,
- libstdlib-shims-ocaml-dev,
- ${ocaml:Provides},
+ ocaml-${F:OCamlABI},
  ocaml-best-compilers (= ${binary:Version}),
  ${F:NativeProvides}
 Suggests:
@@ -92,6 +87,65 @@ Description: ML language implementation with a class-based object system
  .
  This package contains everything needed to develop OCaml applications.
 
+Package: libstdlib-ocaml-dev
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ${ocaml:Depends}
+Provides:
+ libseq-ocaml-dev,
+ libuchar-ocaml-dev,
+ libstdlib-shims-ocaml-dev,
+ ${ocaml:Provides}
+Recommends:
+ ocaml-man
+Breaks: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Replaces: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Description: OCaml standard library (development files)
+ OCaml is an implementation of the ML language, based on the Caml
+ Light dialect extended with a complete class-based object system and
+ a powerful module system in the style of Standard ML.
+ .
+ This package contains the development files of the standard library.
+
+Package: libstdlib-ocaml
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ${ocaml:Depends}
+Provides:
+ libseq-ocaml,
+ libuchar-ocaml,
+ libstdlib-shims-ocaml,
+ ${ocaml:Provides}
+Breaks: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Replaces: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Description: OCaml standard library (runtime files)
+ OCaml is an implementation of the ML language, based on the Caml
+ Light dialect extended with a complete class-based object system and
+ a powerful module system in the style of Standard ML.
+ .
+ This package contains the runtime files of the standard library.
+
+Package: libcompiler-libs-ocaml-dev
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ ${ocaml:Depends}
+Provides:
+ ${ocaml:Provides}
+Breaks: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Replaces: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Description: OCaml compiler library (development files)
+ OCaml is an implementation of the ML language, based on the Caml
+ Light dialect extended with a complete class-based object system and
+ a powerful module system in the style of Standard ML.
+ .
+ This package contains the development files of the compiler library.
+
 Package: ocaml-source
 Architecture: all
 Depends: ${misc:Depends}
@@ -108,7 +162,8 @@ Description: Sources for Objective Caml
 Package: ocaml-interp
 Architecture: any
 Depends:
- ocaml-compiler-libs (= ${binary:Version}),
+ ocaml-base (= ${binary:Version}),
+ libcompiler-libs-ocaml-dev (= ${binary:Version}),
  ${ocaml:Depends},
  ${misc:Depends}
 Provides:
@@ -121,27 +176,6 @@ Description: OCaml interactive interpreter and standard libraries
  .
  This package contains the files required to run an OCaml shell from the
  command line.
-
-Package: ocaml-compiler-libs
-Architecture: any
-Depends:
- ${shlibs:Depends},
- ${misc:Depends},
- ${ocaml:Depends}
-Provides:
- ${ocaml:Provides}
-Recommends:
- ocaml-man
-Replaces: ocaml-base-nox (<< 4)
-Breaks: ocaml-base-nox (<< 4)
-Description: OCaml interpreter and standard libraries
- Objective (OCaml) is an implementation of the ML language, based on
- the Caml Light dialect extended with a complete class-based object system
- and a powerful module system in the style of Standard ML.
- .
- This package contains several modules used internally by the OCaml
- compilers.  They are not needed for normal OCaml development, but may
- be helpful in the development of certain applications.
 
 Package: ocaml-man
 Architecture: all
@@ -188,6 +222,21 @@ Replaces: ocaml-base-nox (<< 4.08), ocaml-compiler-libs (<< 4.08)
 Breaks: ocaml-base-nox (<< 4.08), ocaml-compiler-libs (<< 4.08)
 Description: transitional package for ocaml
  Objective Caml (OCaml) is an implementation of the ML language, based on
+ the Caml Light dialect extended with a complete class-based object system
+ and a powerful module system in the style of Standard ML.
+ .
+ This is a transitional package and can be safely removed.
+
+Package: ocaml-compiler-libs
+Section: oldlibs
+Architecture: all
+Depends:
+ libcompiler-libs-ocaml-dev,
+ ${misc:Depends}
+Replaces: ocaml-base-nox (<< 4)
+Breaks: ocaml-base-nox (<< 4)
+Description: transitional package for libcompiler-libs-ocaml-dev
+ Objective (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
  and a powerful module system in the style of Standard ML.
  .

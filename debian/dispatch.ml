@@ -47,12 +47,15 @@ let get_base str =
 module SMap = Map.Make (String)
 module SSet = Set.Make (String)
 
+let dev_stdlib = ref []
+let run_stdlib = ref []
+let dev_compiler_libs = ref []
+
 let ocaml_base = ref [ "debian/ld.conf usr/lib/ocaml" ]
 let ocaml =
   ref [
       "debian/native-archs usr/lib/ocaml";
     ]
-let ocaml_compiler_libs = ref []
 let ocaml_interp =
   ref [
       "debian/ocaml.desktop usr/share/applications";
@@ -61,9 +64,11 @@ let ocaml_interp =
 let ocaml_man = ref []
 
 let pkgs = [
+    run_stdlib, "libstdlib-ocaml";
+    dev_stdlib, "libstdlib-ocaml-dev";
+    dev_compiler_libs, "libcompiler-libs-ocaml-dev";
     ocaml_base, "ocaml-base";
     ocaml, "ocaml";
-    ocaml_compiler_libs, "ocaml-compiler-libs";
     ocaml_interp, "ocaml-interp";
     ocaml_man, "ocaml-man";
   ]
@@ -202,22 +207,22 @@ let process_file x =
   match find_base base with
   | true ->
      if List.exists (fun y -> endswith y x) exts_dev then (
-       push ocaml x
+       push dev_stdlib x
      ) else if List.exists (fun y -> endswith y x) exts_run then (
-       push ocaml_base x
+       push run_stdlib x
      ) else Some x
   | false -> Some x
 
 let remaining =
   installed_files
   |> move_all_to ocaml (startswith "usr/lib/ocaml/caml/")
-  |> move_all_to ocaml (startswith "usr/lib/ocaml/ocamldoc/")
-  |> move_all_to ocaml (startswith "usr/lib/ocaml/vmthreads/")
-  |> move_all_to ocaml (startswith "usr/lib/ocaml/threads/")
-  |> move_all_to ocaml (startswith "usr/lib/ocaml/std_exit.")
-  |> move_all_to ocaml (startswith "usr/lib/ocaml/stdlib.")
-  |> move_all_to ocaml (startswith "usr/lib/ocaml/dynlink")
-  |> move_all_to ocaml_compiler_libs (startswith "usr/lib/ocaml/compiler-libs/")
+  |> move_all_to dev_stdlib (startswith "usr/lib/ocaml/threads/")
+  |> move_all_to dev_stdlib (startswith "usr/lib/ocaml/std_exit.")
+  |> move_all_to dev_stdlib (startswith "usr/lib/ocaml/stdlib.")
+  |> move_all_to dev_stdlib (startswith "usr/lib/ocaml/dynlink")
+  |> move_all_to dev_compiler_libs (startswith "usr/lib/ocaml/topdirs.")
+  |> move_all_to dev_compiler_libs (startswith "usr/lib/ocaml/compiler-libs/")
+  |> move_all_to dev_compiler_libs (startswith "usr/lib/ocaml/ocamldoc/")
   |> move_all_to ocaml_man (endswith ".3o")
   |> rev_filter_map process_static
   |> rev_filter_map process_file
