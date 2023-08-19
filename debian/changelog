@@ -1,10 +1,13 @@
-ocaml (4.13.1-5) UNRELEASED; urgency=medium
+ocaml (4.13.1-5~exp1) experimental; urgency=medium
 
-  * Compute an actual ABI for ocaml-compiler-libs
+  * Reorganize binary packages
+    - New packages: libstdlib-ocaml{,-dev}, libcompiler-libs-ocaml-dev
+    - Treat them as regular OCaml libraries with dh_ocaml
+    - Make ocaml-compiler-libs transitional
   * Bump Standards-Version to 4.6.2
   * Update lintian overrides
 
- -- Stéphane Glondu <glondu@debian.org>  Fri, 18 Aug 2023 16:20:48 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Sat, 19 Aug 2023 05:15:41 +0200
 
 ocaml (4.13.1-4) unstable; urgency=medium
 
