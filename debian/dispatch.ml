@@ -19,14 +19,6 @@ let rev_read_lines fn =
     assert false
   with End_of_file -> !res
 
-let startswith prefix str =
-  let p = String.length prefix and n = String.length str in
-  n >= p && String.sub str 0 p = prefix
-
-let endswith suffix str =
-  let p = String.length suffix and n = String.length str in
-  n >= p && String.sub str (n-p) p = suffix
-
 let chop_prefix prefix str =
   let p = String.length prefix and n = String.length str in
   if n >= p && String.sub str 0 p = prefix then
@@ -38,7 +30,7 @@ let get_base str =
   let n = String.length str in
   let last_slash = String.rindex_from str (n - 1) '/' in
   let first_dot = try String.index_from str last_slash '.' with Not_found -> n in
-  let try_prefix prefix x = if startswith prefix x then chop_prefix prefix x else x in
+  let try_prefix prefix x = if String.starts_with ~prefix x then chop_prefix prefix x else x in
   String.sub str (last_slash + 1) (first_dot - last_slash - 1)
   |> try_prefix "dll"
   |> try_prefix "lib"
@@ -206,24 +198,24 @@ let process_file x =
   let base = get_base x in
   match find_base base with
   | true ->
-     if List.exists (fun y -> endswith y x) exts_dev then (
+     if List.exists (fun suffix -> String.ends_with ~suffix x) exts_dev then (
        push dev_stdlib x
-     ) else if List.exists (fun y -> endswith y x) exts_run then (
+     ) else if List.exists (fun suffix -> String.ends_with ~suffix x) exts_run then (
        push run_stdlib x
      ) else Some x
   | false -> Some x
 
 let remaining =
   installed_files
-  |> move_all_to ocaml (startswith "usr/lib/ocaml/caml/")
-  |> move_all_to dev_stdlib (startswith "usr/lib/ocaml/threads/")
-  |> move_all_to dev_stdlib (startswith "usr/lib/ocaml/std_exit.")
-  |> move_all_to dev_stdlib (startswith "usr/lib/ocaml/stdlib.")
-  |> move_all_to dev_stdlib (startswith "usr/lib/ocaml/dynlink")
-  |> move_all_to dev_compiler_libs (startswith "usr/lib/ocaml/topdirs.")
-  |> move_all_to dev_compiler_libs (startswith "usr/lib/ocaml/compiler-libs/")
-  |> move_all_to dev_compiler_libs (startswith "usr/lib/ocaml/ocamldoc/")
-  |> move_all_to ocaml_man (endswith ".3o")
+  |> move_all_to ocaml (String.starts_with ~prefix:"usr/lib/ocaml/caml/")
+  |> move_all_to dev_stdlib (String.starts_with ~prefix:"usr/lib/ocaml/threads/")
+  |> move_all_to dev_stdlib (String.starts_with ~prefix:"usr/lib/ocaml/std_exit.")
+  |> move_all_to dev_stdlib (String.starts_with ~prefix:"usr/lib/ocaml/stdlib.")
+  |> move_all_to dev_stdlib (String.starts_with ~prefix:"usr/lib/ocaml/dynlink")
+  |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/topdirs.")
+  |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/compiler-libs/")
+  |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/ocamldoc/")
+  |> move_all_to ocaml_man (String.ends_with ~suffix:".3o")
   |> rev_filter_map process_static
   |> rev_filter_map process_file
 
