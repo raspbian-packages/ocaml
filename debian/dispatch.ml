@@ -19,18 +19,18 @@ let rev_read_lines fn =
     assert false
   with End_of_file -> !res
 
-let chop_prefix prefix str =
+let chop_prefix ~prefix str =
   let p = String.length prefix and n = String.length str in
   if n >= p && String.sub str 0 p = prefix then
-    String.sub str p (n-p)
+    Some (String.sub str p (n - p))
   else
-    invalid_arg "chop_prefix"
+    None
 
 let get_base str =
   let n = String.length str in
   let last_slash = String.rindex_from str (n - 1) '/' in
   let first_dot = try String.index_from str last_slash '.' with Not_found -> n in
-  let try_prefix prefix x = if String.starts_with ~prefix x then chop_prefix prefix x else x in
+  let try_prefix prefix x = Option.value ~default:x (chop_prefix ~prefix x) in
   String.sub str (last_slash + 1) (first_dot - last_slash - 1)
   |> try_prefix "dll"
   |> try_prefix "lib"
@@ -156,11 +156,11 @@ let base_set = ref SSet.empty
 
 let () =
   List.iter (fun x ->
-      try
-        let x = chop_prefix "usr/lib/ocaml/stdlib__" x in
-        let i = String.index x '.' in
-        base_set := SSet.add (String.sub x 0 i) !base_set
-      with _ -> ()
+      match chop_prefix ~prefix:"usr/lib/ocaml/stdlib__" x with
+      | None -> ()
+      | Some x ->
+         let i = String.index x '.' in
+         base_set := SSet.add (String.sub x 0 i) !base_set
     ) installed_files
 
 let () =
