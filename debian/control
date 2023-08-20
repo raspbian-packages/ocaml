@@ -120,7 +120,7 @@ Provides:
  libuchar-ocaml,
  libstdlib-shims-ocaml,
  ${ocaml:Provides}
-Breaks: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Breaks: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~), dh-ocaml (<< 2)
 Replaces: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
 Description: OCaml standard library (runtime files)
  OCaml is an implementation of the ML language, based on the Caml
