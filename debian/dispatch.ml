@@ -3,21 +3,18 @@
   Copyright © 2019-2021 Stéphane Glondu <glondu@debian.org>
 *)
 
-let rev_filter_map f xs =
-  let rec loop accu = function
-    | [] -> accu
-    | x :: xs ->
-       match f x with
-       | None -> loop accu xs
-       | Some y -> loop (y :: accu) xs
-  in loop [] xs
-
-let rev_read_lines fn =
-  let ic = open_in fn and res = ref [] in
-  try
-    while true do res := input_line ic :: !res done;
-    assert false
-  with End_of_file -> !res
+let read_lines fn =
+  let ic = open_in fn in
+  Fun.protect
+    ~finally:(fun () -> close_in ic)
+    (fun () ->
+      let rec loop accu =
+        match input_line ic with
+        | exception End_of_file -> List.rev accu
+        | line -> loop (line :: accu)
+      in
+      loop []
+    )
 
 let chop_prefix ~prefix str =
   let p = String.length prefix and n = String.length str in
@@ -65,7 +62,7 @@ let pkgs = [
     ocaml_man, "ocaml-man";
   ]
 
-let installed_files = rev_read_lines "debian/installed-files"
+let installed_files = read_lines "debian/installed-files"
 
 let move_all_to pkg pred xs =
   let rec loop accu = function
@@ -216,8 +213,8 @@ let remaining =
   |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/compiler-libs/")
   |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/ocamldoc/")
   |> move_all_to ocaml_man (String.ends_with ~suffix:".3o")
-  |> rev_filter_map process_static
-  |> rev_filter_map process_file
+  |> List.filter_map process_static
+  |> List.filter_map process_file
 
 let () = assert (remaining = [])
 
