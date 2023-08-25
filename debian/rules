@@ -183,6 +183,10 @@ endif
 # Remaining stuff
 	-rm -Rf debian/$(SRCTARBALL) $(TESTDIR)
 
+execute_after_dh_clean:
+	rm -f install-stamp-*
+	rm -f debian/installed-files debian/*.install
+
 .PHONY: override_dh_auto_install-arch override_dh_auto_install-indep
 override_dh_auto_install-arch: install-stamp-arch
 override_dh_auto_install-indep: install-stamp-indep
