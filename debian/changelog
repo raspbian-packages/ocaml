@@ -1,3 +1,11 @@
+ocaml (4.13.1-6) UNRELEASED; urgency=medium
+
+  * Ignore test failures on hurd
+  * Remove empty override_dh_dwz
+  * Fix source build after successful build (Closes: #1049230)
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 25 Aug 2023 11:46:30 +0200
+
 ocaml (4.13.1-5) unstable; urgency=medium
 
   * Reorganize binary packages
