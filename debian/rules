@@ -301,6 +301,3 @@ override_dh_installdocs:
 
 override_dh_autoreconf:
 	./tools/autogen
-
-# FIXME: figure out why dh_dwz fails
-override_dh_dwz:
