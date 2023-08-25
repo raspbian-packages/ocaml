@@ -1,16 +1,11 @@
-ocaml (4.13.1-5~exp2) UNRELEASED; urgency=medium
-
-  * libstdlib-ocaml breaks dh-ocaml (<< 2)
-  * Add (empty) METAS directory in stdlib dir
-
- -- Stéphane Glondu <glondu@debian.org>  Wed, 23 Aug 2023 16:20:03 +0200
-
-ocaml (4.13.1-5~exp1) experimental; urgency=medium
+ocaml (4.13.1-5) unstable; urgency=medium
 
   * Reorganize binary packages
     - New packages: libstdlib-ocaml{,-dev}, libcompiler-libs-ocaml-dev
     - Treat them as regular OCaml libraries with dh_ocaml
     - Make ocaml-compiler-libs transitional
+    - libstdlib-ocaml breaks dh-ocaml (<< 2)
+  * Add (empty) METAS directory in stdlib dir
   * Bump Standards-Version to 4.6.2
   * Update lintian overrides
 
