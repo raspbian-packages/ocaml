@@ -139,8 +139,8 @@ val concat : string -> string list -> string
 val cat : string -> string -> string
 (** [cat s1 s2] concatenates s1 and s2 ([s1 ^ s2]).
 
-    @raise Invalid_argument if the result is longer then
-    than {!Sys.max_string_length} bytes.
+    @raise Invalid_argument if the result is longer than
+    {!Sys.max_string_length} bytes.
 
     @since 4.13.0
 *)
@@ -158,14 +158,14 @@ val compare : t -> t -> int
 
 val starts_with :
   prefix (* comment thwarts tools/sync_stdlib_docs *) :string -> string -> bool
-(** [starts_with ][~][prefix s] is [true] if and only if [s] starts with
+(** [starts_with ][~prefix s] is [true] if and only if [s] starts with
     [prefix].
 
     @since 4.13.0 *)
 
 val ends_with :
   suffix (* comment thwarts tools/sync_stdlib_docs *) :string -> string -> bool
-(** [ends_with suffix s] is [true] if and only if [s] ends with [suffix].
+(** [ends_with ][~suffix s] is [true] if and only if [s] ends with [suffix].
 
     @since 4.13.0 *)
 
