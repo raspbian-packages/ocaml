@@ -204,6 +204,8 @@ let process_file x =
 
 let remaining =
   installed_files
+  |> move_all_to ocaml ((=) "usr/share/doc/ocaml/Changes")
+  |> move_all_to ocaml ((=) "usr/share/doc/ocaml/README.adoc")
   |> move_all_to ocaml (String.starts_with ~prefix:"usr/lib/ocaml/caml/")
   |> move_all_to dev_stdlib (String.starts_with ~prefix:"usr/lib/ocaml/threads/")
   |> move_all_to dev_stdlib (String.starts_with ~prefix:"usr/lib/ocaml/std_exit.")
