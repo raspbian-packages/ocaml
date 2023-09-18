@@ -7,10 +7,10 @@ Subject: Trigger -output-complete-exe on -custom with an environment variable
  1 file changed, 9 insertions(+), 1 deletion(-)
 
 diff --git a/driver/main_args.ml b/driver/main_args.ml
-index 3c6faac..a208056 100644
+index 60db017..a46e50e 100644
 --- a/driver/main_args.ml
 +++ b/driver/main_args.ml
-@@ -1976,7 +1976,6 @@ third-party libraries such as Lwt, but with a different API."
+@@ -2005,7 +2005,6 @@ third-party libraries such as Lwt, but with a different API."
      include Core
      include Compiler
      let _compat_32 = set bytecode_compatible_32
@@ -18,7 +18,7 @@ index 3c6faac..a208056 100644
      let _dcamlprimc = set keep_camlprimc_file
      let _dinstr = set dump_instr
      let _dllib s = Compenv.defer (ProcessDLLs (Misc.rev_split_words s))
-@@ -1995,6 +1994,15 @@ third-party libraries such as Lwt, but with a different API."
+@@ -2024,6 +2023,15 @@ third-party libraries such as Lwt, but with a different API."
      let _use_runtime s = use_runtime := s
      let _v () = Compenv.print_version_and_library "compiler"
      let _vmthread () = Compenv.fatal vmthread_removed_message

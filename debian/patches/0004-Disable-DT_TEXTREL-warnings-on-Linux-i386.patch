@@ -8,10 +8,10 @@ Bug: https://github.com/ocaml/ocaml/issues/9800
  1 file changed, 10 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index ac8a080..9ac019f 100644
+index d27d47b..48b438a 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1183,6 +1183,16 @@ AS_CASE([$arch],
+@@ -1199,6 +1199,16 @@ AS_CASE([$arch],
         [common_cflags="-no-pie $common_cflags"],
      [])])
  
