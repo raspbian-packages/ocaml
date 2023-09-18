@@ -224,9 +224,11 @@ DECLARE_SIGNAL_HANDLER(segv_handler)
 #endif
 #else
     /* Raise a Stack_overflow exception straight from this signal handler */
-#if defined(CONTEXT_YOUNG_PTR) && defined(CONTEXT_EXCEPTION_POINTER)
-    Caml_state->exception_pointer == (char *) CONTEXT_EXCEPTION_POINTER;
+#if defined(CONTEXT_YOUNG_PTR)
     Caml_state->young_ptr = (value *) CONTEXT_YOUNG_PTR;
+#endif
+#if defined(CONTEXT_EXCEPTION_POINTER)
+    Caml_state->exception_pointer = (char *) CONTEXT_EXCEPTION_POINTER;
 #endif
     caml_raise_stack_overflow();
 #endif
@@ -286,6 +288,36 @@ void caml_init_signals(void)
 #endif
 }
 
+/* Termination of signal stuff */
+
+#if defined(TARGET_power) || defined(TARGET_s390x) \
+    || defined(HAS_STACK_OVERFLOW_DETECTION)
+static void set_signal_default(int signum)
+{
+  struct sigaction act;
+  sigemptyset(&act.sa_mask);
+  act.sa_handler = SIG_DFL;
+  act.sa_flags = 0;
+  sigaction(signum, &act, NULL);
+}
+#endif
+
+void caml_terminate_signals(void)
+{
+#if defined(TARGET_power)
+  set_signal_default(SIGTRAP);
+#endif
+
+#if defined(TARGET_s390x)
+  set_signal_default(SIGFPE);
+#endif
+
+#ifdef HAS_STACK_OVERFLOW_DETECTION
+  set_signal_default(SIGSEGV);
+  caml_stop_stack_overflow_detection();
+#endif
+}
+
 /* Allocate and select an alternate stack for handling signals,
    especially SIGSEGV signals.
    Each thread needs its own alternate stack.
@@ -301,7 +333,26 @@ CAMLexport int caml_setup_stack_overflow_detection(void)
   if (stk.ss_sp == NULL) return -1;
   stk.ss_size = SIGSTKSZ;
   stk.ss_flags = 0;
-  return sigaltstack(&stk, NULL);
+  if (sigaltstack(&stk, NULL) == -1) {
+    free(stk.ss_sp);
+    return -1;
+  }
+#endif
+  /* Success (or stack overflow detection not available) */
+  return 0;
+}
+
+CAMLexport int caml_stop_stack_overflow_detection(void)
+{
+#ifdef HAS_STACK_OVERFLOW_DETECTION
+  stack_t oldstk, stk;
+  stk.ss_flags = SS_DISABLE;
+  if (sigaltstack(&stk, &oldstk) == -1) return -1;
+  /* If caml_setup_stack_overflow_detection failed, we are not using
+     an alternate signal stack.  SS_DISABLE will be set in oldstk,
+     and there is nothing to free in this case. */
+  if (! (oldstk.ss_flags & SS_DISABLE)) free(oldstk.ss_sp);
+  return 0;
 #else
   return 0;
 #endif

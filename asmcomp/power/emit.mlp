@@ -49,15 +49,16 @@ let frame_size env =
 
 let slot_offset env loc cls =
   match loc with
-    Local n ->
+  | Local n ->
       reserved_stack_space + env.stack_offset +
       (if cls = 0 then env.f.fun_num_stack_slots.(1) * size_float + n * size_int
                   else n * size_float)
   | Incoming n ->
     (* Callee's [reserved_stack_space] is included in [frame_size].
        To access incoming arguments, add caller's [reserverd_stack_space]. *)
-    frame_size env + reserved_stack_space + n
+      frame_size env + reserved_stack_space + n
   | Outgoing n -> reserved_stack_space + n
+  | Domainstate _ -> assert false  (* not a stack slot *)
 
 let retaddr_offset env =
   match abi with
@@ -133,8 +134,12 @@ let emit_reg r =
 
 let emit_stack env r =
   match r.loc with
+  | Stack (Domainstate n) ->
+      let ofs = n + Domainstate.(idx_of_field Domain_extra_params) * 8 in
+      `{emit_int ofs}(30)`
   | Stack s ->
-      let ofs = slot_offset env s (register_class r) in `{emit_int ofs}(1)`
+      let ofs = slot_offset env s (register_class r) in
+      `{emit_int ofs}(1)`
   | _ -> Misc.fatal_error "Emit.emit_stack"
 
 (* Output the name of a symbol plus an optional offset *)
@@ -781,7 +786,7 @@ let emit_instr env i =
           | Thirtytwo_signed -> if ppc64 then "lwa" else "lwz"
 	  | Word_int | Word_val -> lg
           | Single -> "lfs"
-          | Double | Double_u -> "lfd" in
+          | Double -> "lfd" in
         emit_load_store loadinstr addr i.arg 0 i.res.(0);
         if chunk = Byte_signed then
           `	extsb	{emit_reg i.res.(0)}, {emit_reg i.res.(0)}\n`
@@ -793,7 +798,7 @@ let emit_instr env i =
 	  | Thirtytwo_unsigned | Thirtytwo_signed -> "stw"
 	  | Word_int | Word_val -> stg
           | Single -> "stfs"
-          | Double | Double_u -> "stfd" in
+          | Double -> "stfd" in
         emit_load_store storeinstr addr i.arg 1 i.arg.(0)
     | Lop(Ialloc { bytes; dbginfo }) ->
         emit_alloc env i bytes dbginfo false

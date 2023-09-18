@@ -116,11 +116,15 @@ let execute_phrase print_outcome ppf phr =
   | Ptop_def sstr ->
       let oldenv = !toplevel_env in
       Typecore.reset_delayed_checks ();
-      let (str, sg, sn, newenv) = Typemod.type_toplevel_phrase oldenv sstr in
+      let (str, sg, sn, shape, newenv) =
+        Typemod.type_toplevel_phrase oldenv sstr
+      in
       if !Clflags.dump_typedtree then Printtyped.implementation ppf str;
       let sg' = Typemod.Signature_names.simplify newenv sn sg in
       ignore (Includemod.signatures ~mark:Mark_positive oldenv sg sg');
       Typecore.force_delayed_checks ();
+      let shape = Shape.local_reduce shape in
+      if !Clflags.dump_shape then Shape.print ppf shape;
       let lam = Translmod.transl_toplevel_definition str in
       Warnings.check_fatal ();
       begin try
@@ -132,23 +136,14 @@ let execute_phrase print_outcome ppf phr =
               if print_outcome then
                 Printtyp.wrap_printing_env ~error:false oldenv (fun () ->
                   match str.str_items with
-                  | [ { str_desc =
-                          (Tstr_eval (exp, _)
-                          |Tstr_value
-                              (Asttypes.Nonrecursive,
-                               [{vb_pat = {pat_desc=Tpat_any};
-                                 vb_expr = exp}
-                               ]
-                              )
-                          )
-                      }
-                    ] ->
-                      let outv = outval_of_value newenv v exp.exp_type in
-                      let ty = Printtyp.tree_of_type_scheme exp.exp_type in
-                      Ophr_eval (outv, ty)
-
                   | [] -> Ophr_signature []
-                  | _ -> Ophr_signature (pr_item oldenv sg'))
+                  | _ ->
+                      match find_eval_phrase str with
+                      | Some (exp, _, _) ->
+                        let outv = outval_of_value newenv v exp.exp_type in
+                        let ty = Printtyp.tree_of_type_scheme exp.exp_type in
+                        Ophr_eval (outv, ty)
+                      | None -> Ophr_signature (pr_item oldenv sg'))
               else Ophr_signature []
           | Exception exn ->
               toplevel_env := oldenv;
@@ -176,38 +171,7 @@ let execute_phrase print_outcome ppf phr =
         toplevel_env := oldenv; raise x
       end
   | Ptop_dir {pdir_name = {Location.txt = dir_name}; pdir_arg } ->
-      begin match Topcommon.get_directive dir_name with
-      | None ->
-          fprintf ppf "Unknown directive `%s'." dir_name;
-          let directives = Topcommon.all_directive_names () in
-          Misc.did_you_mean ppf
-            (fun () -> Misc.spellcheck directives dir_name);
-          fprintf ppf "@.";
-          false
-      | Some d ->
-          match d, pdir_arg with
-          | Directive_none f, None -> f (); true
-          | Directive_string f, Some {pdira_desc = Pdir_string s} -> f s; true
-          | Directive_int f, Some {pdira_desc = Pdir_int (n,None) } ->
-             begin match Int_literal_converter.int n with
-             | n -> f n; true
-             | exception _ ->
-               fprintf ppf "Integer literal exceeds the range of \
-                            representable integers for directive `%s'.@."
-                       dir_name;
-               false
-             end
-          | Directive_int _, Some {pdira_desc = Pdir_int (_, Some _)} ->
-              fprintf ppf "Wrong integer literal for directive `%s'.@."
-                dir_name;
-              false
-          | Directive_ident f, Some {pdira_desc = Pdir_ident lid} -> f lid; true
-          | Directive_bool f, Some {pdira_desc = Pdir_bool b} -> f b; true
-          | _ ->
-              fprintf ppf "Wrong type of argument for directive `%s'.@."
-                dir_name;
-              false
-      end
+      try_run_directive ppf dir_name pdir_arg
 
 let execute_phrase print_outcome ppf phr =
   try execute_phrase print_outcome ppf phr

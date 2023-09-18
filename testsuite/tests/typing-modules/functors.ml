@@ -1310,22 +1310,14 @@ module Add_one' :
     module type t = arg -> sig type arg = A.arg end
   end
 module Add_one :
-  sig
-    type witness
-    module M = Add_one'.M
-    module type t = arg -> sig type arg = A.arg end
-  end
+  sig type witness module M = Add_one'.M module type t = Add_one'.t end
 module Add_three' :
   sig
     module M : arg -> arg -> arg -> sig type arg = A.arg end
     module type t = arg -> arg -> arg -> sig type arg = A.arg end
   end
 module Add_three :
-  sig
-    module M = Add_three'.M
-    module type t = arg -> arg -> arg -> sig type arg = A.arg end
-    type witness
-  end
+  sig module M = Add_three'.M module type t = Add_three'.t type witness end
 Line 22, characters 21-43:
 22 | module Wrong_intro = F(Add_three')(A)(A)(A)
                           ^^^^^^^^^^^^^^^^^^^^^^
@@ -1336,10 +1328,7 @@ Error: The functor application is ill-typed.
          functor (X : $T1) arg arg arg -> ...
        1. Modules do not match:
             Add_three' :
-            sig
-              module M = Add_three'.M
-              module type t = arg -> arg -> arg -> sig type arg = A.arg end
-            end
+            sig module M = Add_three'.M module type t = Add_three'.t end
           is not included in
             $T1 = sig type witness module type t module M : t end
           The type `witness' is required but not provided
@@ -1360,10 +1349,7 @@ Error: The functor application is ill-typed.
          functor (X : ...) arg arg arg -> ...
        1. The following extra argument is provided
               Add_one' :
-              sig
-                module M = Add_one'.M
-                module type t = arg -> sig type arg = A.arg end
-              end
+              sig module M = Add_one'.M module type t = Add_one'.t end
        2. Module Add_three matches the expected module type
        3. Module A matches the expected module type arg
        4. Module A matches the expected module type arg
@@ -1388,7 +1374,7 @@ Error: The functor application is ill-typed.
               sig
                 type witness = Add_one.witness
                 module M = Add_one'.M
-                module type t = arg -> sig type arg = A.arg end
+                module type t = Add_one.t
               end
        2. Module Add_three matches the expected module type
        3. Module A matches the expected module type arg
@@ -1617,11 +1603,9 @@ Error: The functor application is ill-typed.
             type t = Y of X.t
           Constructors do not match:
             Y of int
-          is not compatible with:
+          is not the same as:
             Y of X.t
-          The types are not equal.
-          Line 5, characters 0-32:
-            Definition of module X/1
+          The type int is not equal to the type X.t
        4. Modules do not match:
             Z : sig type t = Z.t = Z of int end
           is not included in
@@ -1632,9 +1616,9 @@ Error: The functor application is ill-typed.
             type t = Z of X.t
           Constructors do not match:
             Z of int
-          is not compatible with:
+          is not the same as:
             Z of X.t
-          The types are not equal.
+          The type int is not equal to the type X.t
 |}]
 
 (** Final state in the presence of extensions

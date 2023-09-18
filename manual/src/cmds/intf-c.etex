@@ -1727,8 +1727,8 @@ compilation of OCaml, as the variable "OC_LDFLAGS".
 OCaml have been compiled with the "/MD" flag, and therefore
 all other object files linked with it should also be compiled with
 "/MD".
-\item other systems: you may have to add one or more of "-lcurses",
-"-lm", "-ldl", depending on your OS and C compiler.
+\item other systems: you may have to add one or both of
+"-lm" and "-ldl", depending on your OS and C compiler.
 \end{itemize}
 
 \paragraph{Stack backtraces.}  When OCaml bytecode produced by
@@ -1778,6 +1778,12 @@ Once a runtime is unloaded, it cannot be started up again without reloading the
 shared library and reinitializing its static data. Therefore, at the moment, the
 facility is only useful for building reloadable shared libraries.
 
+\paragraph{Unix signal handling.}  Depending on the target platform and
+operating system, the native-code runtime system may install signal
+handlers for one or several of the "SIGSEGV", "SIGTRAP" and "SIGFPE"
+signals when "caml_startup" is called, and reset these signals to
+their default behaviors when "caml_shutdown" is called.  The main
+program written in~C should not try to handle these signals itself.
 
 \section{s:c-advexample}{Advanced example with callbacks}
 
@@ -2056,7 +2062,7 @@ memory that are held by your custom block. This function works like
 "caml_alloc_custom" except that the "max" parameter is under the
 control of the user (via the "custom_major_ratio",
 "custom_minor_ratio", and "custom_minor_max_size" parameters) and
-proportional to the heap sizes.
+proportional to the heap sizes. It has been available since OCaml 4.08.0.
 
 \subsection{ss:c-custom-access}{Accessing custom blocks}
 
@@ -2190,6 +2196,9 @@ The kind of array elements is one of the following constants:
 \entree{"CAML_BA_INT64"}{64-bit signed integers}
 \entree{"CAML_BA_CAML_INT"}{31- or 63-bit signed integers}
 \entree{"CAML_BA_NATIVE_INT"}{32- or 64-bit (platform-native) integers}
+\entree{"CAML_BA_COMPLEX32"}{32-bit single-precision complex numbers}
+\entree{"CAML_BA_COMPLEX64"}{64-bit double-precision complex numbers}
+\entree{"CAML_BA_CHAR"}{8-bit characters}
 \end{tableau}
 %
 \paragraph{Warning:}

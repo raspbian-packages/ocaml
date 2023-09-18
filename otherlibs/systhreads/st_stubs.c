@@ -19,6 +19,7 @@
 #include "caml/backtrace.h"
 #include "caml/callback.h"
 #include "caml/custom.h"
+#include "caml/debugger.h"
 #include "caml/domain.h"
 #include "caml/fail.h"
 #include "caml/io.h"
@@ -549,6 +550,7 @@ static ST_THREAD_FUNCTION caml_thread_start(void * arg)
 #ifdef NATIVE_CODE
   }
 #endif
+  caml_stop_stack_overflow_detection();
   /* The thread now stops running */
   return 0;
 }
@@ -558,6 +560,10 @@ CAMLprim value caml_thread_new(value clos)          /* ML */
   caml_thread_t th;
   st_retcode err;
 
+#ifndef NATIVE_CODE
+  if (caml_debugger_in_use)
+    caml_fatal_error("ocamldebug does not support multithreaded programs");
+#endif
   /* Create a thread info block */
   th = caml_thread_new_info();
   if (th == NULL) caml_raise_out_of_memory();

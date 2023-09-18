@@ -7426,4 +7426,20 @@ module M = struct
     let%foo x and y and z in (x,y,z)
 end
 
+(* No surrounding parentheses for immediate objects *)
+let x = object method f = 1 end;;
+let x = object method f = 1 end # f;;
+let x = Some object method f = 1 end;;
+let x = Some object method f = 1 end # f;;
+
+let f x y z = x in
+f object method f = 1 end
+  object method f = 1 end # f
+  object end
+
+(* Punning of labelled function argument with type constraint *)
+let g y =
+  let f ~y = y + 1 in
+  f ~(y:int)
+
 let goober a = match a with C (type a b) y -> y

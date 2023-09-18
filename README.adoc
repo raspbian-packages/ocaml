@@ -70,7 +70,7 @@ file LICENSE.
 == Installation
 
 See the file link:INSTALL.adoc[] for installation instructions on
-machines running Unix, Linux, macOS and Cygwin.  For native Microsoft
+machines running Unix, Linux, macOS, WSL and Cygwin.  For native Microsoft
 Windows, see link:README.win32.adoc[].
 
 == Documentation
@@ -111,7 +111,7 @@ community. These can be accessed at
 
 https://ocaml.org/community/
 
-In particular, the IRC channel `#ocaml` on https://freenode.net/[Freenode] has a
+In particular, the IRC channel `#ocaml` on https://libera.chat/[Libera] has a
 long history and welcomes questions.
 
 == Bug Reports and User Feedback

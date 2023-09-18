@@ -904,8 +904,14 @@ val prerr_newline : unit -> unit
 
 val read_line : unit -> string
 (** Flush standard output, then read characters from standard input
-   until a newline character is encountered. Return the string of
-   all characters read, without the newline character at the end. *)
+   until a newline character is encountered.
+
+   Return the string of all characters read, without the newline character
+   at the end.
+
+   @raise End_of_file if the end of the file is reached at the beginning of
+   line.
+*)
 
 val read_int_opt: unit -> int option
 (** Flush standard output, then read one line from standard input
@@ -1128,12 +1134,12 @@ val really_input_string : in_channel -> int -> string
 val input_byte : in_channel -> int
 (** Same as {!Stdlib.input_char}, but return the 8-bit integer representing
    the character.
-   @raise End_of_file if an end of file was reached. *)
+   @raise End_of_file if the end of file was reached. *)
 
 val input_binary_int : in_channel -> int
 (** Read an integer encoded in binary format (4 bytes, big-endian)
    from the given input channel. See {!Stdlib.output_binary_int}.
-   @raise End_of_file if an end of file was reached while reading the
+   @raise End_of_file if the end of file was reached while reading the
    integer. *)
 
 val input_value : in_channel -> 'a
@@ -1284,7 +1290,7 @@ type ('a,'b) result = Ok of 'a | Error of 'b
       For [printf]-style functions from module {!Printf}, ['b] is typically
       [out_channel];
       for [printf]-style functions from module {!Format}, ['b] is typically
-      {!Format.formatter};
+      {!type:Format.formatter};
       for [scanf]-style functions from module {!Scanf}, ['b] is typically
       {!Scanf.Scanning.in_channel}.
 
@@ -1397,7 +1403,9 @@ module Format       = Format
 module Fun          = Fun
 module Gc           = Gc
 module Genlex       = Genlex
+[@@deprecated "Use the camlp-streams library instead."]
 module Hashtbl      = Hashtbl
+module In_channel   = In_channel
 module Int          = Int
 module Int32        = Int32
 module Int64        = Int64
@@ -1412,6 +1420,7 @@ module Nativeint    = Nativeint
 module Obj          = Obj
 module Oo           = Oo
 module Option       = Option
+module Out_channel  = Out_channel
 module Parsing      = Parsing
 module Pervasives   = Pervasives
 [@@deprecated "Use Stdlib instead.\n\
@@ -1429,6 +1438,7 @@ module Set          = Set
 module Stack        = Stack
 module StdLabels    = StdLabels
 module Stream       = Stream
+[@@deprecated "Use the camlp-streams library instead."]
 module String       = String
 module StringLabels = StringLabels
 module Sys          = Sys

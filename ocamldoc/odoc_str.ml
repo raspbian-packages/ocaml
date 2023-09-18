@@ -30,7 +30,7 @@ let string_of_variance t (co,cn) =
   else
     ""
 let rec is_arrow_type t =
-  match t.Types.desc with
+  match Types.get_desc t with
     Types.Tarrow _ -> true
   | Types.Tlink t2 -> is_arrow_type t2
   | Types.Ttuple _
@@ -43,7 +43,7 @@ let raw_string_of_type_list sep type_list =
   let buf = Buffer.create 256 in
   let fmt = Format.formatter_of_buffer buf in
   let rec need_parent t =
-    match t.Types.desc with
+    match Types.get_desc t with
       Types.Tarrow _ | Types.Ttuple _ -> true
     | Types.Tlink t2 -> need_parent t2
     | Types.Tconstr _
@@ -52,17 +52,16 @@ let raw_string_of_type_list sep type_list =
     | Types.Tsubst _ -> assert false
   in
   let print_one_type variance t =
-    Printtyp.mark_loops t;
     if need_parent t then
       (
        Format.fprintf fmt "(%s" variance;
-       Printtyp.type_scheme_max ~b_reset_names: false fmt t;
+       Printtyp.shared_type_scheme fmt t;
        Format.fprintf fmt ")"
       )
     else
       (
        Format.fprintf fmt "%s" variance;
-       Printtyp.type_scheme_max ~b_reset_names: false fmt t
+       Printtyp.shared_type_scheme fmt t
       )
   in
   begin match type_list with

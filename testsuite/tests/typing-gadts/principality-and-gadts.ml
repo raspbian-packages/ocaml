@@ -362,7 +362,7 @@ val foo : int foo -> int = <fun>
 Line 3, characters 26-31:
 3 |   | { x = (x : int); eq = Refl3 } -> x
                               ^^^^^
-Warning 18 [not-principal]: typing this pattern requires considering M.t and int as equal.
+Warning 18 [not-principal]: typing this pattern requires considering M.t and N.t as equal.
 But the knowledge of these types is not principal.
 val foo : int foo -> int = <fun>
 |}]
@@ -404,7 +404,7 @@ val foo : string foo -> string = <fun>
 Line 3, characters 29-34:
 3 |   | { x = (x : string); eq = Refl3 } -> x
                                  ^^^^^
-Warning 18 [not-principal]: typing this pattern requires considering M.t and string as equal.
+Warning 18 [not-principal]: typing this pattern requires considering M.t and N.t as equal.
 But the knowledge of these types is not principal.
 val foo : string foo -> string = <fun>
 |}]
@@ -439,4 +439,20 @@ let bar x =
 ;;
 [%%expect{|
 val bar : string foo -> string = <fun>
+|}]
+
+(* #10822 *)
+type t
+type u = private t
+type ('a, 'b) eq = Refl : ('a, 'a) eq
+[%%expect{|
+type t
+type u = private t
+type ('a, 'b) eq = Refl : ('a, 'a) eq
+|}]
+
+let foo (type s) x (Refl : (s, u) eq) =
+  (x : s :> t)
+[%%expect{|
+val foo : 's -> ('s, u) eq -> t = <fun>
 |}]

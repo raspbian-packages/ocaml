@@ -462,17 +462,26 @@ and transl_exp0 ~in_new_scope ~scopes e =
   | Texp_for(param, _, low, high, dir, body) ->
       Lfor(param, transl_exp ~scopes low, transl_exp ~scopes high, dir,
            event_before ~scopes body (transl_exp ~scopes body))
-  | Texp_send(_, _, Some exp) -> transl_exp ~scopes exp
-  | Texp_send(expr, met, None) ->
-      let obj = transl_exp ~scopes expr in
-      let loc = of_location ~scopes e.exp_loc in
+  | Texp_send(expr, met) ->
       let lam =
+        let loc = of_location ~scopes e.exp_loc in
         match met with
-          Tmeth_val id -> Lsend (Self, Lvar id, obj, [], loc)
+        | Tmeth_val id ->
+            let obj = transl_exp ~scopes expr in
+            Lsend (Self, Lvar id, obj, [], loc)
         | Tmeth_name nm ->
+            let obj = transl_exp ~scopes expr in
             let (tag, cache) = Translobj.meth obj nm in
             let kind = if cache = [] then Public else Cached in
             Lsend (kind, tag, obj, cache, loc)
+        | Tmeth_ancestor(meth, path_self) ->
+            let self = transl_value_path loc e.exp_env path_self in
+            Lapply {ap_loc = loc;
+                    ap_func = Lvar meth;
+                    ap_args = [self];
+                    ap_tailcall = Default_tailcall;
+                    ap_inlined = Default_inline;
+                    ap_specialised = Default_specialise}
       in
       event_after ~scopes e lam
   | Texp_new (cl, {Location.loc=loc}, _) ->
@@ -510,10 +519,9 @@ and transl_exp0 ~in_new_scope ~scopes e =
              ap_specialised=Default_specialise;
            },
            List.fold_right
-             (fun (path, _, expr) rem ->
-               let var = transl_value_path loc e.exp_env path in
+             (fun (id, _, expr) rem ->
                 Lsequence(transl_setinstvar ~scopes Loc_unknown
-                            (Lvar cpy) var expr, rem))
+                            (Lvar cpy) (Lvar id) expr, rem))
              modifs
              (Lvar cpy))
   | Texp_letmodule(None, loc, Mp_present, modl, body) ->
@@ -577,12 +585,12 @@ and transl_exp0 ~in_new_scope ~scopes e =
          transl_exp ~scopes e
       | `Other ->
          (* other cases compile to a lazy block holding a function *)
-         let fn = Lfunction {kind = Curried;
-                             params= [Ident.create_local "param", Pgenval];
-                             return = Pgenval;
-                             attr = default_function_attribute;
-                             loc = of_location ~scopes e.exp_loc;
-                             body = transl_exp ~scopes e} in
+         let fn = lfunction ~kind:Curried
+                            ~params:[Ident.create_local "param", Pgenval]
+                            ~return:Pgenval
+                            ~attr:default_function_attribute
+                            ~loc:(of_location ~scopes e.exp_loc)
+                            ~body:(transl_exp ~scopes e) in
           Lprim(Pmakeblock(Config.lazy_tag, Mutable, None), [fn],
                 of_location ~scopes e.exp_loc)
       end
@@ -725,22 +733,17 @@ and transl_apply ~scopes
         let body =
           match build_apply handle ((Lvar id_arg, optional)::args') l with
             Lfunction{kind = Curried; params = ids; return;
-                      body = lam; attr; loc} ->
-              Lfunction{kind = Curried;
-                        params = (id_arg, Pgenval)::ids;
-                        return;
-                        body = lam; attr;
-                        loc}
-          | Levent(Lfunction{kind = Curried; params = ids; return;
-                             body = lam; attr; loc}, _) ->
-              Lfunction{kind = Curried; params = (id_arg, Pgenval)::ids;
-                        return;
-                        body = lam; attr;
-                        loc}
+                      body = lam; attr; loc}
+               when List.length ids < Lambda.max_arity () ->
+              lfunction ~kind:Curried
+                        ~params:((id_arg, Pgenval)::ids)
+                        ~return
+                        ~body:lam ~attr
+                        ~loc
           | lam ->
-              Lfunction{kind = Curried; params = [id_arg, Pgenval];
-                        return = Pgenval; body = lam;
-                        attr = default_stub_attribute; loc = loc}
+              lfunction ~kind:Curried ~params:[id_arg, Pgenval]
+                        ~return:Pgenval ~body:lam
+                        ~attr:default_stub_attribute ~loc
         in
         List.fold_left
           (fun body (id, lam) -> Llet(Strict, Pgenval, id, lam, body))
@@ -870,7 +873,7 @@ and transl_function ~scopes e param cases partial =
   in
   let attr = default_function_attribute in
   let loc = of_location ~scopes e.exp_loc in
-  let lam = Lfunction{kind; params; return; body; attr; loc} in
+  let lam = lfunction ~kind ~params ~return ~body ~attr ~loc in
   Translattribute.add_function_attributes lam e.exp_loc e.exp_attributes
 
 (* Like transl_exp, but used when a new scope was just introduced. *)
@@ -1075,11 +1078,28 @@ and transl_match ~scopes e arg pat_expr_list partial =
     let x, y, z = List.fold_left rewrite_case ([], [], []) pat_expr_list in
     List.rev x, List.rev y, List.rev z
   in
-  let static_catch body val_ids handler =
+  (* In presence of exception patterns, the code we generate for
+
+       match <scrutinees> with
+       | <val-patterns> -> <val-actions>
+       | <exn-patterns> -> <exn-actions>
+
+     looks like
+
+       staticcatch
+         (try (exit <val-exit> <scrutinees>)
+          with <exn-patterns> -> <exn-actions>)
+       with <val-exit> <val-ids> ->
+          match <val-ids> with <val-patterns> -> <val-actions>
+
+     In particular, the 'exit' in the value case ensures that the
+     value actions run outside the try..with exception handler.
+  *)
+  let static_catch scrutinees val_ids handler =
     let id = Typecore.name_pattern "exn" (List.map fst exn_cases) in
     let static_exception_id = next_raise_count () in
     Lstaticcatch
-      (Ltrywith (Lstaticraise (static_exception_id, body), id,
+      (Ltrywith (Lstaticraise (static_exception_id, scrutinees), id,
                  Matching.for_trywith ~scopes e.exp_loc (Lvar id) exn_cases),
        (static_exception_id, val_ids),
        handler)
@@ -1157,7 +1177,7 @@ and transl_letop ~scopes loc env let_ ands param case partial =
     in
     let attr = default_function_attribute in
     let loc = of_location ~scopes case.c_rhs.exp_loc in
-    Lfunction{kind; params; return; body; attr; loc}
+    lfunction ~kind ~params ~return ~body ~attr ~loc
   in
   Lapply{
     ap_loc = of_location ~scopes loc;

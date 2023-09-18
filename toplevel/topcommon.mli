@@ -46,6 +46,10 @@ val record_backtrace : unit -> unit
 
 (* Printing of values *)
 
+val find_eval_phrase :
+  Typedtree.structure ->
+    (Typedtree.expression * Typedtree.attributes * Location.t) option
+
 val max_printer_depth: int ref
 val max_printer_steps: int ref
 
@@ -142,6 +146,9 @@ val get_directive : string -> directive_fun option
 val get_directive_info : string -> directive_info option
 
 val all_directive_names : unit -> string list
+
+val try_run_directive :
+  formatter -> string -> Parsetree.directive_argument option -> bool
 
 val[@deprecated] directive_table : (string, directive_fun) Hashtbl.t
   (* @deprecated please use [add_directive] instead of inserting
