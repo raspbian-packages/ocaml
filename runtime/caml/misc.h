@@ -29,20 +29,47 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
-/* Basic types and constants */
-
-typedef size_t asize_t;
+/* Deprecation warnings */
 
 #if defined(__GNUC__) || defined(__clang__)
   /* Supported since at least GCC 3.1 */
   #define CAMLdeprecated_typedef(name, type) \
     typedef type name __attribute ((deprecated))
-#elif _MSC_VER >= 1310
+#elif defined(_MSC_VER) && _MSC_VER >= 1310
   /* NB deprecated("message") only supported from _MSC_VER >= 1400 */
   #define CAMLdeprecated_typedef(name, type) \
     typedef __declspec(deprecated) type name
 #else
   #define CAMLdeprecated_typedef(name, type) typedef type name
+#endif
+
+#if defined(__GNUC__) && __STDC_VERSION__ >= 199901L \
+ || defined(_MSC_VER) && _MSC_VER >= 1925
+
+#define CAML_STRINGIFY(x) #x
+#ifdef _MSC_VER
+#define CAML_MAKEWARNING1(x) CAML_STRINGIFY(message(x))
+#else
+#define CAML_MAKEWARNING1(x) CAML_STRINGIFY(GCC warning x)
+#endif
+#define CAML_MAKEWARNING2(y) CAML_MAKEWARNING1(#y)
+#define CAML_PREPROWARNING(x) _Pragma(CAML_MAKEWARNING2(x))
+#define CAML_DEPRECATED(name1,name2) \
+  CAML_PREPROWARNING(name1 is deprecated: use name2 instead)
+
+#else
+
+#define CAML_PREPROWARNING(msg)
+#define CAML_DEPRECATED(name1,name2)
+
+#endif
+
+/* Basic types and constants */
+
+typedef size_t asize_t;
+
+#ifndef NULL
+#define NULL 0
 #endif
 
 #ifdef CAML_INTERNALS
@@ -64,7 +91,7 @@ CAMLdeprecated_typedef(addr, char *);
   #define CAMLnoreturn_start
   #define CAMLnoreturn_end __attribute__ ((noreturn))
   #define Noreturn __attribute__ ((noreturn))
-#elif _MSC_VER >= 1500
+#elif defined(_MSC_VER) && _MSC_VER >= 1500
   #define CAMLnoreturn_start __declspec(noreturn)
   #define CAMLnoreturn_end
   #define Noreturn
@@ -72,6 +99,15 @@ CAMLdeprecated_typedef(addr, char *);
   #define CAMLnoreturn_start
   #define CAMLnoreturn_end
   #define Noreturn
+#endif
+
+/* Manually preventing inlining */
+#if defined(__GNUC__)
+  #define Caml_noinline __attribute__ ((noinline))
+#elif defined(_MSC_VER)
+  #define Caml_noinline __declspec(noinline)
+#else
+  #define Caml_noinline
 #endif
 
 /* Export control (to mark primitives and to handle Windows DLL) */
@@ -103,11 +139,12 @@ CAMLdeprecated_typedef(addr, char *);
 /* we need to be able to compute the exact offset of each member. */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 #define CAMLalign(n) _Alignas(n)
-#elif defined(__cplusplus) && (__cplusplus >= 201103L || _MSC_VER >= 1900)
+#elif defined(__cplusplus) \
+   && (__cplusplus >= 201103L || defined(_MSC_VER) && _MSC_VER >= 1900)
 #define CAMLalign(n) alignas(n)
 #elif defined(SUPPORTS_ALIGNED_ATTRIBUTE)
 #define CAMLalign(n) __attribute__((aligned(n)))
-#elif _MSC_VER >= 1500
+#elif defined(_MSC_VER) && _MSC_VER >= 1500
 #define CAMLalign(n) __declspec(align(n))
 #else
 #error "How do I align values on this platform?"
@@ -135,7 +172,7 @@ CAMLdeprecated_typedef(addr, char *);
   #define CAMLunused_start __attribute__ ((unused))
   #define CAMLunused_end
   #define CAMLunused __attribute__ ((unused))
-#elif _MSC_VER >= 1500
+#elif defined(_MSC_VER) && _MSC_VER >= 1500
   #define CAMLunused_start  __pragma( warning (push) )           \
     __pragma( warning (disable:4189 ) )
   #define CAMLunused_end __pragma( warning (pop))
@@ -269,6 +306,8 @@ extern double caml_log1p(double);
 
 #ifdef CAML_INTERNALS
 #define T(x) L ## x
+
+#define main_os wmain
 #endif
 
 #define access_os _waccess
@@ -307,6 +346,8 @@ extern double caml_log1p(double);
 
 #ifdef CAML_INTERNALS
 #define T(x) x
+
+#define main_os main
 #endif
 
 #define access_os access
@@ -343,6 +384,13 @@ extern double caml_log1p(double);
 
 #endif /* _WIN32 */
 
+/* Wrapper for Windows unlink */
+#ifdef _WIN32
+#define caml_unlink caml_win32_unlink
+#else
+#define caml_unlink unlink_os
+#endif
+
 
 /* Data structures */
 
@@ -365,9 +413,15 @@ CAMLextern int caml_read_directory(char_os * dirname,
                                    struct ext_table * contents);
 
 /* Deprecated aliases */
-#define caml_aligned_malloc caml_stat_alloc_aligned_noexc
-#define caml_strdup caml_stat_strdup
-#define caml_strconcat caml_stat_strconcat
+#define caml_aligned_malloc \
+   CAML_DEPRECATED("caml_aligned_malloc", "caml_stat_alloc_aligned_noexc") \
+   caml_stat_alloc_aligned_noexc
+#define caml_strdup \
+   CAML_DEPRECATED("caml_strdup", "caml_stat_strdup") \
+   caml_stat_strdup
+#define caml_strconcat \
+   CAML_DEPRECATED("caml_strconcat", "caml_stat_strconcat") \
+   caml_stat_strconcat
 
 #ifdef CAML_INTERNALS
 

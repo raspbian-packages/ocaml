@@ -74,6 +74,10 @@ extern void cstringvect_free(wchar_t **);
 
 extern int unix_cloexec_default;
 extern int unix_cloexec_p(value cloexec);
+extern int win_set_inherit(HANDLE fd, BOOL inherit);
+/* This is a best effort, not guaranteed to work, so don't fail on error */
+#define win_set_cloexec(fd, cloexec) \
+  win_set_inherit((fd), ! unix_cloexec_p((cloexec)))
 
 /* Information stored in flags_fd, describing more precisely the socket
  * and its status. The whole flags_fd is initialized to 0.
@@ -86,45 +90,6 @@ extern int unix_cloexec_p(value cloexec);
 
 #ifdef __cplusplus
 }
-#endif
-
-/*
- * This structure is defined inconsistently. mingw64 has it in ntdef.h (which
- * doesn't look like a primary header) and technically it's part of ntifs.h in
- * the WDK. Requiring the WDK is a bit extreme, so the definition is taken from
- * ntdef.h. Both ntdef.h and ntifs.h define REPARSE_DATA_BUFFER_HEADER_SIZE
- */
-#ifndef REPARSE_DATA_BUFFER_HEADER_SIZE
-typedef struct _REPARSE_DATA_BUFFER
-{
-  ULONG  ReparseTag;
-  USHORT ReparseDataLength;
-  USHORT Reserved;
-  union
-  {
-    struct
-    {
-      USHORT SubstituteNameOffset;
-      USHORT SubstituteNameLength;
-      USHORT PrintNameOffset;
-      USHORT PrintNameLength;
-      ULONG  Flags;
-      WCHAR  PathBuffer[1];
-    } SymbolicLinkReparseBuffer;
-    struct
-    {
-      USHORT SubstituteNameOffset;
-      USHORT SubstituteNameLength;
-      USHORT PrintNameOffset;
-      USHORT PrintNameLength;
-      WCHAR  PathBuffer[1];
-    } MountPointReparseBuffer;
-    struct
-    {
-      UCHAR  DataBuffer[1];
-    } GenericReparseBuffer;
-  };
-} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
 #endif
 
 #define EXECV_CAST (const char_os * const *)

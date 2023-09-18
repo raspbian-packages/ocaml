@@ -159,6 +159,7 @@ CAMLexport void caml_do_exit(int retcode)
 #ifdef _WIN32
   caml_restore_win32_terminal();
 #endif
+  caml_terminate_signals();
 #ifdef NAKED_POINTERS_CHECKER
   if (retcode == 0 && caml_naked_pointers_detected) {
     fprintf (stderr, "\nOut-of-heap pointers were detected by the runtime.\n"
@@ -289,7 +290,7 @@ CAMLprim value caml_sys_remove(value name)
   caml_sys_check_path(name);
   p = caml_stat_strdup_to_os(String_val(name));
   caml_enter_blocking_section();
-  ret = unlink_os(p);
+  ret = caml_unlink(p);
   caml_leave_blocking_section();
   caml_stat_free(p);
   if (ret != 0) caml_sys_error(name);
@@ -561,6 +562,41 @@ CAMLprim value caml_sys_time(value unit)
 
 #ifdef _WIN32
 extern int caml_win32_random_seed (intnat data[16]);
+#else
+int caml_unix_random_seed(intnat data[16])
+{
+  int fd;
+  int n = 0;
+
+  /* Try /dev/urandom first */
+  fd = open("/dev/urandom", O_RDONLY, 0);
+  if (fd != -1) {
+    unsigned char buffer[12];
+    int nread = read(fd, buffer, 12);
+    close(fd);
+    while (nread > 0) data[n++] = buffer[--nread];
+  }
+  /* If the read from /dev/urandom fully succeeded, we now have 96 bits
+     of good random data and can stop here. */
+  if (n >= 12) return n;
+  /* Otherwise, complement whatever we got (probably nothing)
+     with some not-very-random data. */
+  {
+#ifdef HAS_GETTIMEOFDAY
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    if (n < 16) data[n++] = tv.tv_usec;
+    if (n < 16) data[n++] = tv.tv_sec;
+#else
+    if (n < 16) data[n++] = time(NULL);
+#endif
+#ifdef HAS_UNISTD
+    if (n < 16) data[n++] = getpid();
+    if (n < 16) data[n++] = getppid();
+#endif
+    return n;
+  }
+}
 #endif
 
 CAMLprim value caml_sys_random_seed (value unit)
@@ -571,33 +607,7 @@ CAMLprim value caml_sys_random_seed (value unit)
 #ifdef _WIN32
   n = caml_win32_random_seed(data);
 #else
-  int fd;
-  n = 0;
-  /* Try /dev/urandom first */
-  fd = open("/dev/urandom", O_RDONLY, 0);
-  if (fd != -1) {
-    unsigned char buffer[12];
-    int nread = read(fd, buffer, 12);
-    close(fd);
-    while (nread > 0) data[n++] = buffer[--nread];
-  }
-  /* If the read from /dev/urandom fully succeeded, we now have 96 bits
-     of good random data and can stop here.  Otherwise, complement
-     whatever we got (probably nothing) with some not-very-random data. */
-  if (n < 12) {
-#ifdef HAS_GETTIMEOFDAY
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    data[n++] = tv.tv_usec;
-    data[n++] = tv.tv_sec;
-#else
-    data[n++] = time(NULL);
-#endif
-#ifdef HAS_UNISTD
-    data[n++] = getpid();
-    data[n++] = getppid();
-#endif
-  }
+  n = caml_unix_random_seed(data);
 #endif
   /* Convert to an OCaml array of ints */
   res = caml_alloc_small(n, 0);

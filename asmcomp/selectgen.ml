@@ -70,7 +70,7 @@ let oper_result_type = function
   | Cload (c, _) ->
       begin match c with
       | Word_val -> typ_val
-      | Single | Double | Double_u -> typ_float
+      | Single | Double -> typ_float
       | _ -> typ_int
       end
   | Calloc -> typ_val
@@ -998,7 +998,7 @@ method emit_stores env data regs_addr =
             Istore(_, _, _) ->
               for i = 0 to Array.length regs - 1 do
                 let r = regs.(i) in
-                let kind = if r.typ = Float then Double_u else Word_val in
+                let kind = if r.typ = Float then Double else Word_val in
                 self#insert env
                             (Iop(Istore(kind, !a, false)))
                             (Array.append [|r|] regs_addr) [||];
@@ -1181,7 +1181,8 @@ method emit_fundecl ~future_funcnames f =
     if Polling.requires_prologue_poll ~future_funcnames
          ~fun_name:f.Cmm.fun_name body
       then
-      instr_cons (Iop(Ipoll { return_label = None })) [||] [||] body
+        instr_cons_debug
+          (Iop(Ipoll { return_label = None })) [||] [||] f.Cmm.fun_dbg body
     else
       body
     in
@@ -1192,6 +1193,7 @@ method emit_fundecl ~future_funcnames f =
     fun_body = body_with_prologue;
     fun_codegen_options = f.Cmm.fun_codegen_options;
     fun_dbg  = f.Cmm.fun_dbg;
+    fun_poll = f.Cmm.fun_poll;
     fun_num_stack_slots = Array.make Proc.num_register_classes 0;
     fun_contains_calls = !contains_calls;
   }

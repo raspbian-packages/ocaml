@@ -17,7 +17,7 @@
 
    This module implements buffers that automatically expand
    as necessary.  It provides accumulative concatenation of strings
-   in quasi-linear time (instead of quadratic time when strings are
+   in linear time (instead of quadratic time when strings are
    concatenated pairwise). For example:
 
 {[
@@ -186,12 +186,14 @@ val add_channel : t -> in_channel -> int -> unit
 
 val to_seq : t -> char Seq.t
 (** Iterate on the buffer, in increasing order.
-    Modification of the buffer during iteration is undefined behavior.
+
+    The behavior is not specified if the buffer is modified during iteration.
     @since 4.07 *)
 
 val to_seqi : t -> (int * char) Seq.t
 (** Iterate on the buffer, in increasing order, yielding indices along chars.
-    Modification of the buffer during iteration is undefined behavior.
+
+    The behavior is not specified if the buffer is modified during iteration.
     @since 4.07 *)
 
 val add_seq : t -> char Seq.t -> unit

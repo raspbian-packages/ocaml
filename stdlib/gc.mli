@@ -45,10 +45,24 @@ type stat =
 
     live_words : int;
     (** Number of words of live data in the major heap, including the header
-       words. *)
+       words.
+
+       Note that "live" words refers to every word in the major heap that isn't
+       currently known to be collectable, which includes words that have become
+       unreachable by the program after the start of the previous gc cycle.
+       It is typically much simpler and more predictable to call
+       {!Gc.full_major} (or {!Gc.compact}) then computing gc stats, as then
+       "live" words has the simple meaning of "reachable by the program". One
+       caveat is that a single call to {!Gc.full_major} will not reclaim values
+       that have a finaliser from {!Gc.finalise} (this does not apply to
+       {!Gc.finalise_last}). If this caveat matters, simply call
+       {!Gc.full_major} twice instead of once.
+     *)
 
     live_blocks : int;
-    (** Number of live blocks in the major heap. *)
+    (** Number of live blocks in the major heap.
+
+        See [live_words] for a caveat about what "live" means. *)
 
     free_words : int;
     (** Number of words in the free list. *)
@@ -71,11 +85,13 @@ type stat =
     (** Maximum size reached by the major heap, in words. *)
 
     stack_size: int;
-    (** Current size of the stack, in words. @since 3.12.0 *)
+    (** Current size of the stack, in words.
+        @since 3.12.0 *)
 
     forced_major_collections: int;
     (** Number of forced full major collections completed since the program
-        was started. @since 4.12.0 *)
+        was started.
+        @since 4.12.0 *)
 }
 (** The memory management counters are returned in a [stat] record.
 
@@ -188,7 +204,8 @@ type control =
     (** The size of the window used by the major GC for smoothing
         out variations in its workload. This is an integer between
         1 and 50.
-        Default: 1. @since 4.03.0 *)
+        Default: 1.
+        @since 4.03.0 *)
 
     custom_major_ratio : int;
     (** Target ratio of floating garbage to major heap size for
@@ -380,7 +397,7 @@ val finalise : ('a -> unit) -> 'a -> unit
 
 
    The results of calling {!String.make}, {!Bytes.make}, {!Bytes.create},
-   {!Array.make}, and {!Stdlib.ref} are guaranteed to be
+   {!Array.make}, and {!val:Stdlib.ref} are guaranteed to be
    heap-allocated and non-constant except when the length argument is [0].
 *)
 
@@ -425,7 +442,10 @@ external eventlog_pause : unit -> unit = "caml_eventlog_pause"
    Traces are collected if the program is linked to the instrumented runtime
    and started with the environment variable OCAML_EVENTLOG_ENABLED.
    Events are flushed to disk after pausing, and no new events will be
-   recorded until [eventlog_resume] is called. *)
+   recorded until [eventlog_resume] is called.
+
+   @since 4.11
+  *)
 
 external eventlog_resume : unit -> unit = "caml_eventlog_resume"
 (** [eventlog_resume ()] will resume the collection of traces in the
@@ -434,7 +454,10 @@ external eventlog_resume : unit -> unit = "caml_eventlog_resume"
    and started with the environment variable OCAML_EVENTLOG_ENABLED.
    This call can be used after calling [eventlog_pause], or if the program
    was started with OCAML_EVENTLOG_ENABLED=p. (which pauses the collection of
-   traces before the first event.) *)
+   traces before the first event.)
+
+   @since 4.11
+  *)
 
 
 (** [Memprof] is a sampling engine for allocated memory words. Every

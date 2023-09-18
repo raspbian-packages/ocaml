@@ -17,6 +17,13 @@
 
 # The configuration Makefile
 
+## Variables defining the current version of OCaml
+OCAML_DEVELOPMENT_VERSION=@OCAML_DEVELOPMENT_VERSION@
+OCAML_VERSION_MAJOR=@OCAML_VERSION_MAJOR@
+OCAML_VERSION_MINOR=@OCAML_VERSION_MINOR@
+OCAML_VERSION_PATCHLEVEL=@OCAML_VERSION_PATCHLEVEL@
+OCAML_VERSION_EXTRA=@OCAML_VERSION_EXTRA@
+
 ## The EMPTY variable, used in other definitions
 EMPTY=
 
@@ -46,11 +53,11 @@ LIBDIR=@libdir@
 STUBLIBDIR=@libdir@/stublibs
 
 ### Where to install the man pages
-# Man pages for commands go in $(MANDIR)/man$(PROGRAMS_MAN_SECTION)
-# Man pages for the library go in $(MANDIR)/man/man$(LIBRARIES_MAN_SECTION)
+# Man pages for commands go in $(MANDIR)/man1
+# Man pages for the library go in $(MANDIR)/man3
 MANDIR=@mandir@
-PROGRAMS_MAN_SECTION=@programs_man_section@
-LIBRARIES_MAN_SECTION=@libraries_man_section@
+PROGRAMS_MAN_DIR=$(MANDIR)/man1
+LIBRARIES_MAN_DIR=$(MANDIR)/man3
 
 ### Do #! scripts work on your system?
 ### Beware: on some systems (e.g. SunOS 4), this will work only if
@@ -80,10 +87,6 @@ LDFLAGS?=@LDFLAGS@
 
 ### How to invoke the C preprocessor through the C compiler
 CPP=@CPP@
-
-### How to invoke ranlib
-RANLIB=@RANLIB@
-RANLIBCMD=@RANLIBCMD@
 
 ### How to invoke ar
 ARCMD=@AR@
@@ -257,25 +260,6 @@ else
   MKEXE_USING_COMPILER=$(CC) $(OC_CFLAGS) $(CFLAGS) $(OC_LDFLAGS) $(LDFLAGS) \
     $(OUTPUTEXE)$(1) $(2)
 endif # ifeq "$(TOOLCHAIN)" "msvc"
-
-# The following variables were defined only in the Windows-specific makefiles.
-# They were not defined by the configure script used on Unix systems,
-# so we also make sure to provide them only under Windows
-# User code should absolutely not rely on their presence because
-# in the future their definition may be moved to a more private part of
-# the compiler's build system
-ifeq "$(UNIX_OR_WIN32)" "win32"
-  CYGPATH=cygpath -m
-  DIFF=/usr/bin/diff -q --strip-trailing-cr
-  FIND=/usr/bin/find
-  SORT=/usr/bin/sort
-  SET_LD_PATH=PATH="$(PATH):$(LD_PATH)"
-else # ifeq "$(UNIX_OR_WIN32)" "win32"
-  # On Unix, make sure FLEXLINK is defined but empty
-  SORT=sort
-  CYGPATH=echo
-  SET_LD_PATH=CAML_LD_LIBRARY_PATH="$(LD_PATH)"
-endif # ifeq "$(UNIX_OR_WIN32)" "win32"
 
 FLEXLINK_FLAGS=@flexlink_flags@
 FLEXLINK_CMD=flexlink
