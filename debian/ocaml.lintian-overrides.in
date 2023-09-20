@@ -1,0 +1,7 @@
+ocaml: script-not-executable [.@OCamlStdlibDir@/camlheader]
+ocaml: script-not-executable [.@OCamlStdlibDir@/camlheaderd]
+ocaml: script-not-executable [.@OCamlStdlibDir@/camlheaderi]
+ocaml: unusual-interpreter /usr/bin/ocamlrund [.@OCamlStdlibDir@/camlheaderd]
+ocaml: unusual-interpreter /usr/bin/ocamlruni [.@OCamlStdlibDir@/camlheaderi]
+ocaml: no-manual-page [usr/bin/ocaml*.byte]
+ocaml: no-manual-page [usr/bin/ocaml*.opt]

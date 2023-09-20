@@ -1,0 +1,31 @@
+From: Torok Edwin <edwin@etorok.net>
+Date: Wed, 15 Jul 2015 16:33:23 +0300
+Subject: Use CCLINKFLAGS for linking all executables and shared libraries
+
+This allows packagers to set additional linker flags for executables and shared
+libraries created by OCaml, and for the OCaml tools themselves.
+OCaml code can be linked with various C stubs and C libraries that would
+benefit from using hardening link flags, such as -Wl,-z,relro.
+
+Origin: other
+Bug-Debian: https://bugs.debian.org/702349
+Forwarded: no
+Last-Update: <2021-12-21>
+---
+ configure.ac | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index 3698c7c..ac8a080 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -984,6 +984,9 @@ AS_IF([test x"$enable_shared" != "xno"],
+       natdynlinkopts="-Wl,-E"
+       shared_libraries_supported=true])])
+ 
++mksharedlib="$mksharedlib $CCLINKFLAGS"
++mkexe="$mkexe $CCLINKFLAGS"
++
+ AS_IF([test -z "$mkmaindll"], [mkmaindll=$mksharedlib])
+ 
+ # Configure native dynlink

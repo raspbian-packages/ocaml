@@ -1,0 +1,10 @@
+Makefile.build_config
+Makefile.config
+config.log
+config.status
+configure
+libtool
+runtime/caml/m.h
+runtime/caml/s.h
+testsuite/_log
+tools/eventlog_metadata

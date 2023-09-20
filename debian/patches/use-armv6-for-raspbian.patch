@@ -1,0 +1,16 @@
+Description:  Edit configure.ac to select armv6 when using "arm-linux-gnueabihf"
+Author: Peter Michael Green <plugwash@raspbian.org>
+
+diff --git a/configure.ac b/configure.ac
+index 9ac019f7..03f0fd95 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1092,7 +1092,7 @@ AS_CASE([$host],
+   [armv5*-*-linux-*eabi],
+     [arch=arm; model=armv5; system=linux_eabi],
+   [arm*-*-linux-*eabihf],
+-    [arch=arm; system=linux_eabihf],
++    [arch=arm; model=armv6; system=linux_eabihf],
+   [arm*-*-linux-*eabi],
+     [arch=arm; system=linux_eabi],
+   [arm*-*-openbsd*],
