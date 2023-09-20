@@ -1,0 +1,1 @@
+libcompiler-libs-ocaml-dev: ocaml-dangling-cmx [.@OCamlStdlibDir@/ocamldoc/odoc*.cmx]

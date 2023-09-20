@@ -1,0 +1,30 @@
+From: Stephane Glondu <steph@glondu.net>
+Date: Wed, 29 Jul 2020 16:22:39 +0200
+Subject: Disable DT_TEXTREL warnings on Linux i386
+
+Bug: https://github.com/ocaml/ocaml/issues/9800
+---
+ configure.ac | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index ac8a080..9ac019f 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1183,6 +1183,16 @@ AS_CASE([$arch],
+        [common_cflags="-no-pie $common_cflags"],
+     [])])
+ 
++# Disable DT_TEXTREL warnings on Linux i386
++# See https://github.com/ocaml/ocaml/issues/9800
++
++AS_CASE([$host],
++  [i?86-*-linux-*],
++    [common_cflags="-Wl,-z,notext $common_cflags"
++    mksharedlib="$mksharedlib -Wl,-z,notext"
++    mkmaindll="$mkmaindll -Wl,-z,notext"],
++  [])
++
+ # Assembler
+ 
+ AS_IF([test -n "$target_alias"],
