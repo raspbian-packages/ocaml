@@ -105,7 +105,6 @@ installopt-default::
 	$(INSTALL_DATA) \
 	  stdlib.cmxa stdlib.$(A) std_exit.$(O) *.cmx \
 	  "$(INSTALL_LIBDIR)"
-	cd "$(INSTALL_LIBDIR)"; $(RANLIB) stdlib.$(A)
 
 ifeq "$(UNIX_OR_WIN32)" "unix"
 HEADERPROGRAM = header
@@ -200,13 +199,11 @@ stdlib.cma: $(OBJS)
 stdlib.cmxa: $(OBJS:.cmo=.cmx)
 	$(CAMLOPT) -a -o $@ $^
 
-sys.ml: $(ROOTDIR)/VERSION sys.mlp
-	sed -e "s|%%VERSION%%|`sed -e 1q $< | tr -d '\r'`|" sys.mlp > $@
-
-.PHONY: clean
-clean::
+.PHONY: distclean
+distclean: clean
 	rm -f sys.ml
 
+.PHONY: clean
 clean::
 	rm -f $(CAMLHEADERS)
 

@@ -1105,12 +1105,11 @@ Line 4, characters 11-60:
 Warning 15 [implicit-public-methods]: the following private methods were made public implicitly:
  n.
 val f : unit -> < m : int; n : int > = <fun>
-Line 5, characters 11-56:
+Line 5, characters 27-39:
 5 | let f () = object (self:c) method n = 1 method m = 2 end;;
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This object is expected to have type c but actually has type
-         < m : int; n : 'a >
-       The first object type has no method n
+                               ^^^^^^^^^^^^
+Error: This object is expected to have type : c
+       This type does not have a method n.
 |}];;
 
 
@@ -1130,9 +1129,9 @@ Error: This expression has type < m : 'a. 'a * < m : 'a * 'b > > as 'b
        but an expression was expected of type
          < m : 'a. 'a * (< m : 'a * < m : 'c. 'c * 'd > > as 'd) >
        The method m has type
-       'a. 'a * (< m : 'a * < m : 'c. 'c * 'b > > as 'b),
+       'a. 'a * (< m : 'a * < m : 'c. 'c * 'd > > as 'd),
        but the expected method type was
-       'c. 'c * < m : 'a * < m : 'c. 'b > > as 'b
+       'c. 'c * < m : 'a * < m : 'c. 'e > > as 'e
        The universal variable 'a would escape its scope
 |}];;
 
@@ -1177,6 +1176,12 @@ Error: Signature mismatch:
          val f : (< m : 'a. 'a * ('a * 'b) > as 'b) -> unit
        is not included in
          val f : < m : 'b. 'b * ('b * < m : 'c. 'c * 'a > as 'a) > -> unit
+       The type (< m : 'a. 'a * ('a * 'd) > as 'd) -> unit
+       is not compatible with the type
+         < m : 'b. 'b * ('b * < m : 'c. 'c * 'e > as 'e) > -> unit
+       The method m has type 'a. 'a * ('a * < m : 'a. 'f >) as 'f,
+       but the expected method type was 'c. 'c * ('b * < m : 'c. 'g >) as 'g
+       The universal variable 'b would escape its scope
 |}];;
 
 module M : sig type 'a t type u = <m: 'a. 'a t> end
@@ -1249,8 +1254,7 @@ Lines 2-3, characters 2-47:
 3 |     :> <m:'b. (<p:int;q:int;..> as 'b) -> int>)..
 Error: Type < m : 'a. (< p : int; .. > as 'a) -> int > is not a subtype of
          < m : 'b. (< p : int; q : int; .. > as 'b) -> int >
-       Type < p : int; q : int; .. > as 'c is not a subtype of
-         < p : int; .. > as 'd
+       Type < p : int; q : int; .. > is not a subtype of < p : int; .. >
 |}];;
 
 (* Keep sharing the epsilons *)
@@ -1569,6 +1573,11 @@ Error: Values do not match:
        is not included in
          val f :
            < m : 'a. [< `Bar | `Foo of 'b & int ] as 'c > -> < m : 'b. 'c >
+       The type
+         < m : 'a. [< `Bar | `Foo of 'b & int ] as 'c > -> < m : 'b. 'c >
+       is not compatible with the type
+         < m : 'a. [< `Bar | `Foo of 'b & int ] as 'd > -> < m : 'b. 'd >
+       Types for tag `Foo are incompatible
 |}]
 
 (* PR#6171 *)
@@ -1876,7 +1885,7 @@ Line 1, characters 17-18:
                      ^
 Error: This expression has type u but an expression was expected of type v
        The method m has type 'a s list * < m : 'b > as 'b,
-       but the expected method type was 'a. 'a s list * < m : 'a. 'b > as 'b
+       but the expected method type was 'a. 'a s list * < m : 'a. 'c > as 'c
        The universal variable 'a would escape its scope
 |}]
 

@@ -247,6 +247,10 @@ type local_attribute =
   | Never_local (* [@local never] *)
   | Default_local (* [@local maybe] or no [@local] attribute *)
 
+type poll_attribute =
+  | Error_poll (* [@poll error] *)
+  | Default_poll (* no [@poll] attribute *)
+
 type function_kind = Curried | Tupled
 
 type let_kind = Strict | Alias | StrictOpt
@@ -266,8 +270,10 @@ type function_attribute = {
   inline : inline_attribute;
   specialise : specialise_attribute;
   local: local_attribute;
+  poll: poll_attribute;
   is_a_functor: bool;
   stub: bool;
+  tmc_candidate: bool;
 }
 
 type scoped_location = Debuginfo.Scoped_location.t
@@ -343,14 +349,25 @@ let const_int n = Const_base (Const_int n)
 
 let const_unit = const_int 0
 
+let max_arity () =
+  if !Clflags.native_code then 126 else max_int
+  (* 126 = 127 (the maximal number of parameters supported in C--)
+           - 1 (the hidden parameter containing the environment) *)
+
+let lfunction ~kind ~params ~return ~body ~attr ~loc =
+  assert (List.length params <= max_arity ());
+  Lfunction { kind; params; return; body; attr; loc }
+
 let lambda_unit = Lconst const_unit
 
 let default_function_attribute = {
   inline = Default_inline;
   specialise = Default_specialise;
   local = Default_local;
+  poll = Default_poll;
   is_a_functor = false;
   stub = false;
+  tmc_candidate = false;
 }
 
 let default_stub_attribute =
@@ -362,11 +379,10 @@ let default_stub_attribute =
    For that reason, they should not include cycles.
 *)
 
-exception Not_simple
-
 let max_raw = 32
 
 let make_key e =
+  let exception Not_simple in
   let count = ref 0   (* Used for controlling size *)
   and make_key = Ident.make_key_generator () in
   (* make_key is used for normalizing let-bound variables *)
@@ -960,10 +976,24 @@ let function_is_curried func =
   | Curried -> true
   | Tupled -> false
 
-let max_arity () =
-  if !Clflags.native_code then 126 else max_int
-  (* 126 = 127 (the maximal number of parameters supported in C--)
-           - 1 (the hidden parameter containing the environment) *)
+let find_exact_application kind ~arity args =
+  match kind with
+  | Curried ->
+      if arity <> List.length args
+      then None
+      else Some args
+  | Tupled ->
+      begin match args with
+      | [Lprim(Pmakeblock _, tupled_args, _)] ->
+          if arity <> List.length tupled_args
+          then None
+          else Some tupled_args
+      | [Lconst(Const_block (_, const_args))] ->
+          if arity <> List.length const_args
+          then None
+          else Some (List.map (fun cst -> Lconst cst) const_args)
+      | _ -> None
+      end
 
 let reset () =
   raise_count := 0

@@ -9,10 +9,10 @@ Forwarded: not-needed
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/configure.ac b/configure.ac
-index 9ac019f..a449246 100644
+index 48b438a..20f0873 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -43,7 +43,7 @@ libraries_man_section=3
+@@ -37,7 +37,7 @@ CONFIGURE_ARGS="$*"
  # at the moment they are not taken into account on Windows, because
  # flexlink, which is used to build executables on this platform, can
  # not handle them.
@@ -21,7 +21,7 @@ index 9ac019f..a449246 100644
  
  # Flags for building executable files with debugging symbols
  mkexedebugflag="-g"
-@@ -1952,7 +1952,7 @@ AS_IF([test x"$DEFAULT_STRING" = "xunsafe"],
+@@ -1980,7 +1980,7 @@ AS_IF([test x"$DEFAULT_STRING" = "xunsafe"],
  
  oc_cflags="$common_cflags $internal_cflags"
  oc_cppflags="$common_cppflags $internal_cppflags"

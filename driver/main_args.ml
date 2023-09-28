@@ -94,6 +94,11 @@ let mk_dllpath f =
   "<dir>  Add <dir> to the run-time search path for shared libraries"
 ;;
 
+let mk_eval f =
+  "-e", Arg.String f,
+  "<script>  Evaluate given script"
+;;
+
 let mk_function_sections f =
   if Config.function_sections then
     "-function-sections",  Arg.Unit f,
@@ -699,12 +704,21 @@ let mk_dump_into_file f =
   "-dump-into-file", Arg.Unit f, " dump output like -dlambda into <target>.dump"
 ;;
 
+let mk_dump_dir f =
+  "-dump-dir", Arg.String f,
+  "<dir> dump output like -dlambda into <dir>/<target>.dump"
+;;
+
 let mk_dparsetree f =
   "-dparsetree", Arg.Unit f, " (undocumented)"
 ;;
 
 let mk_dtypedtree f =
   "-dtypedtree", Arg.Unit f, " (undocumented)"
+;;
+
+let mk_dshape f =
+  "-dshape", Arg.Unit f, " (undocumented)"
 ;;
 
 let mk_drawlambda f =
@@ -943,6 +957,7 @@ module type Core_options = sig
   val _dsource : unit -> unit
   val _dparsetree : unit -> unit
   val _dtypedtree : unit -> unit
+  val _dshape : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
 
@@ -997,6 +1012,7 @@ module type Compiler_options = sig
   val _dtimings : unit -> unit
   val _dprofile : unit -> unit
   val _dump_into_file : unit -> unit
+  val _dump_dir : string -> unit
 
   val _args: string -> string array
   val _args0: string -> string array
@@ -1015,6 +1031,7 @@ module type Toplevel_options = sig
   val _args0 : string -> string array
   val _color : string -> unit
   val _error_style : string -> unit
+  val _eval: string -> unit
 end
 ;;
 
@@ -1237,6 +1254,7 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
+    mk_dshape F._dshape;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
@@ -1244,6 +1262,7 @@ struct
     mk_dtimings F._dtimings;
     mk_dprofile F._dprofile;
     mk_dump_into_file F._dump_into_file;
+    mk_dump_dir F._dump_dir;
 
     mk_args F._args;
     mk_args0 F._args0;
@@ -1304,12 +1323,14 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
+    mk_dshape F._dshape;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
 
     mk_args F._args;
     mk_args0 F._args0;
+    mk_eval F._eval;
   ]
 end;;
 
@@ -1434,6 +1455,7 @@ struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
+    mk_dshape F._dshape;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
@@ -1463,6 +1485,7 @@ struct
     mk_dtimings F._dtimings;
     mk_dprofile F._dprofile;
     mk_dump_into_file F._dump_into_file;
+    mk_dump_dir F._dump_dir;
     mk_dump_pass F._dump_pass;
 
     mk_args F._args;
@@ -1544,7 +1567,9 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
     mk_dtypedtree F._dtypedtree;
+    mk_dshape F._dshape;
     mk_drawlambda F._drawlambda;
+    mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
     mk_dcmm_invariants F._dcmm_invariants;
@@ -1566,6 +1591,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dinterval F._dinterval;
     mk_dstartup F._dstartup;
     mk_dump_pass F._dump_pass;
+    mk_eval F._eval;
   ]
 end;;
 
@@ -1707,6 +1733,7 @@ module Default = struct
     let _drawlambda = set dump_rawlambda
     let _dsource = set dump_source
     let _dtypedtree = set dump_typedtree
+    let _dshape = set dump_shape
     let _dunique_ids = set unique_ids
     let _dno_unique_ids = clear unique_ids
     let _dlocations = set locations
@@ -1839,6 +1866,7 @@ module Default = struct
     let _dprofile () = profile_columns := Profile.all_columns
     let _dtimings () = profile_columns := [`Time]
     let _dump_into_file = set dump_into_file
+    let _dump_dir s = dump_dir := Some s
     let _for_pack s = for_package := (Some s)
     let _g = set debug
     let _i = set print_types
@@ -1905,6 +1933,7 @@ module Default = struct
     let _stdin () = (* placeholder: file_argument ""*) ()
     let _version () = print_version ()
     let _vnum () = print_version_num ()
+    let _eval (_:string) = ()
   end
 
   module Topmain = struct

@@ -31,6 +31,9 @@ m4_include([build-aux/lt~obsolete.m4])
 m4_include([build-aux/ax_func_which_gethostbyname_r.m4])
 m4_include([build-aux/ax_pthread.m4])
 
+# OCaml version
+m4_include([build-aux/ocaml_version.m4])
+
 # The following macro figures out which C compiler is used.
 # It does so by checking for compiler-specific predefined macros.
 # A list of such macros can be found at
@@ -122,6 +125,19 @@ AC_DEFUN([OCAML_CC_HAS_DEBUG_PREFIX_MAP], [
     [cc_has_debug_prefix_map=true
     AC_MSG_RESULT([yes])],
     [cc_has_debug_prefix_map=false
+    AC_MSG_RESULT([no])])
+  CFLAGS="$saved_CFLAGS"
+])
+
+AC_DEFUN([OCAML_CL_HAS_VOLATILE_METADATA], [
+  AC_MSG_CHECKING([whether the C compiler supports -d2VolatileMetadata-])
+  saved_CFLAGS="$CFLAGS"
+  CFLAGS="-d2VolatileMetadata- $CFLAGS"
+  AC_COMPILE_IFELSE(
+    [AC_LANG_SOURCE([int main() { return 0; }])],
+    [cl_has_volatile_metadata=true
+    AC_MSG_RESULT([yes])],
+    [cl_has_volatile_metadata=false
     AC_MSG_RESULT([no])])
   CFLAGS="$saved_CFLAGS"
 ])
@@ -312,6 +328,7 @@ AC_DEFUN([OCAML_TEST_FLEXLINK], [
     CC="$1 -chain $2 -exe"
     LIBS="conftest2.$ac_objext"
     CPPFLAGS="$3 $CPPFLAGS"
+    CFLAGS=""
     AC_LINK_IFELSE(
       [AC_LANG_SOURCE([int main() { return 0; }])],
       [AC_MSG_RESULT([yes])],
@@ -423,7 +440,7 @@ int main (void) {
      broken implementations of Cygwin64, mingw-w64 (x86_64) and VS2013-2017.
      The static volatile variables aim to thwart GCC's constant folding. */
   static volatile double x, y, z;
-  double t264, t265, t266;
+  volatile double t264, t265, t266;
   x = 0x3.bd5b7dde5fddap-496;
   y = 0x3.bd5b7dde5fddap-496;
   z = -0xd.fc352bc352bap-992;

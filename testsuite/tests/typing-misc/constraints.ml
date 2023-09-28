@@ -7,8 +7,7 @@ type 'a t = [`A of 'a t t] as 'a;; (* fails *)
 Line 1, characters 0-32:
 1 | type 'a t = [`A of 'a t t] as 'a;; (* fails *)
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of t contains a cycle:
-       'a t t as 'a
+Error: The type abbreviation t is cyclic
 |}, Principal{|
 Line 1, characters 0-32:
 1 | type 'a t = [`A of 'a t t] as 'a;; (* fails *)
@@ -295,4 +294,38 @@ Line 4, characters 2-31:
 Error: The class constraints are not consistent.
        Type int * int is not compatible with type float * float
        Type int is not compatible with type float
+|}]
+
+(* #11101 *)
+type ('node,'self) extension = < node: 'node; self: 'self > as 'self
+type 'ext node = < > constraint 'ext = ('ext node, 'self) extension;;
+[%%expect{|
+type ('node, 'a) extension = 'a constraint 'a = < node : 'node; self : 'a >
+type 'a node = <  >
+  constraint 'a = ('a node, < node : 'a node; self : 'b > as 'b) extension
+|}, Principal{|
+type ('node, 'a) extension = < node : 'node; self : 'b > as 'b
+  constraint 'a = < node : 'node; self : 'a >
+type 'a node = <  >
+  constraint 'a = ('a node, < node : 'a node; self : 'b > as 'b) extension
+|}]
+
+class type ['node] extension =
+  object ('self)
+    method clone : 'self
+    method node : 'node
+  end
+type 'ext node = < >
+  constraint 'ext = 'ext node #extension ;;
+[%%expect{|
+class type ['node] extension =
+  object ('a) method clone : 'a method node : 'node end
+type 'a node = <  > constraint 'a = < clone : 'a; node : 'a node; .. >
+|}]
+
+module Raise: sig val default_extension: 'a node extension as 'a end = struct
+  let default_extension = failwith "Default_extension failure"
+end;;
+[%%expect{|
+Exception: Failure "Default_extension failure".
 |}]

@@ -1,4 +1,4 @@
-ocaml (4.13.1-6+rpi1) trixie-staging; urgency=medium
+ocaml (4.14.1-1+rpi1) trixie-staging; urgency=medium
 
   [changes brought forward from 4.08.1-4+rpi2 by Peter Michael Green <plugwash@raspbian.org> at Tue, 26 Nov 2019 19:38:59 +0000]
   * Revert previous raspbian changes, changing the triplet 
@@ -10,7 +10,13 @@ ocaml (4.13.1-6+rpi1) trixie-staging; urgency=medium
   [changes introduced in 4.08.1-5+rpi1 by Peter Michael Green]
   * Remove gitattributes that cause problems for dgit.
 
- -- Raspbian forward porter <root@raspbian.org>  Wed, 20 Sep 2023 15:06:07 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Thu, 28 Sep 2023 16:36:56 +0000
+
+ocaml (4.14.1-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Stéphane Glondu <glondu@debian.org>  Wed, 20 Sep 2023 09:59:40 +0200
 
 ocaml (4.13.1-6) unstable; urgency=medium
 

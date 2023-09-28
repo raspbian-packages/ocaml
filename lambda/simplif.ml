@@ -220,7 +220,7 @@ let simplify_exits lam =
       Lapply{ap with ap_func = simplif ~try_depth ap.ap_func;
                      ap_args = List.map (simplif ~try_depth) ap.ap_args}
   | Lfunction{kind; params; return; body = l; attr; loc} ->
-     Lfunction{kind; params; return; body = simplif ~try_depth l; attr; loc}
+     lfunction ~kind ~params ~return ~body:(simplif ~try_depth l) ~attr ~loc
   | Llet(str, kind, v, l1, l2) ->
       Llet(str, kind, v, simplif ~try_depth l1, simplif ~try_depth l2)
   | Lmutlet(kind, v, l1, l2) ->
@@ -333,23 +333,8 @@ let simplify_exits lam =
 *)
 
 let exact_application {kind; params; _} args =
-  match kind with
-  | Curried ->
-      if List.length params <> List.length args
-      then None
-      else Some args
-  | Tupled ->
-      begin match args with
-      | [Lprim(Pmakeblock _, tupled_args, _)] ->
-          if List.length params <> List.length tupled_args
-          then None
-          else Some tupled_args
-      | [Lconst(Const_block (_, const_args))] ->
-          if List.length params <> List.length const_args
-          then None
-          else Some (List.map (fun cst -> Lconst cst) const_args)
-      | _ -> None
-      end
+  let arity = List.length params in
+  Lambda.find_exact_application kind ~arity args
 
 let beta_reduce params body args =
   List.fold_left2 (fun l (param, kind) arg -> Llet(Strict, kind, param, arg, l))
@@ -535,9 +520,9 @@ let simplify_lets lam =
              type of the merged function taking [params @ params'] as
              parameters is the type returned after applying [params']. *)
           let return = return2 in
-          Lfunction{kind; params = params @ params'; return; body; attr; loc}
+          lfunction ~kind ~params:(params @ params') ~return ~body ~attr ~loc
       | body ->
-          Lfunction{kind; params; return = return1; body; attr; loc}
+          lfunction ~kind ~params ~return:return1 ~body ~attr ~loc
       end
   | Llet(_str, _k, v, Lvar w, l2) when optimize ->
       Hashtbl.add subst v (simplif (Lvar w));
@@ -712,7 +697,24 @@ and list_emit_tail_infos is_tail =
 
 let split_default_wrapper ~id:fun_id ~kind ~params ~return ~body ~attr ~loc =
   let rec aux map = function
-    | Llet(Strict, k, id, (Lifthenelse(Lvar optparam, _, _) as def), rest) when
+    (* When compiling [fun ?(x=expr) -> body], this is first translated
+       to:
+       [fun *opt* ->
+          let x =
+            match *opt* with
+            | None -> expr
+            | Some *sth* -> *sth*
+          in
+          body]
+       We want to detect the let binding to put it into the wrapper instead of
+       the inner function.
+       We need to find which optional parameter the binding corresponds to,
+       which is why we need a deep pattern matching on the expected result of
+       the pattern-matching compiler for options.
+    *)
+    | Llet(Strict, k, id,
+           (Lifthenelse(Lprim (Pisint, [Lvar optparam], _), _, _) as def),
+           rest) when
         Ident.name optparam = "*opt*" && List.mem_assoc optparam params
           && not (List.mem_assoc optparam map)
       ->
@@ -747,18 +749,18 @@ let split_default_wrapper ~id:fun_id ~kind ~params ~return ~body ~attr ~loc =
         in
         let body = Lambda.rename subst body in
         let inner_fun =
-          Lfunction { kind = Curried;
-            params = List.map (fun id -> id, Pgenval) new_ids;
-            return; body; attr; loc; }
+          lfunction ~kind:Curried
+            ~params:(List.map (fun id -> id, Pgenval) new_ids)
+            ~return ~body ~attr ~loc
         in
         (wrapper_body, (inner_id, inner_fun))
   in
   try
     let body, inner = aux [] body in
     let attr = default_stub_attribute in
-    [(fun_id, Lfunction{kind; params; return; body; attr; loc}); inner]
+    [(fun_id, lfunction ~kind ~params ~return ~body ~attr ~loc); inner]
   with Exit ->
-    [(fun_id, Lfunction{kind; params; return; body; attr; loc})]
+    [(fun_id, lfunction ~kind ~params ~return ~body ~attr ~loc)]
 
 (* Simplify local let-bound functions: if all occurrences are
    fully-applied function calls in the same "tail scope", replace the
@@ -887,7 +889,10 @@ let simplify_local_functions lam =
     rewrite lam
 
 (* The entry point:
-   simplification + emission of tailcall annotations, if needed. *)
+   simplification
+   + rewriting of tail-modulo-cons calls
+   + emission of tailcall annotations, if needed
+*)
 
 let simplify_lambda lam =
   let lam =
@@ -897,6 +902,7 @@ let simplify_lambda lam =
        )
     |> simplify_exits
     |> simplify_lets
+    |> Tmc.rewrite
   in
   if !Clflags.annotations
      || Warnings.is_active (Warnings.Wrong_tailcall_expectation true)

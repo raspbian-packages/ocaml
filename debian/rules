@@ -236,6 +236,10 @@ ifeq ($(OCAML_HAVE_OCAMLOPT),no)
 	  $(INSTDIR)/bin/ocamloptp.* \
 	  $(INSTDIR)/bin/ocamloptp
 endif
+# Remove irrelevant files
+	rm -f \
+	  $(INSTDIR)/share/doc/ocaml/README.win32.adoc \
+	  $(INSTDIR)/share/doc/ocaml/LICENSE
 # Dispatch files with dh_install
 	find debian/tmp \( -type f -or -type l \) -printf '%P\n' > debian/installed-files
 	boot/ocamlrun ./ocaml -nostdlib -I debian/tmp/usr/lib/ocaml debian/dispatch.ml

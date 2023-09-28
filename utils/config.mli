@@ -82,9 +82,6 @@ val mkexe: string
 val mkmaindll: string
 (** The linker command line to build main programs as dlls. *)
 
-val ranlib: string
-(** Command to randomize a library, or "" if not needed *)
-
 val default_rpath: string
 (** Option to add a directory to be searched for libraries at runtime
     (used by ocamlmklib) *)
@@ -243,6 +240,11 @@ val function_sections : bool
 
 val windows_unicode: bool
 (** Whether Windows Unicode runtime is enabled *)
+
+val naked_pointers : bool
+(** Whether the runtime supports naked pointers
+
+    @since 4.14.0 *)
 
 val supports_shared_libraries: bool
 (** Whether shared libraries are supported

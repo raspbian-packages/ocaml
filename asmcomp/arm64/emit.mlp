@@ -104,13 +104,18 @@ let slot_offset env loc cl =
   | Outgoing n ->
       assert (n >= 0);
       n
+  | Domainstate _ -> assert false  (* not a stack slot *)
 
 (* Output a stack reference *)
 
 let emit_stack env r =
   match r.loc with
+  | Stack (Domainstate n) ->
+      let ofs = n + Domainstate.(idx_of_field Domain_extra_params) * 8 in
+      `[{emit_reg reg_domain_state_ptr}, #{emit_int ofs}]`
   | Stack s ->
-      let ofs = slot_offset env s (register_class r) in `[sp, #{emit_int ofs}]`
+      let ofs = slot_offset env s (register_class r) in
+      `[sp, #{emit_int ofs}]`
   | _ -> fatal_error "Emit.emit_stack"
 
 (* Output an addressing mode *)
@@ -741,7 +746,7 @@ let emit_instr env i =
         | Single ->
             `	ldr	s7, {emit_addressing addr base}\n`;
             `	fcvt	{emit_reg dst}, s7\n`
-        | Word_int | Word_val | Double | Double_u ->
+        | Word_int | Word_val | Double ->
             `	ldr	{emit_reg dst}, {emit_addressing addr base}\n`
         end
     | Lop(Istore(size, addr, _)) ->
@@ -763,7 +768,7 @@ let emit_instr env i =
         | Single ->
             `	fcvt	s7, {emit_reg src}\n`;
             `	str	s7, {emit_addressing addr base}\n`;
-        | Word_int | Word_val | Double | Double_u ->
+        | Word_int | Word_val | Double ->
             `	str	{emit_reg src}, {emit_addressing addr base}\n`
         end
     | Lop(Ialloc { bytes = n; dbginfo }) ->
