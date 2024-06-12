@@ -54,6 +54,7 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+bindnow
 export CCLINKFLAGS=$(shell dpkg-buildflags --get LDFLAGS)
 
 CONFIGURE_OPTS := \
+  --enable-ocamltest \
   --host $(DEB_BUILD_GNU_TYPE)\
   -prefix $(DEB_TEST_BUILD_PREFIX)/usr \
   -libdir $(DEB_TEST_BUILD_PREFIX)$(OCAML_STDLIB_DIR) \
@@ -277,22 +278,8 @@ ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
-ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
-	rm -f testsuite/tests/lib-threads/beat.ml
-	rm -f testsuite/tests/lib-systhreads/threadsigmask.ml
-	# Takes forever
-	rm -f testsuite/tests/lib-systhreads/testyield.ml
-	# Fail
-	rm -f testsuite/tests/lib-unix/unix-socket/recvfrom_unix.ml
-	rm -f testsuite/tests/tool-debugger/no_debug_event/noev.ml
-	rm -f testsuite/tests/tool-debugger/printer/debuggee.ml
-	rm -f testsuite/tests/misc/weaklifetime.ml
-	rm -f testsuite/tests/tool-debugger/basic/debuggee.ml
-	rm -f testsuite/tests/tool-debugger/dynlink/host.ml
-endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
-	make -C ocamltest
-	make -C testsuite all $(IGNORE_TESTS_FAILURE)
+	make tests $(IGNORE_TESTS_FAILURE)
 endif
 endif
 
