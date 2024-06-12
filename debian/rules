@@ -87,12 +87,6 @@ export BUILD_PATH_PREFIX_MAP=.=$(CURDIR)
 build:
 	dh $@
 
-# Generate ocaml-native-compilers' Architecture field.
-# Should never be called automatically.
-.PHONY: debian/control
-debian/control:
-	sed -e 's/@OCamlNativeArchs@/$(OCAML_NATIVE_ARCHS)/g' debian/control.in > $@
-
 pre-config-stamp: $(TARBALL_TARGET)
 # Backup upstream config.{sub,guess}, and use most up-to-date ones
 	set -e; for ext in sub guess; do \
