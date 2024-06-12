@@ -9,11 +9,12 @@ Uploaders:
  Ximin Luo <infinity0@debian.org>
 Build-Depends:
  debhelper-compat (= 13),
- pkg-config,
+ pkgconf,
  binutils-dev,
  libiberty-dev,
  libncurses-dev,
  zlib1g-dev,
+ libzstd-dev,
  dh-ocaml
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
