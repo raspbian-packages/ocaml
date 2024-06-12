@@ -211,6 +211,10 @@ module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
           else Oide_dot (Printtyp.tree_of_path p, Out_name.print name)
       | Papply _ ->
           Printtyp.tree_of_path ty_path
+      | Pextra_ty _ ->
+          (* These can only appear directly inside of the associated
+             constructor so we can just drop the prefix *)
+          Oide_ident name
 
     let tree_of_constr =
       tree_of_qualified
@@ -374,15 +378,15 @@ module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
                    then nest tree_of_val depth forced_obj ty_arg
                    else      tree_of_val depth forced_obj ty_arg
                  in
-                 Oval_constr (Oide_ident (Out_name.create "lazy"), [v])
+                 Oval_lazy v
                end
           | Tconstr(path, ty_list, _) -> begin
               try
                 let decl = Env.find_type path env in
                 match decl with
-                | {type_kind = Type_abstract; type_manifest = None} ->
+                | {type_kind = Type_abstract _; type_manifest = None} ->
                     Oval_stuff "<abstr>"
-                | {type_kind = Type_abstract; type_manifest = Some body} ->
+                | {type_kind = Type_abstract _; type_manifest = Some body} ->
                     tree_of_val depth obj
                       (instantiate_type env decl.type_params ty_list body)
                 | {type_kind = Type_variant (constr_list,rep)} ->

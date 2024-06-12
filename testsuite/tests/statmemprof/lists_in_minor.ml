@@ -1,5 +1,7 @@
 (* TEST
-   flags = "-g"
+ flags = "-g";
+ reason = "port stat-mem-prof : https://github.com/ocaml/ocaml/pull/8634";
+ skip;
 *)
 
 open Gc.Memprof

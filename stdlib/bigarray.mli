@@ -64,6 +64,8 @@
 (** {1 Element kinds} *)
 
 (** Bigarrays can contain elements of the following kinds:
+- IEEE half precision (16 bits) floating-point numbers
+   ({!Bigarray.float16_elt}),
 - IEEE single precision (32 bits) floating-point numbers
    ({!Bigarray.float32_elt}),
 - IEEE double precision (64 bits) floating-point numbers
@@ -87,9 +89,11 @@
    [*_elt] types defined below (defined with a single constructor instead
    of abstract types for technical injectivity reasons).
 
-   @since 4.07.0 Moved from otherlibs to stdlib.
+   @since 4.07 Moved from otherlibs to stdlib.
+   @since 5.2 Added float16_elt element kind.
 *)
 
+type float16_elt = Float16_elt
 type float32_elt = Float32_elt
 type float64_elt = Float64_elt
 type int8_signed_elt = Int8_signed_elt
@@ -104,7 +108,7 @@ type complex32_elt = Complex32_elt
 type complex64_elt = Complex64_elt
 
 type ('a, 'b) kind =
-    Float32 : (float, float32_elt) kind
+  | Float32 : (float, float32_elt) kind
   | Float64 : (float, float64_elt) kind
   | Int8_signed : (int, int8_signed_elt) kind
   | Int8_unsigned : (int, int8_unsigned_elt) kind
@@ -116,7 +120,8 @@ type ('a, 'b) kind =
   | Nativeint : (nativeint, nativeint_elt) kind
   | Complex32 : (Complex.t, complex32_elt) kind
   | Complex64 : (Complex.t, complex64_elt) kind
-  | Char : (char, int8_unsigned_elt) kind (**)
+  | Char : (char, int8_unsigned_elt) kind
+  | Float16 : (float, float16_elt) kind  (**)
 (** To each element kind is associated an OCaml type, which is
    the type of OCaml values that can be stored in the Bigarray
    or read back from it.  This type is not necessarily the same
@@ -141,13 +146,20 @@ type ('a, 'b) kind =
   let zero : type a b. (a, b) kind -> a = function
     | Float32 -> 0.0 | Complex32 -> Complex.zero
     | Float64 -> 0.0 | Complex64 -> Complex.zero
+    | Float16 -> 0.0
     | Int8_signed -> 0 | Int8_unsigned -> 0
     | Int16_signed -> 0 | Int16_unsigned -> 0
     | Int32 -> 0l | Int64 -> 0L
     | Int -> 0 | Nativeint -> 0n
     | Char -> '\000'
 ]}
+
+   @since 5.2 Constructor Float16 for the GADT.
 *)
+
+val float16 : (float, float16_elt) kind
+(** See {!Bigarray.char}.
+   @since 5.2 *)
 
 val float32 : (float, float32_elt) kind
 (** See {!Bigarray.char}. *)
@@ -187,7 +199,7 @@ val nativeint : (nativeint, nativeint_elt) kind
 
 val char : (char, int8_unsigned_elt) kind
 (** As shown by the types of the values above,
-   Bigarrays of kind [float32_elt] and [float64_elt] are
+   Bigarrays of kind [float16_elt], [float32_elt] and [float64_elt] are
    accessed using the OCaml type [float].  Bigarrays of complex kinds
    [complex32_elt], [complex64_elt] are accessed with the OCaml type
    {!Complex.t}. Bigarrays of
@@ -205,7 +217,7 @@ val kind_size_in_bytes : ('a, 'b) kind -> int
 (** [kind_size_in_bytes k] is the number of bytes used to store
    an element of type [k].
 
-   @since 4.03.0 *)
+   @since 4.03 *)
 
 (** {1 Array layouts} *)
 
@@ -324,7 +336,7 @@ module Genarray :
       is not in the range 0 to 16 inclusive, or if one of the dimensions
       is negative.
 
-      @since 4.12.0 *)
+      @since 4.12 *)
 
   external num_dims: ('a, 'b, 'c) t -> int = "caml_ba_num_dims"
   (** Return the number of dimensions of the given Bigarray. *)
@@ -356,14 +368,14 @@ module Genarray :
       The dimensions are reversed, such that [get v [| a; b |]] in
       C layout becomes [get v [| b+1; a+1 |]] in Fortran layout.
 
-      @since 4.04.0
+      @since 4.04
   *)
 
   val size_in_bytes : ('a, 'b, 'c) t -> int
   (** [size_in_bytes a] is the number of elements in [a] multiplied
     by [a]'s {!kind_size_in_bytes}.
 
-    @since 4.03.0 *)
+    @since 4.03 *)
 
   external get: ('a, 'b, 'c) t -> int array -> 'a = "caml_ba_get_generic"
   (** Read an element of a generic Bigarray.
@@ -503,7 +515,7 @@ module Genarray :
    of zero-dimensional arrays that only contain a single scalar value.
    Statically knowing the number of dimensions of the array allows
    faster operations, and more precise static type-checking.
-   @since 4.05.0 *)
+   @since 4.05 *)
 module Array0 : sig
   type (!'a, !'b, !'c) t
   (** The type of zero-dimensional Bigarrays whose elements have
@@ -518,7 +530,7 @@ module Array0 : sig
   (** [Array0.init kind layout v] behaves like [Array0.create kind layout]
      except that the element is additionally initialized to the value [v].
 
-     @since 4.12.0 *)
+     @since 4.12 *)
 
   external kind: ('a, 'b, 'c) t -> ('a, 'b) kind = "caml_ba_kind"
   (** Return the kind of the given Bigarray. *)
@@ -532,7 +544,7 @@ module Array0 : sig
       is involved: the new array and the original array share the same
       storage space.
 
-      @since 4.06.0
+      @since 4.06
   *)
 
   val size_in_bytes : ('a, 'b, 'c) t -> int
@@ -593,7 +605,7 @@ module Array1 : sig
      the results of [f] applied to the indices of a new Bigarray whose
      layout is described by [kind], [layout] and [dim].
 
-     @since 4.12.0 *)
+     @since 4.12 *)
 
   external dim: ('a, 'b, 'c) t -> int = "%caml_ba_dim_1"
   (** Return the size (dimension) of the given one-dimensional
@@ -611,7 +623,7 @@ module Array1 : sig
       the same dimension as [a]). No copying of elements is involved: the
       new array and the original array share the same storage space.
 
-      @since 4.06.0
+      @since 4.06
   *)
 
 
@@ -619,7 +631,7 @@ module Array1 : sig
   (** [size_in_bytes a] is the number of elements in [a]
     multiplied by [a]'s {!kind_size_in_bytes}.
 
-    @since 4.03.0 *)
+    @since 4.03 *)
 
   external get: ('a, 'b, 'c) t -> int -> 'a = "%caml_ba_ref_1"
   (** [Array1.get a x], or alternatively [a.{x}],
@@ -646,7 +658,7 @@ module Array1 : sig
      Bigarray.  The integer parameter is the index of the scalar to
      extract.  See {!Bigarray.Genarray.slice_left} and
      {!Bigarray.Genarray.slice_right} for more details.
-     @since 4.05.0 *)
+     @since 4.05 *)
 
   external blit: ('a, 'b, 'c) t -> ('a, 'b, 'c) t -> unit
       = "caml_ba_blit"
@@ -708,7 +720,7 @@ module Array2 :
      the results of [f] applied to the indices of a new Bigarray whose
      layout is described by [kind], [layout], [dim1] and [dim2].
 
-     @since 4.12.0 *)
+     @since 4.12 *)
 
   external dim1: ('a, 'b, 'c) t -> int = "%caml_ba_dim_1"
   (** Return the first dimension of the given two-dimensional Bigarray. *)
@@ -730,7 +742,7 @@ module Array2 :
       The dimensions are reversed, such that [get v [| a; b |]] in
       C layout becomes [get v [| b+1; a+1 |]] in Fortran layout.
 
-      @since 4.06.0
+      @since 4.06
   *)
 
 
@@ -738,7 +750,7 @@ module Array2 :
   (** [size_in_bytes a] is the number of elements in [a]
     multiplied by [a]'s {!kind_size_in_bytes}.
 
-    @since 4.03.0 *)
+    @since 4.03 *)
 
   external get: ('a, 'b, 'c) t -> int -> int -> 'a = "%caml_ba_ref_2"
   (** [Array2.get a x y], also written [a.{x,y}],
@@ -841,7 +853,7 @@ module Array3 :
      the results of [f] applied to the indices of a new Bigarray whose
      layout is described by [kind], [layout], [dim1], [dim2] and [dim3].
 
-     @since 4.12.0 *)
+     @since 4.12 *)
 
   external dim1: ('a, 'b, 'c) t -> int = "%caml_ba_dim_1"
   (** Return the first dimension of the given three-dimensional Bigarray. *)
@@ -867,14 +879,14 @@ module Array3 :
       The dimensions are reversed, such that [get v [| a; b; c |]] in
       C layout becomes [get v [| c+1; b+1; a+1 |]] in Fortran layout.
 
-      @since 4.06.0
+      @since 4.06
   *)
 
   val size_in_bytes : ('a, 'b, 'c) t -> int
   (** [size_in_bytes a] is the number of elements in [a]
     multiplied by [a]'s {!kind_size_in_bytes}.
 
-    @since 4.03.0 *)
+    @since 4.03 *)
 
   external get: ('a, 'b, 'c) t -> int -> int -> int -> 'a = "%caml_ba_ref_3"
   (** [Array3.get a x y z], also written [a.{x,y,z}],
@@ -972,7 +984,7 @@ external genarray_of_array0 :
   ('a, 'b, 'c) Array0.t -> ('a, 'b, 'c) Genarray.t = "%identity"
 (** Return the generic Bigarray corresponding to the given zero-dimensional
     Bigarray.
-    @since 4.05.0 *)
+    @since 4.05 *)
 
 external genarray_of_array1 :
   ('a, 'b, 'c) Array1.t -> ('a, 'b, 'c) Genarray.t = "%identity"
@@ -994,7 +1006,7 @@ val array0_of_genarray : ('a, 'b, 'c) Genarray.t -> ('a, 'b, 'c) Array0.t
    generic Bigarray.
    @raise Invalid_argument if the generic Bigarray
    does not have exactly zero dimension.
-   @since 4.05.0 *)
+   @since 4.05 *)
 
 val array1_of_genarray : ('a, 'b, 'c) Genarray.t -> ('a, 'b, 'c) Array1.t
 (** Return the one-dimensional Bigarray corresponding to the given
@@ -1036,7 +1048,7 @@ val reshape : ('a, 'b, 'c) Genarray.t -> int array -> ('a, 'b, 'c) Genarray.t
 val reshape_0 : ('a, 'b, 'c) Genarray.t -> ('a, 'b, 'c) Array0.t
 (** Specialized version of {!Bigarray.reshape} for reshaping to
    zero-dimensional arrays.
-   @since 4.05.0 *)
+   @since 4.05 *)
 
 val reshape_1 : ('a, 'b, 'c) Genarray.t -> int -> ('a, 'b, 'c) Array1.t
 (** Specialized version of {!Bigarray.reshape} for reshaping to
@@ -1049,4 +1061,64 @@ val reshape_2 : ('a, 'b, 'c) Genarray.t -> int -> int -> ('a, 'b, 'c) Array2.t
 val reshape_3 :
   ('a, 'b, 'c) Genarray.t -> int -> int -> int -> ('a, 'b, 'c) Array3.t
 (** Specialized version of {!Bigarray.reshape} for reshaping to
-   three-dimensional arrays. *)
+    three-dimensional arrays. *)
+
+(** {1:bigarray_concurrency Bigarrays and concurrency safety}
+
+    Care must be taken when concurrently accessing bigarrays from multiple
+    domains: accessing a bigarray will never crash a program, but unsynchronized
+    accesses might yield surprising (non-sequentially-consistent) results.
+
+    {2:bigarray_atomicity Atomicity}
+
+    Every bigarray operation that accesses more than one array element is not
+    atomic. This includes slicing, bliting, and filling bigarrays.
+
+    For example, consider the following program:
+{[open Bigarray
+let size = 100_000_000
+let a = Array1.init Int C_layout size (fun _ -> 1)
+let update f a () =
+  for i = 0 to size - 1 do a.{i} <- f a.{i} done
+let d1 = Domain.spawn (update (fun x -> x + 1) a)
+let d2 = Domain.spawn (update (fun x -> 2 * x + 1) a)
+let () = Domain.join d1; Domain.join d2
+]}
+
+    After executing this code, each field of the bigarray [a] is either [2],
+    [3], [4] or [5]. If atomicity is required, then the user must implement
+    their own synchronization (for example, using {!Mutex.t}).
+
+    {2:bigarray_data_race Data races}
+
+    If two domains only access disjoint parts of the bigarray, then the
+    observed behaviour is the equivalent to some sequential interleaving of the
+    operations from the two domains.
+
+    A data race is said to occur when two domains access the same bigarray
+    element without synchronization and at least one of the accesses is a
+    write. In the absence of data races, the observed behaviour is equivalent
+    to some sequential interleaving of the operations from different domains.
+
+    Whenever possible, data races should be avoided by using synchronization to
+    mediate the accesses to the bigarray elements.
+
+    Indeed, in the presence of data races, programs will not crash but the
+    observed behaviour may not be equivalent to any sequential interleaving of
+    operations from different domains.
+
+    {2:bigarrarray_data_race_tearing Tearing}
+
+    Bigarrays have a distinct caveat in the presence of data races:
+    concurrent bigarray operations might produce surprising values due to
+    tearing. More precisely, the interleaving of partial writes and reads might
+    create values that would not exist with a sequential execution.
+    For instance, at the end of
+{[let res = Array1.init Complex64 c_layout size (fun _ -> Complex.zero)
+let d1 = Domain.spawn (fun () -> Array1.fill res Complex.one)
+let d2 = Domain.spawn (fun () -> Array1.fill res Complex.i)
+let () = Domain.join d1; Domain.join d2
+]}
+    the [res] bigarray might contain values that are neither [Complex.i]
+    nor [Complex.one] (for instance [1 + i]).
+*)

@@ -1,4 +1,7 @@
-(* TEST *)
+(* TEST
+ reason = "port stat-mem-prof : https://github.com/ocaml/ocaml/pull/8634";
+ skip;
+*)
 module MP = Gc.Memprof
 
 let allocs_by_memprof f =

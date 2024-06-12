@@ -24,6 +24,13 @@ open Debuginfo.Scoped_location
 
 exception Real_reference
 
+let check_function_escape id lfun =
+  (* Check that the identifier is not one of the parameters *)
+  let param_is_id (param, _) = Ident.same id param in
+  assert (not (List.exists param_is_id lfun.params));
+  if Ident.Set.mem id (Lambda.free_variables lfun.body) then
+    raise Real_reference
+
 let rec eliminate_ref id = function
     Lvar v as lam ->
       if Ident.same v id then raise Real_reference else lam
@@ -31,18 +38,17 @@ let rec eliminate_ref id = function
   | Lapply ap ->
       Lapply{ap with ap_func = eliminate_ref id ap.ap_func;
                      ap_args = List.map (eliminate_ref id) ap.ap_args}
-  | Lfunction _ as lam ->
-      if Ident.Set.mem id (free_variables lam)
-      then raise Real_reference
-      else lam
+  | Lfunction lfun as lam ->
+      check_function_escape id lfun;
+      lam
   | Llet(str, kind, v, e1, e2) ->
       Llet(str, kind, v, eliminate_ref id e1, eliminate_ref id e2)
   | Lmutlet(kind, v, e1, e2) ->
       Lmutlet(kind, v, eliminate_ref id e1, eliminate_ref id e2)
   | Lletrec(idel, e2) ->
-      Lletrec(List.map (fun (v, e) -> (v, eliminate_ref id e)) idel,
-              eliminate_ref id e2)
-  | Lprim(Pfield 0, [Lvar v], _) when Ident.same v id ->
+      List.iter (fun rb -> check_function_escape id rb.def) idel;
+      Lletrec(idel, eliminate_ref id e2)
+  | Lprim(Pfield (0, _, _), [Lvar v], _) when Ident.same v id ->
       Lmutvar id
   | Lprim(Psetfield(0, _, _), [Lvar v; e], _) when Ident.same v id ->
       Lassign(id, eliminate_ref id e)
@@ -129,7 +135,7 @@ let simplify_exits lam =
   | Lmutlet(_kind, _v, l1, l2) ->
       count ~try_depth l2; count ~try_depth l1
   | Lletrec(bindings, body) ->
-      List.iter (fun (_v, l) -> count ~try_depth l) bindings;
+      List.iter (fun { def = { body } } -> count ~try_depth body) bindings;
       count ~try_depth body
   | Lprim(_p, ll, _) -> List.iter (count ~try_depth) ll
   | Lswitch(l, sw, _loc) ->
@@ -219,15 +225,24 @@ let simplify_exits lam =
   | Lapply ap ->
       Lapply{ap with ap_func = simplif ~try_depth ap.ap_func;
                      ap_args = List.map (simplif ~try_depth) ap.ap_args}
-  | Lfunction{kind; params; return; body = l; attr; loc} ->
-     lfunction ~kind ~params ~return ~body:(simplif ~try_depth l) ~attr ~loc
+  | Lfunction lfun ->
+      Lfunction (map_lfunction (simplif ~try_depth) lfun)
   | Llet(str, kind, v, l1, l2) ->
       Llet(str, kind, v, simplif ~try_depth l1, simplif ~try_depth l2)
   | Lmutlet(kind, v, l1, l2) ->
       Lmutlet(kind, v, simplif ~try_depth l1, simplif ~try_depth l2)
   | Lletrec(bindings, body) ->
-      Lletrec(List.map (fun (v, l) -> (v, simplif ~try_depth l)) bindings,
-      simplif ~try_depth body)
+      let bindings =
+        List.map (fun ({ def = {kind; params; return; body = l; attr; loc} }
+                       as rb) ->
+                   let def =
+                     lfunction' ~kind ~params ~return
+                       ~body:(simplif ~try_depth l) ~attr ~loc
+                   in
+                   { rb with def })
+          bindings
+      in
+      Lletrec(bindings, simplif ~try_depth body)
   | Lprim(p, ll, loc) -> begin
     let ll = List.map (simplif ~try_depth) ll in
     match p, ll with
@@ -417,7 +432,7 @@ let simplify_lets lam =
      count bv l1;
      count bv l2
   | Lletrec(bindings, body) ->
-      List.iter (fun (_v, l) -> count bv l) bindings;
+      List.iter (fun { def } -> count bv def.body) bindings;
       count bv body
   | Lprim(_p, ll, _) -> List.iter (count bv) ll
   | Lswitch(l, sw, _loc) ->
@@ -510,19 +525,23 @@ let simplify_lets lam =
           end
       | _ -> no_opt ()
       end
-  | Lfunction{kind; params; return=return1; body = l; attr; loc} ->
+  | Lfunction{kind; params; return=return1; body = l; attr=attr1; loc}
+    ->
       begin match simplif l with
-        Lfunction{kind=Curried; params=params'; return=return2; body; attr; loc}
+        Lfunction{kind=Curried; params=params'; return=return2; body;
+                  attr=attr2; loc}
         when kind = Curried && optimize &&
+             attr1.may_fuse_arity && attr2.may_fuse_arity &&
              List.length params + List.length params' <= Lambda.max_arity() ->
           (* The return type is the type of the value returned after
              applying all the parameters to the function. The return
              type of the merged function taking [params @ params'] as
              parameters is the type returned after applying [params']. *)
           let return = return2 in
-          lfunction ~kind ~params:(params @ params') ~return ~body ~attr ~loc
+          lfunction ~kind ~params:(params @ params') ~return ~body ~attr:attr2
+            ~loc
       | body ->
-          lfunction ~kind ~params ~return:return1 ~body ~attr ~loc
+          lfunction ~kind ~params ~return:return1 ~body ~attr:attr1 ~loc
       end
   | Llet(_str, _k, v, Lvar w, l2) when optimize ->
       Hashtbl.add subst v (simplif (Lvar w));
@@ -556,7 +575,12 @@ let simplify_lets lam =
   | Llet(str, kind, v, l1, l2) -> mklet str kind v (simplif l1) (simplif l2)
   | Lmutlet(kind, v, l1, l2) -> mkmutlet kind v (simplif l1) (simplif l2)
   | Lletrec(bindings, body) ->
-      Lletrec(List.map (fun (v, l) -> (v, simplif l)) bindings, simplif body)
+      let bindings =
+        List.map (fun rb ->
+            { rb with def = map_lfunction simplif rb.def }
+          ) bindings
+      in
+      Lletrec(bindings, simplif body)
   | Lprim(p, ll, loc) -> Lprim(p, List.map simplif ll, loc)
   | Lswitch(l, sw, loc) ->
       let new_l = simplif l
@@ -622,14 +646,14 @@ let rec emit_tail_infos is_tail lambda =
       end;
       emit_tail_infos false ap.ap_func;
       list_emit_tail_infos false ap.ap_args
-  | Lfunction {body = lam} ->
-      emit_tail_infos true lam
+  | Lfunction lfun ->
+      emit_tail_infos_lfunction is_tail lfun
   | Llet (_, _k, _, lam, body)
   | Lmutlet (_k, _, lam, body) ->
       emit_tail_infos false lam;
       emit_tail_infos is_tail body
   | Lletrec (bindings, body) ->
-      List.iter (fun (_, lam) -> emit_tail_infos false lam) bindings;
+      List.iter (fun { def } -> emit_tail_infos_lfunction is_tail def) bindings;
       emit_tail_infos is_tail body
   | Lprim ((Pbytes_to_string | Pbytes_of_string), [arg], _) ->
       emit_tail_infos is_tail arg
@@ -686,6 +710,10 @@ and list_emit_tail_infos_fun f is_tail =
   List.iter (fun x -> emit_tail_infos is_tail (f x))
 and list_emit_tail_infos is_tail =
   List.iter (emit_tail_infos is_tail)
+and emit_tail_infos_lfunction _is_tail lfun =
+  (* Tail call annotations are only meaningful with respect to the
+     current function; so entering a function resets the [is_tail] flag *)
+  emit_tail_infos true lfun.body
 
 (* Split a function with default parameters into a wrapper and an
    inner function.  The wrapper fills in missing optional parameters
@@ -749,18 +777,22 @@ let split_default_wrapper ~id:fun_id ~kind ~params ~return ~body ~attr ~loc =
         in
         let body = Lambda.rename subst body in
         let inner_fun =
-          lfunction ~kind:Curried
+          lfunction' ~kind:Curried
             ~params:(List.map (fun id -> id, Pgenval) new_ids)
             ~return ~body ~attr ~loc
         in
-        (wrapper_body, (inner_id, inner_fun))
+        (wrapper_body, { id = inner_id;
+                         def = inner_fun })
   in
   try
     let body, inner = aux [] body in
     let attr = default_stub_attribute in
-    [(fun_id, lfunction ~kind ~params ~return ~body ~attr ~loc); inner]
+    [{ id = fun_id;
+       def = lfunction' ~kind ~params ~return ~body ~attr ~loc };
+     inner]
   with Exit ->
-    [(fun_id, lfunction ~kind ~params ~return ~body ~attr ~loc)]
+    [{ id = fun_id;
+       def = lfunction' ~kind ~params ~return ~body ~attr ~loc }]
 
 (* Simplify local let-bound functions: if all occurrences are
    fully-applied function calls in the same "tail scope", replace the
@@ -773,6 +805,7 @@ let split_default_wrapper ~id:fun_id ~kind ~params ~return ~body ~attr ~loc =
 type slot =
   {
     func: lfunction;
+    function_scope: lambda;
     mutable scope: lambda option;
   }
 
@@ -790,6 +823,9 @@ let simplify_local_functions lam =
      by the outermost lambda for which the the current lambda
      is in tail position. *)
   let current_scope = ref lam in
+  (* PR11383: We will only apply the transformation if we don't have to move
+     code across function boundaries *)
+  let current_function_scope = ref lam in
   let check_static lf =
     if lf.attr.local = Always_local then
       Location.prerr_warning (to_location lf.loc)
@@ -807,7 +843,11 @@ let simplify_local_functions lam =
   in
   let rec tail = function
     | Llet (_str, _kind, id, Lfunction lf, cont) when enabled lf.attr ->
-        let r = {func = lf; scope = None} in
+        let r =
+          { func = lf;
+            function_scope = !current_function_scope;
+            scope = None }
+        in
         Hashtbl.add slots id r;
         tail cont;
         begin match Hashtbl.find_opt slots id with
@@ -826,7 +866,7 @@ let simplify_local_functions lam =
         | _ ->
             check_static lf;
             (* note: if scope = None, the function is unused *)
-            non_tail lf.body
+            function_definition lf
         end
     | Lapply {ap_func = Lvar id; ap_args; _} ->
         begin match Hashtbl.find_opt slots id with
@@ -837,6 +877,10 @@ let simplify_local_functions lam =
         | Some {scope = Some scope; _} when scope != !current_scope ->
             (* Different "tail scope" *)
             Hashtbl.remove slots id
+        | Some {function_scope = fscope; _}
+          when fscope != !current_function_scope ->
+            (* Non local function *)
+            Hashtbl.remove slots id
         | Some ({scope = None; _} as slot) ->
             (* First use of the function: remember the current tail scope *)
             slot.scope <- Some !current_scope
@@ -846,13 +890,18 @@ let simplify_local_functions lam =
         List.iter non_tail ap_args
     | Lvar id ->
         Hashtbl.remove slots id
-    | Lfunction lf as lam ->
+    | Lfunction lf ->
         check_static lf;
-        Lambda.shallow_iter ~tail ~non_tail lam
+        function_definition lf
     | lam ->
         Lambda.shallow_iter ~tail ~non_tail lam
   and non_tail lam =
     with_scope ~scope:lam lam
+  and function_definition lf =
+    let old_function_scope = !current_function_scope in
+    current_function_scope := lf.body;
+    non_tail lf.body;
+    current_function_scope := old_function_scope
   and with_scope ~scope lam =
     let old_scope = !current_scope in
     current_scope := scope;

@@ -49,15 +49,17 @@ let cmx_required = ref ([] : string list)
 
 let check_consistency file_name unit crc =
   begin try
+    let source = List.assoc unit.ui_name !implementations_defined in
+    raise (Error(Multiple_definition(unit.ui_name, file_name, source)))
+  with Not_found -> ()
+  end;
+  begin try
     List.iter
       (fun (name, crco) ->
         interfaces := name :: !interfaces;
         match crco with
           None -> ()
-        | Some crc ->
-            if name = unit.ui_name
-            then Cmi_consistbl.set crc_interfaces name crc file_name
-            else Cmi_consistbl.check crc_interfaces name crc file_name)
+        | Some crc -> Cmi_consistbl.check crc_interfaces name crc file_name)
       unit.ui_imports_cmi
   with Cmi_consistbl.Inconsistency {
       unit_name = name;
@@ -84,13 +86,8 @@ let check_consistency file_name unit crc =
     } ->
     raise(Error(Inconsistent_implementation(name, user, auth)))
   end;
-  begin try
-    let source = List.assoc unit.ui_name !implementations_defined in
-    raise (Error(Multiple_definition(unit.ui_name, file_name, source)))
-  with Not_found -> ()
-  end;
   implementations := unit.ui_name :: !implementations;
-  Cmx_consistbl.set crc_implementations unit.ui_name crc file_name;
+  Cmx_consistbl.check crc_implementations unit.ui_name crc file_name;
   implementations_defined :=
     (unit.ui_name, file_name) :: !implementations_defined;
   if unit.ui_symbol <> unit.ui_name then
@@ -236,9 +233,22 @@ let make_startup_file ~ppf_dump units_list ~crc_interfaces =
   Emit.begin_assembly ();
   let name_list =
     List.flatten (List.map (fun (info,_,_) -> info.ui_defines) units_list) in
-  compile_phrase (Cmm_helpers.entry_point name_list);
+  let entry = Cmm_helpers.entry_point name_list in
+  let entry =
+    if Config.tsan then
+      match entry with
+      | Cfunction ({ fun_body; _ } as cf) ->
+          Cmm.Cfunction
+            { cf with fun_body = Thread_sanitizer.wrap_entry_exit fun_body }
+      | _ -> assert false
+    else
+      entry
+  in
+  compile_phrase entry;
   let units = List.map (fun (info,_,_) -> info) units_list in
-  List.iter compile_phrase (Cmm_helpers.generic_functions false units);
+  List.iter compile_phrase
+    (Cmm_helpers.emit_preallocated_blocks [] (* add gc_roots (for dynlink) *)
+      (Cmm_helpers.generic_functions false units));
   Array.iteri
     (fun i name -> compile_phrase (Cmm_helpers.predef_exception i name))
     Runtimedef.builtin_exceptions;
@@ -263,7 +273,8 @@ let make_shared_startup_file ~ppf_dump units =
   Compilenv.reset "_shared_startup";
   Emit.begin_assembly ();
   List.iter compile_phrase
-    (Cmm_helpers.generic_functions true (List.map fst units));
+    (Cmm_helpers.emit_preallocated_blocks [] (* add gc_roots (for dynlink) *)
+      (Cmm_helpers.generic_functions true (List.map fst units)));
   compile_phrase (Cmm_helpers.plugin_header units);
   compile_phrase
     (Cmm_helpers.global_table
@@ -313,9 +324,10 @@ let call_linker file_list startup_file output_name =
   and main_obj_runtime = !Clflags.output_complete_object
   in
   let files = startup_file :: (List.rev file_list) in
-  let files, c_lib =
+  let files, ldflags =
     if (not !Clflags.output_c_object) || main_dll || main_obj_runtime then
       files @ (List.rev !Clflags.ccobjs) @ runtime_lib (),
+      native_ldflags ^ " " ^
       (if !Clflags.nopervasives || (main_obj_runtime && not main_dll)
        then "" else Config.native_c_libraries)
     else
@@ -326,7 +338,7 @@ let call_linker file_list startup_file output_name =
     else if !Clflags.output_c_object then Ccomp.Partial
     else Ccomp.Exe
   in
-  let exitcode = Ccomp.call_linker mode output_name files c_lib in
+  let exitcode = Ccomp.call_linker mode output_name files ldflags in
   if not (exitcode = 0)
   then raise(Error(Linking_error exitcode))
 
@@ -373,61 +385,68 @@ let link ~ppf_dump objfiles output_name =
 (* Error report *)
 
 open Format
+module Style = Misc.Style
 
 let report_error ppf = function
   | File_not_found name ->
-      fprintf ppf "Cannot find file %s" name
+      fprintf ppf "Cannot find file %a" Style.inline_code name
   | Not_an_object_file name ->
       fprintf ppf "The file %a is not a compilation unit description"
-        Location.print_filename name
+        (Style.as_inline_code Location.print_filename) name
   | Missing_implementations l ->
      let print_references ppf = function
        | [] -> ()
        | r1 :: rl ->
-           fprintf ppf "%s" r1;
-           List.iter (fun r -> fprintf ppf ",@ %s" r) rl in
+           Style.inline_code ppf r1;
+           List.iter (fun r -> fprintf ppf ",@ %a" Style.inline_code r) rl in
       let print_modules ppf =
         List.iter
          (fun (md, rq) ->
-            fprintf ppf "@ @[<hov 2>%s referenced from %a@]" md
-            print_references rq) in
+           fprintf ppf "@ @[<hov 2>%a referenced from %a@]"
+             Style.inline_code md
+             print_references rq) in
       fprintf ppf
        "@[<v 2>No implementations provided for the following modules:%a@]"
        print_modules l
   | Inconsistent_interface(intf, file1, file2) ->
       fprintf ppf
        "@[<hov>Files %a@ and %a@ make inconsistent assumptions \
-              over interface %s@]"
-       Location.print_filename file1
-       Location.print_filename file2
-       intf
+              over interface %a@]"
+       (Style.as_inline_code Location.print_filename) file1
+       (Style.as_inline_code Location.print_filename) file2
+       Style.inline_code intf
   | Inconsistent_implementation(intf, file1, file2) ->
       fprintf ppf
        "@[<hov>Files %a@ and %a@ make inconsistent assumptions \
-              over implementation %s@]"
-       Location.print_filename file1
-       Location.print_filename file2
-       intf
+              over implementation %a@]"
+       (Style.as_inline_code Location.print_filename) file1
+       (Style.as_inline_code Location.print_filename) file2
+       Style.inline_code intf
   | Assembler_error file ->
-      fprintf ppf "Error while assembling %a" Location.print_filename file
+      fprintf ppf "Error while assembling %a"
+        (Style.as_inline_code Location.print_filename) file
   | Linking_error exitcode ->
       fprintf ppf "Error during linking (exit code %d)" exitcode
   | Multiple_definition(modname, file1, file2) ->
       fprintf ppf
-        "@[<hov>Files %a@ and %a@ both define a module named %s@]"
-        Location.print_filename file1
-        Location.print_filename file2
-        modname
+        "@[<hov>Files %a@ and %a@ both define a module named %a@]"
+        (Style.as_inline_code Location.print_filename) file1
+        (Style.as_inline_code Location.print_filename) file2
+        Style.inline_code modname
   | Missing_cmx(filename, name) ->
       fprintf ppf
         "@[<hov>File %a@ was compiled without access@ \
-         to the .cmx file@ for module %s,@ \
-         which was produced by `ocamlopt -for-pack'.@ \
-         Please recompile %a@ with the correct `-I' option@ \
-         so that %s.cmx@ is found.@]"
-        Location.print_filename filename name
-        Location.print_filename  filename
-        name
+         to the %a file@ for module %a,@ \
+         which was produced by %a.@ \
+         Please recompile %a@ with the correct %a option@ \
+         so that %a@ is found.@]"
+        (Style.as_inline_code Location.print_filename) filename
+        Style.inline_code ".cmx"
+        Style.inline_code name
+        Style.inline_code "ocamlopt -for-pack"
+        (Style.as_inline_code Location.print_filename) filename
+        Style.inline_code "-I"
+        Style.inline_code (name^".cmx")
 
 let () =
   Location.register_error_of_exn

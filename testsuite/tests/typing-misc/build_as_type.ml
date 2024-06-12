@@ -1,5 +1,5 @@
 (* TEST
-   * expect
+ expect;
 *)
 
 let f = function
@@ -75,6 +75,7 @@ Lines 5-7, characters 4-7:
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 `B
+
 val f : t -> unit = <fun>
 |}]
 
@@ -103,9 +104,9 @@ let f = function
 Line 6, characters 6-8:
 6 |     | `C -> ()
           ^^
-Error: This pattern matches values of type [? `C ]
-       but a pattern was expected which matches values of type t
-       The second variant type does not allow tag(s) `C
+Error: This pattern matches values of type "[? `C ]"
+       but a pattern was expected which matches values of type "t"
+       The second variant type does not allow tag(s) "`C"
 |}]
 
 let f = function (`A, _ : _ * int) as x -> x;;
@@ -131,6 +132,7 @@ Lines 5-7, characters 4-7:
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 `B
+
 val f : t -> unit = <fun>
 |}]
 
@@ -151,5 +153,6 @@ Lines 5-7, characters 4-7:
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 `B
+
 val f : t -> unit = <fun>
 |}]

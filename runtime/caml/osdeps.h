@@ -32,16 +32,12 @@ extern unsigned short caml_win32_revision;
 #include "misc.h"
 #include "memory.h"
 
-#define Io_interrupted (-1)
-
 /* Read at most [n] bytes from file descriptor [fd] into buffer [buf].
    [flags] indicates whether [fd] is a socket
    (bit [CHANNEL_FLAG_FROM_SOCKET] is set in this case, see [io.h]).
    (This distinction matters for Win32, but not for Unix.)
    Return number of bytes read.
-   In case of error, raises [Sys_error] or [Sys_blocked_io].
-   If interrupted by a signal and no bytes where read, returns
-   Io_interrupted without raising. */
+   In case of error, set [errno] and return -1. */
 extern int caml_read_fd(int fd, int flags, void * buf, int n);
 
 /* Write at most [n] bytes from buffer [buf] onto file descriptor [fd].
@@ -49,9 +45,7 @@ extern int caml_read_fd(int fd, int flags, void * buf, int n);
    (bit [CHANNEL_FLAG_FROM_SOCKET] is set in this case, see [io.h]).
    (This distinction matters for Win32, but not for Unix.)
    Return number of bytes written.
-   In case of error, raises [Sys_error] or [Sys_blocked_io].
-   If interrupted by a signal and no bytes were written, returns
-   Io_interrupted without raising. */
+   In case of error, set [errno] and return -1. */
 extern int caml_write_fd(int fd, int flags, void * buf, int n);
 
 /* Decompose the given path into a list of directories, and add them
@@ -71,15 +65,10 @@ extern char_os * caml_search_dll_in_path(struct ext_table * path,
                                          const char_os * name);
 
 /* Open a shared library and return a handle on it.
-   If [for_execution] is true, perform full symbol resolution and
-   execute initialization code so that functions from the shared library
-   can be called.  If [for_execution] is false, functions from this
-   shared library will not be called, but just checked for presence,
-   so symbol resolution can be skipped.
    If [global] is true, symbols from the shared library can be used
    to resolve for other libraries to be opened later on.
    Return [NULL] on error. */
-extern void * caml_dlopen(char_os * libname, int for_execution, int global);
+extern void * caml_dlopen(char_os * libname, int global);
 
 /* Close a shared library handle */
 extern void caml_dlclose(void * handle);
@@ -108,7 +97,18 @@ extern char_os *caml_secure_getenv(char_os const *var);
    cannot be determined, return -1. */
 extern int caml_num_rows_fd(int fd);
 
+/* Memory management platform-specific operations */
+
+void *caml_plat_mem_map(uintnat, int);
+void *caml_plat_mem_commit(void *, uintnat);
+void caml_plat_mem_decommit(void *, uintnat);
+void caml_plat_mem_unmap(void *, uintnat);
+
 #ifdef _WIN32
+
+/* Map a Win32 error code (as returned by GetLastError) to a POSIX error code
+   (from <errno.h>).  Return 0 if no POSIX error code matches. */
+CAMLextern int caml_posixerr_of_win32err(unsigned int win32err);
 
 extern int caml_win32_rename(const wchar_t *, const wchar_t *);
 CAMLextern int caml_win32_unlink(const wchar_t *);
@@ -121,14 +121,18 @@ extern wchar_t *caml_win32_getenv(wchar_t const *);
 
 /* Windows Unicode support */
 
-CAMLextern int win_multi_byte_to_wide_char(const char* s,
-                                       int slen,
-                                       wchar_t *out,
-                                       int outlen);
-CAMLextern int win_wide_char_to_multi_byte(const wchar_t* s,
-                                       int slen,
-                                       char *out,
-                                       int outlen);
+CAMLextern int caml_win32_multi_byte_to_wide_char(const char* s,
+                                                  int slen,
+                                                  wchar_t *out,
+                                                  int outlen);
+CAMLextern int caml_win32_wide_char_to_multi_byte(const wchar_t* s,
+                                                  int slen,
+                                                  char *out,
+                                                  int outlen);
+
+/* Legacy names */
+#define win_multi_byte_to_wide_char caml_win32_multi_byte_to_wide_char
+#define win_wide_char_to_multi_byte caml_win32_wide_char_to_multi_byte
 
 CAMLextern int caml_win32_isatty(int fd);
 
@@ -136,7 +140,20 @@ CAMLextern void caml_expand_command_line (int *, wchar_t ***);
 
 CAMLextern clock_t caml_win32_clock(void);
 
+CAMLextern value caml_win32_xdg_defaults(void);
+
 #endif /* _WIN32 */
+
+/* Returns the current value of a counter that increments once per nanosecond.
+   On systems that support it, this uses a monotonic timesource which ignores
+   changes in the system time (so that this counter increases by 1000000 each
+   millisecond, even if the system clock was set back by an hour during that
+   millisecond). This makes it useful for benchmarking and timeouts, but not
+   for telling the time. The units are always nanoseconds, but the achieved
+   resolution may be less. The starting point is unspecified. */
+extern uint64_t caml_time_counter(void);
+
+extern void caml_init_os_params(void);
 
 #endif /* CAML_INTERNALS */
 

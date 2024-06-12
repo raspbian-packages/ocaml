@@ -1,7 +1,7 @@
 (* TEST
-   flags ="-keep-original-error-size"
-   * expect
-  *)
+ flags = "-keep-original-error-size";
+ expect;
+*)
 
 
 module A = struct
@@ -28,7 +28,7 @@ Lines 9-13, characters 15-3:
 13 | end
 Error: Signature mismatch:
        ...
-       In module B:
+       In module "B":
        Modules do not match:
          sig
            type a = B.a
@@ -76,7 +76,7 @@ Error: Signature mismatch:
        ...
        ...
        ...
-       At position module type B = sig module C : <here> end
+       At position "module type B = sig module C : <here> end"
        Modules do not match:
          sig
            type a = C.a

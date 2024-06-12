@@ -1,5 +1,5 @@
 (* TEST
-   * expect
+ expect;
 *)
 
 (* Syntax *)
@@ -54,16 +54,18 @@ type _ t = N : 'a -> 'a N.t t (* KO *)
 Line 1, characters 0-29:
 1 | type _ t = N : 'a -> 'a N.t t (* KO *)
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: In this definition, a type variable cannot be deduced
-       from the type parameters.
+Error: In the GADT constructor
+         "N : 'a -> 'a N.t t"
+       the type variable "'a" cannot be deduced from the type parameters.
 |}]
 type 'a u = 'b constraint 'a = 'b N.t
 [%%expect{|
 Line 1, characters 0-37:
 1 | type 'a u = 'b constraint 'a = 'b N.t
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: In this definition, a type variable cannot be deduced
-       from the type parameters.
+Error: In the definition
+         "type 'a u = 'b constraint 'a = 'b N.t"
+       the type variable "'b" cannot be deduced from the type parameters.
 |}]
 
 (* Of course, the internal type should be injective in this parameter *)
@@ -124,8 +126,9 @@ module M : sig type 'a t = private < m : int; .. > end
 Line 3, characters 0-30:
 3 | type 'a u = M : 'a -> 'a M.t u
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: In this definition, a type variable cannot be deduced
-       from the type parameters.
+Error: In the GADT constructor
+         "M : 'a -> 'a M.t u"
+       the type variable "'a" cannot be deduced from the type parameters.
 |}]
 module M : sig type !'a t = private < m : int ; .. > end =
   struct type 'a t = < m : int > end
@@ -192,8 +195,9 @@ let M.G (x : bool) = M.G 3
 Line 3, characters 2-29:
 3 |   type _ x = G : 'a -> 'a u x
       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: In this definition, a type variable cannot be deduced
-       from the type parameters.
+Error: In the GADT constructor
+         "G : 'a X.t -> 'a X.t u x"
+       the type variable "'a" cannot be deduced from the type parameters.
 |}]
 
 (* Try to be clever *)
@@ -312,6 +316,7 @@ Line 47, characters 4-11:
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 None
+
 val v' : int Vec.t Vec.t = <abstr>
 |}]
 
@@ -343,6 +348,7 @@ Line 17, characters 2-30:
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 Vec (Vec Int)
+
 val eq_int_any : unit -> (int, 'a) eq = <fun>
 |}]
 
@@ -370,8 +376,9 @@ type 'a t = 'b constraint 'a = < b : 'b; c : 'c >
 Line 2, characters 0-27:
 2 | type _ u = M : 'a -> 'a t u (* KO *)
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: In this definition, a type variable cannot be deduced
-       from the type parameters.
+Error: In the GADT constructor
+         "M : < b : 'a; c : 'b > -> < b : 'a; c : 'b > t u"
+       the type variable "'b" cannot be deduced from the type parameters.
 |}]
 
 
@@ -421,7 +428,7 @@ let boom = let module U = Uninj(R) in print_endline (coerce (U.uninj x_eq_y) 0)
 Line 1, characters 18-21:
 1 | let x_eq_y : (int R.t, string R.t) eql = Refl
                       ^^^
-Error: Unbound module R
+Error: Unbound module "R"
 |}]
 
 (* #10028 by Stephen Dolan *)
@@ -434,4 +441,47 @@ end =
 ;;
 [%%expect{|
 module rec A : sig type _ t = Foo : 'a -> 'a A.s t type 'a s = T of 'a end
+|}]
+
+(* #12878 *)
+module Priv1 :
+sig
+  type !'a t = private [`T of 'a t]
+  val eql : (int t, string t) eql
+end =
+struct
+  type 'a t = [`T of 'a t]
+  let eql = Refl
+end
+
+let boom_1 = let module U = Uninj (Priv1) in print_endline (coerce (U.uninj Priv1.eql) 0)
+;;
+[%%expect{|
+Line 3, characters 2-35:
+3 |   type !'a t = private [`T of 'a t]
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this definition, expected parameter variances are not satisfied.
+       The 1st type parameter was expected to be injective invariant,
+       but it is invariant.
+|}]
+
+module Priv2 :
+sig
+  type !'a t = private <m:'a t>
+  val eql : (int t, string t) eql
+end =
+struct
+  type 'a t = <m:'a t>
+  let eql = Refl
+end
+
+let boom_2 = let module U = Uninj (Priv2) in print_endline (coerce (U.uninj Priv2.eql) 0)
+;;
+[%%expect{|
+Line 3, characters 2-31:
+3 |   type !'a t = private <m:'a t>
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this definition, expected parameter variances are not satisfied.
+       The 1st type parameter was expected to be injective invariant,
+       but it is invariant.
 |}]
