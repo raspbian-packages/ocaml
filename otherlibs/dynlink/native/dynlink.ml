@@ -1,4 +1,3 @@
-#3 "otherlibs/dynlink/native/dynlink.ml"
 (**************************************************************************)
 (*                                                                        *)
 (*                                 OCaml                                  *)
@@ -18,8 +17,6 @@
 
 (* Dynamic loading of .cmx files *)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
-
 open! Dynlink_compilerlibs
 
 module DC = Dynlink_common
@@ -37,6 +34,8 @@ module Native = struct
 
   external ndl_open : string -> bool -> handle * Cmxs_format.dynheader
     = "caml_natdynlink_open"
+  external ndl_register : handle -> string array -> unit
+    = "caml_natdynlink_register"
   external ndl_run : handle -> string -> unit = "caml_natdynlink_run"
   external ndl_getmap : unit -> global_map list = "caml_natdynlink_getmap"
   external ndl_globals_inited : unit -> int = "caml_natdynlink_globals_inited"
@@ -71,7 +70,7 @@ module Native = struct
           | None -> None
           | Some _ as crco -> Some (crco, DT.Check_inited !rank)
         in
-        f acc ~comp_unit:name ~interface:crc_intf
+        f acc ~compunit:name ~interface:crc_intf
             ~implementation ~defined_symbols:syms)
       init
       (ndl_getmap ())
@@ -79,7 +78,7 @@ module Native = struct
   let run_shared_startup handle =
     ndl_run handle "_shared_startup"
 
-  let run handle ~unit_header ~priv:_ =
+  let run _lock handle ~unit_header ~priv:_ =
     List.iter (fun cu ->
         try ndl_run handle cu
         with exn ->
@@ -96,7 +95,14 @@ module Native = struct
     if header.dynu_magic <> Config.cmxs_magic_number then begin
       raise (DT.Error (Not_a_bytecode_file filename))
     end;
-    handle, header.dynu_units
+    let syms =
+      "_shared_startup" ::
+      List.concat_map Unit_header.defined_symbols header.dynu_units
+    in
+    try
+      ndl_register handle (Array.of_list syms);
+      handle, header.dynu_units
+    with exn -> raise (DT.Error (Cannot_open_dynamic_library exn))
 
   let unsafe_get_global_value ~bytecode_or_asm_symbol =
     match ndl_loadsym bytecode_or_asm_symbol with

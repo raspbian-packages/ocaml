@@ -121,7 +121,7 @@ and core_type_desc =
             - [T #tconstr]             when [l=[T]],
             - [(T1, ..., Tn) #tconstr] when [l=[T1 ; ... ; Tn]].
          *)
-  | Ptyp_alias of core_type * string  (** [T as 'a]. *)
+  | Ptyp_alias of core_type * string loc  (** [T as 'a]. *)
   | Ptyp_variant of row_field list * closed_flag * label list option
       (** [Ptyp_variant([`A;`B], flag, labels)] represents:
             - [[ `A|`B ]]
@@ -166,6 +166,7 @@ and core_type_desc =
            {!value_description}.
          *)
   | Ptyp_package of package_type  (** [(module S)]. *)
+  | Ptyp_open of Longident.t loc * core_type (** [M.(T)] *)
   | Ptyp_extension of extension  (** [[%id]]. *)
 
 and package_type = Longident.t loc * (Longident.t loc * core_type) list
@@ -296,30 +297,21 @@ and expression_desc =
             - [let rec P1 = E1 and ... and Pn = EN in E]
                when [flag] is {{!Asttypes.rec_flag.Recursive}[Recursive]}.
          *)
-  | Pexp_function of case list  (** [function P1 -> E1 | ... | Pn -> En] *)
-  | Pexp_fun of arg_label * expression option * pattern * expression
-      (** [Pexp_fun(lbl, exp0, P, E1)] represents:
-            - [fun P -> E1]
-                      when [lbl] is {{!Asttypes.arg_label.Nolabel}[Nolabel]}
-                       and [exp0] is [None]
-            - [fun ~l:P -> E1]
-                      when [lbl] is {{!Asttypes.arg_label.Labelled}[Labelled l]}
-                       and [exp0] is [None]
-            - [fun ?l:P -> E1]
-                      when [lbl] is {{!Asttypes.arg_label.Optional}[Optional l]}
-                       and [exp0] is [None]
-            - [fun ?l:(P = E0) -> E1]
-                      when [lbl] is {{!Asttypes.arg_label.Optional}[Optional l]}
-                       and [exp0] is [Some E0]
+  | Pexp_function of
+      function_param list * type_constraint option * function_body
+  (** [Pexp_function ([P1; ...; Pn], C, body)] represents any construct
+      involving [fun] or [function], including:
+      - [fun P1 ... Pn -> E]
+        when [body = Pfunction_body E]
+      - [fun P1 ... Pn -> function p1 -> e1 | ... | pm -> em]
+        when [body = Pfunction_cases [ p1 -> e1; ...; pm -> em ]]
 
-           Notes:
-           - If [E0] is provided, only
-             {{!Asttypes.arg_label.Optional}[Optional]} is allowed.
-           - [fun P1 P2 .. Pn -> E1] is represented as nested
-             {{!expression_desc.Pexp_fun}[Pexp_fun]}.
-           - [let f P = E] is represented using
-             {{!expression_desc.Pexp_fun}[Pexp_fun]}.
-         *)
+      [C] represents a type constraint or coercion placed immediately before the
+      arrow, e.g. [fun P1 ... Pn : ty -> ...] when [C = Some (Pconstraint ty)].
+
+      A function must have parameters. [Pexp_function (params, _, body)] must
+      have non-empty [params] or a [Pfunction_cases _] body.
+  *)
   | Pexp_apply of expression * (arg_label * expression) list
       (** [Pexp_apply(E0, [(l1, E1) ; ... ; (ln, En)])]
             represents [E0 ~l1:E1 ... ~ln:En]
@@ -439,6 +431,66 @@ and binding_op =
     pbop_exp : expression;
     pbop_loc : Location.t;
   }
+
+and function_param_desc =
+  | Pparam_val of arg_label * expression option * pattern
+  (** [Pparam_val (lbl, exp0, P)] represents the parameter:
+      - [P]
+        when [lbl] is {{!Asttypes.arg_label.Nolabel}[Nolabel]}
+        and [exp0] is [None]
+      - [~l:P]
+        when [lbl] is {{!Asttypes.arg_label.Labelled}[Labelled l]}
+        and [exp0] is [None]
+      - [?l:P]
+        when [lbl] is {{!Asttypes.arg_label.Optional}[Optional l]}
+        and [exp0] is [None]
+      - [?l:(P = E0)]
+        when [lbl] is {{!Asttypes.arg_label.Optional}[Optional l]}
+        and [exp0] is [Some E0]
+
+      Note: If [E0] is provided, only
+      {{!Asttypes.arg_label.Optional}[Optional]} is allowed.
+  *)
+  | Pparam_newtype of string loc
+  (** [Pparam_newtype x] represents the parameter [(type x)].
+      [x] carries the location of the identifier, whereas the [pparam_loc]
+      on the enclosing [function_param] node is the location of the [(type x)]
+      as a whole.
+
+      Multiple parameters [(type a b c)] are represented as multiple
+      [Pparam_newtype] nodes, let's say:
+
+      {[ [ { pparam_kind = Pparam_newtype a; pparam_loc = loc1 };
+           { pparam_kind = Pparam_newtype b; pparam_loc = loc2 };
+           { pparam_kind = Pparam_newtype c; pparam_loc = loc3 };
+         ]
+      ]}
+
+      Here, the first loc [loc1] is the location of [(type a b c)], and the
+      subsequent locs [loc2] and [loc3] are the same as [loc1], except marked as
+      ghost locations. The locations on [a], [b], [c], correspond to the
+      variables [a], [b], and [c] in the source code.
+  *)
+
+and function_param =
+  { pparam_loc : Location.t;
+    pparam_desc : function_param_desc;
+  }
+
+and function_body =
+  | Pfunction_body of expression
+  | Pfunction_cases of case list * Location.t * attributes
+  (** In [Pfunction_cases (_, loc, attrs)], the location extends from the
+      start of the [function] keyword to the end of the last case. The compiler
+      will only use typechecking-related attributes from [attrs], e.g. enabling
+      or disabling a warning.
+  *)
+(** See the comment on {{!expression_desc.Pexp_function}[Pexp_function]}. *)
+
+and type_constraint =
+  | Pconstraint of core_type
+  | Pcoerce of core_type option * core_type
+(** See the comment on {{!expression_desc.Pexp_function}[Pexp_function]}. *)
 
 (** {2 Value descriptions} *)
 
@@ -960,7 +1012,8 @@ and module_expr_desc =
   | Pmod_structure of structure  (** [struct ... end] *)
   | Pmod_functor of functor_parameter * module_expr
       (** [functor(X : MT1) -> ME] *)
-  | Pmod_apply of module_expr * module_expr  (** [ME1(ME2)] *)
+  | Pmod_apply of module_expr * module_expr (** [ME1(ME2)] *)
+  | Pmod_apply_unit of module_expr (** [ME1()] *)
   | Pmod_constraint of module_expr * module_type  (** [(ME : MT)] *)
   | Pmod_unpack of expression  (** [(val E)] *)
   | Pmod_extension of extension  (** [[%id]] *)
@@ -1004,13 +1057,30 @@ and structure_item_desc =
   | Pstr_attribute of attribute  (** [[\@\@\@id]] *)
   | Pstr_extension of extension * attributes  (** [[%%id]] *)
 
+and value_constraint =
+  | Pvc_constraint of {
+      locally_abstract_univars:string loc list;
+      typ:core_type;
+    }
+  | Pvc_coercion of {ground:core_type option; coercion:core_type }
+  (**
+     - [Pvc_constraint { locally_abstract_univars=[]; typ}]
+         is a simple type constraint on a value binding: [ let x : typ]
+     - More generally, in [Pvc_constraint { locally_abstract_univars; typ}]
+       [locally_abstract_univars] is the list of locally abstract type
+       variables in [ let x: type a ... . typ ]
+     - [Pvc_coercion { ground=None; coercion }] represents [let x :> typ]
+     - [Pvc_coercion { ground=Some g; coercion }] represents [let x : g :> typ]
+  *)
+
 and value_binding =
   {
     pvb_pat: pattern;
     pvb_expr: expression;
+    pvb_constraint: value_constraint option;
     pvb_attributes: attributes;
     pvb_loc: Location.t;
-  }
+  }(** [let pat : type_constraint = exp] *)
 
 and module_binding =
     {

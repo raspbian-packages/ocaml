@@ -52,8 +52,6 @@ let rec lookup_map lid m =
   | Ldot (l, s) -> String.Map.find s (get_map (lookup_map l m))
   | Lapply _    -> raise Not_found
 
-(* Collect free module identifiers in the a.s.t. *)
-
 let free_structure_names = ref String.Set.empty
 
 let add_names s =
@@ -117,6 +115,9 @@ let rec add_type bv ty =
         fl
   | Ptyp_poly(_, t) -> add_type bv t
   | Ptyp_package pt -> add_package_type bv pt
+  | Ptyp_open (mod_ident, t) ->
+    let bv = open_module bv mod_ident.txt in
+    add_type bv t
   | Ptyp_extension e -> handle_extension e
 
 and add_package_type bv (lid, l) =
@@ -204,10 +205,10 @@ let rec add_expr bv exp =
   | Pexp_constant _ -> ()
   | Pexp_let(rf, pel, e) ->
       let bv = add_bindings rf bv pel in add_expr bv e
-  | Pexp_fun (_, opte, p, e) ->
-      add_opt add_expr bv opte; add_expr (add_pattern bv p) e
-  | Pexp_function pel ->
-      add_cases bv pel
+  | Pexp_function (params, constraint_, body) ->
+      let bv = List.fold_left add_function_param bv params in
+      add_opt add_constraint bv constraint_;
+      add_function_body bv body
   | Pexp_apply(e, el) ->
       add_expr bv e; List.iter (fun (_,e) -> add_expr bv e) el
   | Pexp_match(e, pel) -> add_expr bv e; add_cases bv pel
@@ -271,6 +272,28 @@ let rec add_expr bv exp =
   | Pexp_extension e -> handle_extension e
   | Pexp_unreachable -> ()
 
+and add_function_param bv param =
+  match param.pparam_desc with
+  | Pparam_val (_, opte, pat) ->
+      add_opt add_expr bv opte;
+      add_pattern bv pat
+  | Pparam_newtype _ -> bv
+
+and add_function_body bv body =
+  match body with
+  | Pfunction_body e ->
+      add_expr bv e
+  | Pfunction_cases (cases, _, _) ->
+      add_cases bv cases
+
+and add_constraint bv constraint_ =
+  match constraint_ with
+  | Pconstraint ty ->
+      add_type bv ty
+  | Pcoerce (ty1, ty2) ->
+      add_opt add_type bv ty1;
+      add_type bv ty2
+
 and add_cases bv cases =
   List.iter (add_case bv) cases
 
@@ -282,7 +305,18 @@ and add_case bv {pc_lhs; pc_guard; pc_rhs} =
 and add_bindings recf bv pel =
   let bv' = List.fold_left (fun bv x -> add_pattern bv x.pvb_pat) bv pel in
   let bv = if recf = Recursive then bv' else bv in
-  List.iter (fun x -> add_expr bv x.pvb_expr) pel;
+  let add_constraint = function
+    | Pvc_constraint {locally_abstract_univars=_; typ} ->
+        add_type bv typ
+    | Pvc_coercion { ground; coercion } ->
+        Option.iter (add_type bv) ground;
+        add_type bv coercion
+  in
+  let add_one_binding { pvb_pat= _ ; pvb_loc= _ ; pvb_constraint; pvb_expr } =
+    add_expr bv pvb_expr;
+    Option.iter add_constraint pvb_constraint
+  in
+  List.iter add_one_binding pel;
   bv'
 
 and add_binding_op bv bv' pbop =
@@ -436,8 +470,11 @@ and add_module_expr bv modl =
           | Some name -> String.Map.add name bound bv
       in
       add_module_expr bv modl
-  | Pmod_apply(mod1, mod2) ->
-      add_module_expr bv mod1; add_module_expr bv mod2
+  | Pmod_apply (mod1, mod2) ->
+      add_module_expr bv mod1;
+      add_module_expr bv mod2
+  | Pmod_apply_unit mod1 ->
+      add_module_expr bv mod1
   | Pmod_constraint(modl, mty) ->
       add_module_expr bv modl; add_modtype bv mty
   | Pmod_unpack(e) ->

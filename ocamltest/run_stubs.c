@@ -17,6 +17,8 @@
 
 #define _GNU_SOURCE
 
+#define CAML_INTERNALS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -71,10 +73,10 @@ static void logToChannel(void *voidchannel, const char *fmt, va_list ap)
     if (text == NULL) return;
     if (vsnprintf(text, length, fmt, ap) != length) goto end;
   }
-  Lock(channel);
+  caml_channel_lock(channel);
   caml_putblock(channel, text, length);
   caml_flush(channel);
-  Unlock(channel);
+  caml_channel_unlock(channel);
 end:
   free(text);
 }

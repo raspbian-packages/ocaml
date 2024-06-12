@@ -71,10 +71,13 @@ val use_inlining_arguments_set : ?round:int -> inlining_arguments -> unit
 val objfiles : string list ref
 val ccobjs : string list ref
 val dllibs : string list ref
+val cmi_file : string option ref
 val compile_only : bool ref
 val output_name : string option ref
 val include_dirs : string list ref
+val hidden_include_dirs : string list ref
 val no_std_include : bool ref
+val no_cwd : bool ref
 val print_types : bool ref
 val make_archive : bool ref
 val debug : bool ref
@@ -92,12 +95,14 @@ val all_ccopts : string list ref
 val classic : bool ref
 val nopervasives : bool ref
 val match_context_rows : int ref
+val safer_matching : bool ref
 val open_modules : string list ref
 val preprocessor : string option ref
 val all_ppx : string list ref
 val absname : bool ref
 val annotations : bool ref
 val binary_annotations : bool ref
+val store_occurrences : bool ref
 val use_threads : bool ref
 val noassert : bool ref
 val verbose : bool ref
@@ -192,7 +197,6 @@ val with_runtime : bool ref
 val force_slash : bool ref
 val keep_docs : bool ref
 val keep_locs : bool ref
-val unsafe_string : bool ref
 val opaque : bool ref
 val profile_columns : Profile.column list ref
 val flambda_invariant_checks : bool ref
@@ -239,7 +243,7 @@ val insn_sched : bool ref
 val insn_sched_default : bool
 
 module Compiler_pass : sig
-  type t = Parsing | Typing | Scheduling | Emit
+  type t = Parsing | Typing | Lambda | Scheduling | Emit
   val of_string : string -> t option
   val to_string : t -> string
   val is_compilation_pass : t -> bool

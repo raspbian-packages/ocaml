@@ -86,7 +86,7 @@ type exttype =
 let machtype_of_exttype = function
   | XInt -> typ_int
   | XInt32 -> typ_int
-  | XInt64 -> if Arch.size_int = 4 then [|Int;Int|] else typ_int
+  | XInt64 -> typ_int
   | XFloat -> typ_float
 
 let machtype_of_exttype_list xtl =
@@ -150,7 +150,10 @@ type memory_chunk =
 and operation =
     Capply of machtype
   | Cextcall of string * machtype * exttype list * bool
-  | Cload of memory_chunk * Asttypes.mutable_flag
+  | Cload of
+      { memory_chunk: memory_chunk
+      ; mutability: Asttypes.mutable_flag
+      ; is_atomic: bool }
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
@@ -165,6 +168,7 @@ and operation =
   | Craise of Lambda.raise_kind
   | Ccheckbound
   | Copaque
+  | Cdls_get
 
 type expression =
     Cconst_int of int * Debuginfo.t
@@ -193,6 +197,7 @@ type expression =
   | Cexit of int * expression list
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
+  | Creturn_addr
 
 type codegen_option =
   | Reduce_code_size
@@ -262,7 +267,8 @@ let iter_shallow_tail f = function
   | Cvar _
   | Cassign _
   | Ctuple _
-  | Cop _ ->
+  | Cop _
+  | Creturn_addr ->
       false
 
 let rec map_tail f = function
@@ -298,6 +304,7 @@ let rec map_tail f = function
   | Cvar _
   | Cassign _
   | Ctuple _
+  | Creturn_addr
   | Cop _ as c ->
       f c
 
@@ -332,5 +339,6 @@ let map_shallow f = function
   | Cconst_float _
   | Cconst_symbol _
   | Cvar _
+  | Creturn_addr
     as c ->
       c

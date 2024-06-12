@@ -36,24 +36,20 @@ The
 command is the toplevel system for OCaml,
 that permits interactive use of the OCaml system through a
 read-eval-print loop. In this mode, the system repeatedly reads OCaml
-phrases from the input, then typechecks, compiles and evaluates
-them, then prints the inferred type and result value, if any. The
-system prints a # (hash) prompt before reading each phrase.
-
-A toplevel phrase can span several lines. It is terminated by ;; (a
-double-semicolon). The syntax of toplevel phrases is as follows.
-
-The toplevel system is started by the command
+phrases from standard input, then typechecks, compiles and evaluates
+them, then prints the inferred type and result value, if any.
+End-of-file on standard input terminates
 .BR ocaml (1).
-Phrases are read on standard input, results are printed on standard
-output, errors on standard error. End-of-file on standard input
-terminates
-.BR ocaml (1).
+
+Input to the toplevel can span several lines. It begins after the #
+(sharp) prompt printed by the system and is terminated by ;; (a
+double-semicolon) followed by optional white space and an end of line.
+The toplevel input consists in one or several toplevel phrases.
 
 If one or more
 .I object-files
-(ending in .cmo or .cma) are given, they are loaded silently before
-starting the toplevel.
+(ending in .cmo or .cma) are given on the command line, they are
+loaded silently before starting the toplevel.
 
 If a
 .I script-file
@@ -70,7 +66,10 @@ The following command-line options are recognized by
 .B \-absname
 Show absolute filenames in error messages.
 .TP
-.BI \-I \ directory
+.B \-no-absname
+Do not try to show absolute filenames in error messages.
+.TP
+.BI \-I " directory"
 Add the given directory to the list of directories searched for
 source and compiled files. By default, the current directory is
 searched first, then the standard library directory. Directories added
@@ -94,7 +93,7 @@ is running with the
 .B #directory
 directive.
 .TP
-.BI \-init \ file
+.BI \-init " file"
 Load the given file instead of the default initialization file.
 See the "Initialization file" section below.
 .TP
@@ -136,13 +135,13 @@ window.
 Do not include the standard library directory in the list of
 directories searched for source and compiled files.
 .TP
-.BI \-open \ module
+.BI \-open " module"
 Opens the given module before starting the toplevel. If several
 .B \-open
 options are given, they are processed in order, just as if
 the statements open! module1;; ... open! moduleN;; were input.
 .TP
-.BI \-ppx \ command
+.BI \-ppx " command"
 After parsing, pipe the abstract syntax tree through the preprocessor
 .IR command .
 The module
@@ -162,15 +161,29 @@ default mode with equivalent types, but different binary signatures,
 and this may slow down type checking; yet it is a good idea to
 use it once before publishing source code.
 .TP
+.B \-no\-principal
+Do not check principality of type inference.
+This is the default.
+.TP
 .B \-rectypes
 Allow arbitrary recursive types during type-checking.  By default,
 only recursive types where the recursion goes through an object type
 are supported.
 .TP
+.B \-no\-rectypes
+Do no allow arbitrary recursive types during type-checking.
+This is the default.
+.TP
 .B \-safe\-string
 Enforce the separation between types
-.BR string \ and\  bytes ,
+.BR string " and " bytes ,
 thereby making strings read-only. This is the default.
+.TP
+.B \-safer\-matching
+Do not use type information to optimize pattern-matching.
+This allows to detect match failures even if a pattern-matching was
+wrongly assumed to be exhaustive. This only impacts GADT and
+polymorphic variant compilation.
 .TP
 .B \-short\-paths
 When a type is visible under several module-paths, use the shortest
@@ -183,6 +196,10 @@ interactive session.
 .TP
 .B \-strict\-sequence
 Force the left-hand part of each sequence to have type unit.
+.TP
+.B \-no\-strict\-sequence
+Left-hand part of a sequence need not have type unit.
+This is the default.
 .TP
 .B \-unboxed\-types
 When a type is unboxable (i.e. a record with a single argument or a
@@ -197,7 +214,7 @@ This is the default.
 .TP
 .B \-unsafe
 Turn bound checking off on array and string accesses (the
-.BR v.(i) and s.[i]
+.BR v.(i) " and " s.[i]
 constructs). Programs compiled with
 .B \-unsafe
 are therefore slightly faster, but unsafe: anything can happen if the program
@@ -205,7 +222,7 @@ accesses an array or string outside of its bounds.
 .TP
 .B \-unsafe\-string
 Identify the types
-.BR string \ and\  bytes ,
+.BR string " and " bytes ,
 thereby making strings writable.
 This is intended for compatibility with old source code and should not
 be used with new software.
@@ -219,7 +236,7 @@ Print short version number and exit.
 .B \-no\-version
 Do not print the version banner at startup.
 .TP
-.BI \-w \ warning\-list
+.BI \-w " warning\-list"
 Enable or disable warnings according to the argument
 .IR warning-list .
 See
@@ -228,7 +245,7 @@ for the syntax of the
 .I warning\-list
 argument.
 .TP
-.BI \-warn\-error \ warning\-list
+.BI \-warn\-error " warning\-list"
 Mark as fatal the warnings described by the argument
 .IR warning\-list .
 Note that a warning is not triggered (and does not trigger an error) if
@@ -240,7 +257,7 @@ for the syntax of the
 .I warning\-list
 argument.
 .TP
-.BI \-color \ mode
+.BI \-color " mode"
 Enable or disable colors in compiler messages (especially warnings and errors).
 The following modes are supported:
 
@@ -266,7 +283,7 @@ checks that the "TERM" environment variable exists and is
 not empty or "dumb", and that isatty(stderr) holds.
 
 .TP
-.BI \-error\-style \ mode
+.BI \-error\-style " mode"
 Control the way error messages and warnings are printed.
 The following modes are supported:
 
@@ -288,12 +305,12 @@ above.
 .B \-warn\-help
 Show the description of all available warning numbers.
 .TP
-.BI \- \ file
+.BI \- " file"
 Use
 .I file
 as a script file name, even when it starts with a hyphen (-).
 .TP
-.BR \-help \ or \ \-\-help
+.BR \-help " or " \-\-help
 Display a short usage summary and exit.
 
 .SH INITIALIZATION FILE
@@ -301,19 +318,32 @@ Display a short usage summary and exit.
 When
 .BR ocaml (1)
 is invoked, it will read phrases from an initialization file before
-giving control to the user. The default file is
-.B .ocamlinit
-in the current directory if it exists, otherwise
-.B XDG_CONFIG_HOME/ocaml/init.ml
-according to the XDG base directory specification lookup if it exists (on
-Windows this is skipped), otherwise
-.B .ocamlinit
-in the user's home directory (
-.B HOME
-variable).
+giving control to the user. The file read is the first found of:
+.IP 1.
+\fB.ocamlinit\fP in the current directory;
+.IP 2.
+\fBXDG_CONFIG_HOME/ocaml/init.ml\fP, if \fBXDG_CONFIG_HOME\fP is an absolute
+path;
+.IP 3.
+otherwise, on Unix, \fBHOME/ocaml/init.ml\fP or, on Windows,
+\fBocaml\\init.ml\fP under \fBLocalAppData\fP
+(e.g. \fBC:\\Users\\Bactrian\\AppData\\Local\\ocaml\\init.ml\fP);
+.IP 4.
+\fBocaml/init.ml\fP under any of the absolute paths in \fBXDG_CONFIG_DIRS\fP.
+Paths in \fBXDG_CONFIG_DIRS\fP are colon-delimited on Unix, and
+semicolon-delimited on Windows;
+.IP 5.
+if \fBXDG_CONFIG_DIRS\fP contained no absolute paths,
+\fB/usr/xdg/ocaml/init.ml\fP on Unix or, \fBocaml\\init.ml\fP under any of
+\fBLocalAppData\fP (e.g. \fBC:\\Users\\Bactrian\\AppData\\Local\fP),
+\fBRoamingAppData\fP (e.g. \fBC:\\Users\\Bactrian\\AppData\\Roaming\fP), or
+\fBProgramData\fP (e.g. \fBC:\\ProgramData\fP) on Windows;
+.IP 6.
+\fBHOME/.ocamlinit\fP, if \fBHOME\fP is non-empty;
+
 You can specify a different initialization file
 by using the
-.BI \-init \ file
+.BI \-init " file"
 option, and disable initialization files by using the
 .B \-noinit
 option.
@@ -336,11 +366,12 @@ attempts to underline visually the location of the error. It
 consults the TERM variable to determines the type of output terminal
 and look up its capabilities in the terminal database.
 .TP
-.B XDG_CONFIG_HOME HOME
-.B .ocamlinit
-lookup procedure (see above).
+.B XDG_CONFIG_HOME HOME XDG_CONFIG_DIRS
+See
+.B INITIALIZATION FILE
+above.
 .SH SEE ALSO
-.BR ocamlc (1), \ ocamlopt (1), \ ocamlrun (1).
+.BR ocamlc "(1), " ocamlopt "(1), " ocamlrun (1).
 .br
 .IR The\ OCaml\ user's\ manual ,
 chapter "The toplevel system".

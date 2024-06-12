@@ -50,13 +50,6 @@ let rec split_list n l =
     | a::l -> let (l1, l2) = split_list (n-1) l in (a::l1, l2)
   end
 
-let rec build_closure_env env_param pos = function
-    [] -> V.Map.empty
-  | id :: rem ->
-      V.Map.add id
-        (Uprim(P.Pfield pos, [Uvar env_param], Debuginfo.none))
-          (build_closure_env env_param (pos+1) rem)
-
 (* Auxiliary for accessing globals.  We change the name of the global
    to the name of the corresponding asm symbol.  This is done here
    and no longer in Cmmgen so that approximations stored in .cmx files
@@ -77,8 +70,6 @@ let occurs_var var u =
     | Uoffset(u, _ofs) -> occurs u
     | Ulet(_str, _kind, _id, def, body) -> occurs def || occurs body
     | Uphantom_let _ -> no_phantom_lets ()
-    | Uletrec(decls, body) ->
-        List.exists (fun (_id, u) -> occurs u) decls || occurs body
     | Uprim(_p, args, _) -> List.exists occurs args
     | Uswitch(arg, s, _dbg) ->
         occurs arg ||
@@ -165,8 +156,6 @@ let lambda_smaller lam threshold =
     | Ulet(_str, _kind, _id, lam, body) ->
         lambda_size lam; lambda_size body
     | Uphantom_let _ -> no_phantom_lets ()
-    | Uletrec _ ->
-        raise Exit (* usually too large *)
     | Uprim(prim, args, _) ->
         size := !size + prim_size prim args;
         lambda_list_size args
@@ -479,10 +468,11 @@ let simplif_prim_pure ~backend fpc p (args, approxs) dbg =
         (Uprim(p, args, dbg), Value_tuple (Array.of_list approxs))
       end
   (* Field access *)
-  | Pfield n, _, [ Value_const(Uconst_ref(_, Some (Uconst_block(_, l)))) ]
+  | Pfield (n, _, _), _,
+            [ Value_const(Uconst_ref(_, Some (Uconst_block(_, l)))) ]
     when n < List.length l ->
       make_const (List.nth l n)
-  | Pfield n, [ Uprim(P.Pmakeblock _, ul, _) ], [approx]
+  | Pfield(n, _, _), [ Uprim(P.Pmakeblock _, ul, _) ], [approx]
     when n < List.length ul ->
       (* This case is particularly useful for removing allocations
          for optional parameters *)
@@ -580,21 +570,6 @@ let rec substitute loc ((backend, fpc) as st) sb rn ulam =
            substitute loc st
              (V.Map.add (VP.var id) (Uvar (VP.var id')) sb) rn u2)
   | Uphantom_let _ -> no_phantom_lets ()
-  | Uletrec(bindings, body) ->
-      let bindings1 =
-        List.map (fun (id, rhs) ->
-          (VP.var id, VP.rename id, rhs)) bindings
-      in
-      let sb' =
-        List.fold_right (fun (id, id', _) s ->
-            V.Map.add id (Uvar (VP.var id')) s)
-          bindings1 sb
-      in
-      Uletrec(
-        List.map
-           (fun (_id, id', rhs) -> (id', substitute loc st sb' rn rhs))
-           bindings1,
-        substitute loc st sb' rn body)
   | Uprim(p, args, dbg) ->
       let sargs = List.map (substitute loc st sb rn) args in
       let dbg = subst_debuginfo loc dbg in
@@ -701,9 +676,21 @@ let rec substitute loc ((backend, fpc) as st) sb rn ulam =
   | Uunreachable ->
       Uunreachable
 
+type closure_entry =
+  | Free_variable of int
+  | Function of int
+
+type closure_env =
+  | Not_in_closure
+  | In_closure of {
+      entries: closure_entry V.Map.t;
+      env_param: V.t;
+      env_pos: int;
+    }
+
 type env = {
   backend : (module Backend_intf.S);
-  cenv : ulambda V.Map.t;
+  cenv : closure_env;
   fenv : value_approximation V.Map.t;
   mutable_vars : V.Set.t;
 }
@@ -849,7 +836,7 @@ let check_constant_result ulam approx =
           let glb =
             Uprim(P.Pread_symbol id, [], Debuginfo.none)
           in
-          Uprim(P.Pfield i, [glb], Debuginfo.none), approx
+          Uprim(P.Pfield(i, Pointer, Immutable), [glb], Debuginfo.none), approx
       end
   | _ -> (ulam, approx)
 
@@ -882,8 +869,19 @@ let close_approx_var { fenv; cenv } id =
   match approx with
     Value_const c -> make_const c
   | approx ->
-      let subst = try V.Map.find id cenv with Not_found -> Uvar id in
-      (subst, approx)
+      match cenv with
+      | Not_in_closure -> Uvar id, approx
+      | In_closure { entries; env_param; env_pos } ->
+        let subst =
+          match V.Map.find id entries with
+          | Free_variable fv_pos ->
+            Uprim(P.Pfield(fv_pos - env_pos, Pointer, Immutable),
+                  [Uvar env_param], Debuginfo.none)
+          | Function fun_pos ->
+            Uoffset(Uvar env_param, fun_pos - env_pos)
+          | exception Not_found -> Uvar id
+        in
+        (subst, approx)
 
 let close_var env id =
   let (ulam, _app) = close_approx_var env id in ulam
@@ -895,9 +893,9 @@ let rec close ({ backend; fenv; cenv ; mutable_vars } as env) lam =
      close_approx_var env id
   | Lmutvar id -> (Uvar id, Value_unknown)
   | Lconst cst ->
-      let str ?(shared = true) cst =
+      let str cst =
         let name =
-          Compilenv.new_structured_constant cst ~shared
+          Compilenv.new_structured_constant cst ~shared:true
         in
         Uconst_ref (name, Some cst)
       in
@@ -912,20 +910,14 @@ let rec close ({ backend; fenv; cenv ; mutable_vars } as env) lam =
         | Const_immstring s ->
             str (Uconst_string s)
         | Const_base (Const_string (s, _, _)) ->
-              (* Strings (even literal ones) must be assumed to be mutable...
-                 except when OCaml has been configured with
-                 -safe-string.  Passing -safe-string at compilation
-                 time is not enough, since the unit could be linked
-                 with another one compiled without -safe-string, and
-                 that one could modify our string literal.  *)
-            str ~shared:Config.safe_string (Uconst_string s)
+            str (Uconst_string s)
         | Const_base(Const_float x) -> str (Uconst_float (float_of_string x))
         | Const_base(Const_int32 x) -> str (Uconst_int32 x)
         | Const_base(Const_int64 x) -> str (Uconst_int64 x)
         | Const_base(Const_nativeint x) -> str (Uconst_nativeint x)
       in
       make_const (transl cst)
-  | Lfunction _ as funct ->
+  | Lfunction funct ->
       close_one_function env (Ident.create_local "fun") funct
 
     (* We convert [f a] to [let a' = a in let f' = f in fun b c -> f' a' b c]
@@ -1041,41 +1033,23 @@ let rec close ({ backend; fenv; cenv ; mutable_vars } as env) lam =
      let (ubody, abody) = close env body in
      (Ulet(Mutable, kind, VP.create id, ulam, ubody), abody)
   | Lletrec(defs, body) ->
-      if List.for_all
-           (function (_id, Lfunction _) -> true | _ -> false)
-           defs
-      then begin
-        (* Simple case: only function definitions *)
-        let (clos, infos) = close_functions env defs in
-        let clos_ident = V.create_local "clos" in
-        let fenv_body =
-          List.fold_right
-            (fun (id, _pos, approx) fenv -> V.Map.add id approx fenv)
-            infos fenv in
-        let (ubody, approx) =
-          close { backend; fenv = fenv_body; cenv; mutable_vars } body in
-        let sb =
-          List.fold_right
-            (fun (id, pos, _approx) sb ->
-              V.Map.add id (Uoffset(Uvar clos_ident, pos)) sb)
-            infos V.Map.empty in
-        (Ulet(Immutable, Pgenval, VP.create clos_ident, clos,
-              substitute Debuginfo.none (backend, !Clflags.float_const_prop) sb
-                None ubody),
-         approx)
-      end else begin
-        (* General case: recursive definition of values *)
-        let rec clos_defs = function
-          [] -> ([], fenv)
-        | (id, lam) :: rem ->
-            let (udefs, fenv_body) = clos_defs rem in
-            let (ulam, approx) = close_named env id lam in
-            ((VP.create id, ulam) :: udefs, V.Map.add id approx fenv_body) in
-        let (udefs, fenv_body) = clos_defs defs in
-        let (ubody, approx) =
-          close { backend; fenv = fenv_body; cenv; mutable_vars } body in
-        (Uletrec(udefs, ubody), approx)
-      end
+      let (clos, infos) = close_functions env defs in
+      let clos_ident = V.create_local "clos" in
+      let fenv_body =
+        List.fold_right
+          (fun (id, _pos, approx) fenv -> V.Map.add id approx fenv)
+          infos fenv in
+      let (ubody, approx) =
+        close { backend; fenv = fenv_body; cenv; mutable_vars } body in
+      let sb =
+        List.fold_right
+          (fun (id, pos, _approx) sb ->
+             V.Map.add id (Uoffset(Uvar clos_ident, pos)) sb)
+          infos V.Map.empty in
+      (Ulet(Immutable, Pgenval, VP.create clos_ident, clos,
+            substitute Debuginfo.none (backend, !Clflags.float_const_prop) sb
+              None ubody),
+       approx)
   (* Compile-time constants *)
   | Lprim(Pctconst c, [arg], _loc) ->
       let cst, approx =
@@ -1102,10 +1076,10 @@ let rec close ({ backend; fenv; cenv ; mutable_vars } as env) lam =
       let dbg = Debuginfo.from_location loc in
       check_constant_result (getglobal dbg id)
                             (Compilenv.global_approx id)
-  | Lprim(Pfield n, [lam], loc) ->
+  | Lprim(Pfield (n, ptr, mut), [lam], loc) ->
       let (ulam, approx) = close env lam in
       let dbg = Debuginfo.from_location loc in
-      check_constant_result (Uprim(P.Pfield n, [ulam], dbg))
+      check_constant_result (Uprim(P.Pfield (n, ptr, mut), [ulam], dbg))
                             (field_approx n approx)
   | Lprim(Psetfield(n, is_ptr, init), [Lprim(Pgetglobal id, [], _); lam], loc)->
       let (ulam, approx) = close env lam in
@@ -1227,7 +1201,7 @@ and close_list_approx env = function
       (ulam :: ulams, approx :: approxs)
 
 and close_named env id = function
-    Lfunction _ as funct ->
+    Lfunction funct ->
       close_one_function env id funct
   | lam ->
       close env lam
@@ -1236,18 +1210,30 @@ and close_named env id = function
 
 and close_functions { backend; fenv; cenv; mutable_vars } fun_defs =
   let fun_defs =
-    List.flatten
-      (List.map
-         (function
-           | (id, Lfunction{kind; params; return; body; attr; loc}) ->
-               Simplif.split_default_wrapper ~id ~kind ~params
-                 ~body ~attr ~loc ~return
-           | _ -> assert false
+    (* Split functions with optional arguments and default values into
+       a wrapper function (likely to be inlined) and an inner function
+       (never inlined).
+
+       However, if the user forces inlining of the function, this is
+       counterproductive; we want the whole function to be inlined,
+       not just the wrapper. So we disable the split when inlining
+       is forced. Cf #12526
+    *)
+    match fun_defs with
+    | [{ def = {attr = { inline = Always_inline; }}}] ->
+        fun_defs
+    | _ ->
+        List.concat_map
+          (function
+           | { id;
+               def = {kind; params; return; body; attr; loc} } ->
+             Simplif.split_default_wrapper ~id ~kind ~params
+               ~body ~attr ~loc ~return
          )
-         fun_defs)
+         fun_defs
   in
   let inline_attribute = match fun_defs with
-    | [_, Lfunction{attr = { inline; }}] -> inline
+    | [{ def = {attr = { inline; }}}] -> inline
     | _ -> Default_inline (* recursive functions can't be inlined *)
   in
   (* Update and check nesting depth *)
@@ -1263,7 +1249,8 @@ and close_functions { backend; fenv; cenv; mutable_vars } fun_defs =
   let uncurried_defs =
     List.map
       (function
-          (id, Lfunction{kind; params; return; body; loc; attr}) ->
+          { id;
+            def = {kind; params; return; body; loc; attr} } ->
             let label = Compilenv.make_symbol (Some (V.unique_name id)) in
             let arity = List.length params in
             let fundesc =
@@ -1274,8 +1261,7 @@ and close_functions { backend; fenv; cenv; mutable_vars } fun_defs =
                fun_float_const_prop = !Clflags.float_const_prop;
                fun_poll = attr.poll } in
             let dbg = Debuginfo.from_location loc in
-            (id, params, return, body, fundesc, dbg)
-        | (_, _) -> fatal_error "Closure.close_functions")
+            (id, params, return, body, fundesc, dbg))
       fun_defs in
   (* Build an approximate fenv for compiling the functions *)
   let fenv_rec =
@@ -1296,16 +1282,29 @@ and close_functions { backend; fenv; cenv; mutable_vars } fun_defs =
   (* This reference will be set to false if the hypothesis that a function
      does not use its environment parameter is invalidated. *)
   let useless_env = ref initially_closed in
+  let cenv_entries =
+    let rec free_variables_entries fv_pos = function
+        [] -> V.Map.empty
+      | id :: rem ->
+          V.Map.add id (Free_variable fv_pos)
+            (free_variables_entries (fv_pos+1) rem)
+    in
+    let entries_fv = free_variables_entries fv_pos fv in
+    List.fold_right2
+      (fun (id, _params, _return, _body, _fundesc, _dbg) pos env ->
+         V.Map.add id (Function pos) env)
+      uncurried_defs clos_offsets entries_fv
+  in
   (* Translate each function definition *)
   let clos_fundef (id, params, return, body, fundesc, dbg) env_pos =
     let env_param = V.create_local "env" in
-    let cenv_fv =
-      build_closure_env env_param (fv_pos - env_pos) fv in
     let cenv_body =
-      List.fold_right2
-        (fun (id, _params, _return, _body, _fundesc, _dbg) pos env ->
-          V.Map.add id (Uoffset(Uvar env_param, pos - env_pos)) env)
-        uncurried_defs clos_offsets cenv_fv in
+      In_closure {
+        entries = cenv_entries;
+        env_param;
+        env_pos;
+      }
+    in
     let (ubody, approx) =
       close { backend; fenv = fenv_rec; cenv = cenv_body; mutable_vars } body
     in
@@ -1387,7 +1386,7 @@ and close_functions { backend; fenv; cenv; mutable_vars } fun_defs =
 (* Same, for one non-recursive function *)
 
 and close_one_function env id funct =
-  match close_functions env [id, funct] with
+  match close_functions env [{ id; def = funct }] with
   | (clos, (i, _, approx) :: _) when id = i -> (clos, approx)
   | _ -> fatal_error "Closure.close_one_function"
 
@@ -1478,7 +1477,6 @@ let collect_exported_structured_constants a =
     | Uoffset(u, _) -> ulam u
     | Ulet (_str, _kind, _, u1, u2) -> ulam u1; ulam u2
     | Uphantom_let _ -> no_phantom_lets ()
-    | Uletrec (l, u) -> List.iter (fun (_, u) -> ulam u) l; ulam u
     | Uprim (_, ul, _) -> List.iter ulam ul
     | Uswitch (u, sl, _dbg) ->
         ulam u;
@@ -1514,7 +1512,7 @@ let intro ~backend ~size lam =
   Compilenv.set_global_approx(Value_tuple !global_approx);
   let (ulam, _approx) =
     close { backend; fenv = V.Map.empty;
-            cenv = V.Map.empty; mutable_vars = V.Set.empty } lam
+            cenv = Not_in_closure; mutable_vars = V.Set.empty } lam
   in
   let opaque =
     !Clflags.opaque

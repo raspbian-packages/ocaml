@@ -31,14 +31,10 @@ let need_symbol sym =
   Option.is_none (Dynlink.unsafe_get_global_value ~bytecode_or_asm_symbol:sym)
 
 let dll_run dll entry =
-  match (try Result (Obj.magic (ndl_run_toplevel dll entry))
-         with exn -> Exception exn)
-  with
-    | Exception _ as r -> r
-    | Result r ->
-        match Obj.magic r with
-          | Ok x -> Result x
-          | Err s -> fatal_error ("Toploop.dll_run " ^ s)
+  match ndl_run_toplevel dll entry with
+  | Ok x -> Result x
+  | Err s -> fatal_error ("Toploop.dll_run " ^ s)
+  | exception exn -> Exception exn
 
 (* CR-soon trefis for mshinwell: copy/pasted from Optmain. Should it be shared
    or?
@@ -81,19 +77,22 @@ let load ppf phrase_name program =
     if Filename.is_implicit dll
     then Filename.concat (Sys.getcwd ()) dll
     else dll in
+  let remove_dll () =
+    (* note: under windows, cannot remove a loaded dll
+       (should remember the handles, close them in at_exit, and then
+       remove files) *)
+    try Sys.remove dll with Sys_error _ -> ()
+  in
   match
-    Fun.protect
-      ~finally:(fun () ->
-          (try Sys.remove dll with Sys_error _ -> ()))
-            (* note: under windows, cannot remove a loaded dll
-               (should remember the handles, close them in at_exit, and then
-               remove files) *)
-      (fun () -> dll_run dll phrase_name)
+    dll_run dll phrase_name
   with
-  | res -> res
+  | res ->
+     remove_dll ();
+     res
   | exception x ->
-      record_backtrace ();
-      Exception x
+     record_backtrace ();
+     remove_dll ();
+     Exception x
 
 type lookup_fn = string -> Obj.t option
 type load_fn =

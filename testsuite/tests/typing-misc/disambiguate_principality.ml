@@ -1,5 +1,5 @@
 (* TEST
-   * expect
+ expect;
 *)
 
 (*** Record ***)
@@ -39,6 +39,7 @@ Line 3, characters 2-20:
       ^^^^^^^^^^^^^^^^^^
 Warning 23 [useless-record-with]: all the fields are explicitly listed in this record:
 the 'with' clause is useless.
+
 val after_a : M.r = {M.lbl = 4}
 |}]
 
@@ -53,6 +54,7 @@ Line 3, characters 7-18:
 3 |   x := { lbl = 4 }
            ^^^^^^^^^^^
 Warning 18 [not-principal]: this type-based record disambiguation is not principal.
+
 val b : unit = ()
 |}]
 
@@ -80,7 +82,7 @@ let e =
 Line 3, characters 24-27:
 3 |   { x with contents = { lbl = 4 } }
                             ^^^
-Error: Unbound record field lbl
+Error: Unbound record field "lbl"
 |}]
 
 let f =
@@ -111,16 +113,19 @@ Line 4, characters 4-15:
 4 |   | { lbl = _ } -> ()
         ^^^^^^^^^^^
 Warning 11 [redundant-case]: this match case is unused.
+
 val h : M.r -> unit = <fun>
 |}, Principal{|
 Line 4, characters 4-15:
 4 |   | { lbl = _ } -> ()
         ^^^^^^^^^^^
 Warning 18 [not-principal]: this type-based record disambiguation is not principal.
+
 Line 4, characters 4-15:
 4 |   | { lbl = _ } -> ()
         ^^^^^^^^^^^
 Warning 11 [redundant-case]: this match case is unused.
+
 val h : M.r -> unit = <fun>
 |}]
 
@@ -133,7 +138,7 @@ let i x =
 Line 3, characters 6-9:
 3 |   | { lbl = _ } -> ()
           ^^^
-Error: Unbound record field lbl
+Error: Unbound record field "lbl"
 |}]
 
 let j x =
@@ -146,16 +151,19 @@ Line 4, characters 4-15:
 4 |   | { lbl = _ } -> ()
         ^^^^^^^^^^^
 Warning 12 [redundant-subpat]: this sub-pattern is unused.
+
 val j : M.r -> unit = <fun>
 |}, Principal{|
 Line 4, characters 4-15:
 4 |   | { lbl = _ } -> ()
         ^^^^^^^^^^^
 Warning 18 [not-principal]: this type-based record disambiguation is not principal.
+
 Line 4, characters 4-15:
 4 |   | { lbl = _ } -> ()
         ^^^^^^^^^^^
 Warning 12 [redundant-subpat]: this sub-pattern is unused.
+
 val j : M.r -> unit = <fun>
 |}]
 
@@ -168,7 +176,7 @@ let k x =
 Line 3, characters 6-9:
 3 |   | { lbl = _ }
           ^^^
-Error: Unbound record field lbl
+Error: Unbound record field "lbl"
 |}]
 
 let l (x : M.r ref) =
@@ -187,7 +195,7 @@ let m x =
 Line 3, characters 19-22:
 3 |   | { contents = { lbl = _ } } -> ()
                        ^^^
-Error: Unbound record field lbl
+Error: Unbound record field "lbl"
 |}]
 
 let n x =
@@ -200,16 +208,19 @@ Line 4, characters 4-30:
 4 |   | { contents = { lbl = _ } } -> ()
         ^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 11 [redundant-case]: this match case is unused.
+
 val n : M.r ref -> unit = <fun>
 |}, Principal{|
 Line 4, characters 17-28:
 4 |   | { contents = { lbl = _ } } -> ()
                      ^^^^^^^^^^^
 Warning 18 [not-principal]: this type-based record disambiguation is not principal.
+
 Line 4, characters 4-30:
 4 |   | { contents = { lbl = _ } } -> ()
         ^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 11 [redundant-case]: this match case is unused.
+
 val n : M.r ref -> unit = <fun>
 |}]
 
@@ -222,7 +233,7 @@ let o x =
 Line 3, characters 19-22:
 3 |   | { contents = { lbl = _ } } -> ()
                        ^^^
-Error: Unbound record field lbl
+Error: Unbound record field "lbl"
 |}]
 
 let p x =
@@ -235,16 +246,19 @@ Line 4, characters 4-30:
 4 |   | { contents = { lbl = _ } } -> ()
         ^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 12 [redundant-subpat]: this sub-pattern is unused.
+
 val p : M.r ref -> unit = <fun>
 |}, Principal{|
 Line 4, characters 17-28:
 4 |   | { contents = { lbl = _ } } -> ()
                      ^^^^^^^^^^^
 Warning 18 [not-principal]: this type-based record disambiguation is not principal.
+
 Line 4, characters 4-30:
 4 |   | { contents = { lbl = _ } } -> ()
         ^^^^^^^^^^^^^^^^^^^^^^^^^^
 Warning 12 [redundant-subpat]: this sub-pattern is unused.
+
 val p : M.r ref -> unit = <fun>
 |}]
 
@@ -257,7 +271,7 @@ let q x =
 Line 3, characters 19-22:
 3 |   | { contents = { lbl = _ } }
                        ^^^
-Error: Unbound record field lbl
+Error: Unbound record field "lbl"
 |}]
 
 let r arg =
@@ -281,6 +295,7 @@ Line 4, characters 9-20:
 4 |     x := { lbl = 4 }
              ^^^^^^^^^^^
 Warning 18 [not-principal]: this type-based record disambiguation is not principal.
+
 val s : M.r ref -> unit = <fun>
 |}]
 
@@ -295,6 +310,7 @@ Line 3, characters 9-20:
 3 |     x := { lbl = 4 }
              ^^^^^^^^^^^
 Warning 18 [not-principal]: this type-based record disambiguation is not principal.
+
 val t : M.r ref -> unit = <fun>
 |}]
 
@@ -345,6 +361,7 @@ Line 3, characters 7-8:
 3 |   x := B
            ^
 Warning 18 [not-principal]: this type-based constructor disambiguation is not principal.
+
 val b : unit = ()
 |}]
 
@@ -364,7 +381,7 @@ let e =
 Line 3, characters 22-23:
 3 |   { x with contents = B }
                           ^
-Error: Unbound constructor B
+Error: Unbound constructor "B"
 |}]
 
 (* Patterns *)
@@ -389,6 +406,7 @@ Line 4, characters 4-5:
 4 |   | B -> ()
         ^
 Warning 18 [not-principal]: this type-based constructor disambiguation is not principal.
+
 val h : M.t -> unit = <fun>
 |}]
 
@@ -401,7 +419,7 @@ let i x =
 Line 3, characters 4-5:
 3 |   | A -> ()
         ^
-Error: Unbound constructor A
+Error: Unbound constructor "A"
 |}]
 
 let j x =
@@ -416,6 +434,7 @@ Line 4, characters 4-5:
 4 |   | B -> ()
         ^
 Warning 18 [not-principal]: this type-based constructor disambiguation is not principal.
+
 val j : M.t -> unit = <fun>
 |}]
 
@@ -428,7 +447,7 @@ let k x =
 Line 3, characters 4-5:
 3 |   | A
         ^
-Error: Unbound constructor A
+Error: Unbound constructor "A"
 |}]
 
 let l (x : M.t ref) =
@@ -447,7 +466,7 @@ let m x =
 Line 3, characters 18-19:
 3 |   | { contents = (A | B) } -> ()
                       ^
-Error: Unbound constructor A
+Error: Unbound constructor "A"
 |}]
 
 let n x =
@@ -460,16 +479,19 @@ Line 4, characters 4-20:
 4 |   | { contents = A } -> ()
         ^^^^^^^^^^^^^^^^
 Warning 11 [redundant-case]: this match case is unused.
+
 val n : M.t ref -> unit = <fun>
 |}, Principal{|
 Line 4, characters 17-18:
 4 |   | { contents = A } -> ()
                      ^
 Warning 18 [not-principal]: this type-based constructor disambiguation is not principal.
+
 Line 4, characters 4-20:
 4 |   | { contents = A } -> ()
         ^^^^^^^^^^^^^^^^
 Warning 11 [redundant-case]: this match case is unused.
+
 val n : M.t ref -> unit = <fun>
 |}]
 
@@ -482,7 +504,7 @@ let o x =
 Line 3, characters 17-18:
 3 |   | { contents = A } -> ()
                      ^
-Error: Unbound constructor A
+Error: Unbound constructor "A"
 |}]
 
 let p x =
@@ -495,16 +517,19 @@ Line 4, characters 4-20:
 4 |   | { contents = A } -> ()
         ^^^^^^^^^^^^^^^^
 Warning 12 [redundant-subpat]: this sub-pattern is unused.
+
 val p : M.t ref -> unit = <fun>
 |}, Principal{|
 Line 4, characters 17-18:
 4 |   | { contents = A } -> ()
                      ^
 Warning 18 [not-principal]: this type-based constructor disambiguation is not principal.
+
 Line 4, characters 4-20:
 4 |   | { contents = A } -> ()
         ^^^^^^^^^^^^^^^^
 Warning 12 [redundant-subpat]: this sub-pattern is unused.
+
 val p : M.t ref -> unit = <fun>
 |}]
 
@@ -517,7 +542,7 @@ let q x =
 Line 3, characters 17-18:
 3 |   | { contents = A }
                      ^
-Error: Unbound constructor A
+Error: Unbound constructor "A"
 |}]
 
 let s arg =
@@ -532,6 +557,7 @@ Line 4, characters 9-10:
 4 |     x := A
              ^
 Warning 18 [not-principal]: this type-based constructor disambiguation is not principal.
+
 val s : M.t ref -> unit = <fun>
 |}]
 
@@ -547,12 +573,14 @@ Lines 1-3, characters 8-10:
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 {contents=B}
+
 val t : M.t ref -> unit = <fun>
 |}, Principal{|
 Line 3, characters 9-10:
 3 |     x := B
              ^
 Warning 18 [not-principal]: this type-based constructor disambiguation is not principal.
+
 Lines 1-3, characters 8-10:
 1 | ........function
 2 |   | ({ contents = M.A } : M.t ref) as x ->
@@ -560,5 +588,6 @@ Lines 1-3, characters 8-10:
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 {contents=B}
+
 val t : M.t ref -> unit = <fun>
 |}]

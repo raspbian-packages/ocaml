@@ -18,17 +18,17 @@
 #include <sys/types.h>
 #include <caml/mlvalues.h>
 #include <caml/memory.h>
-#include "unixsupport.h"
+#include "caml/unixsupport.h"
+
+extern char ** environ;
 
 #ifdef HAS_POSIX_SPAWN
 
 #include <spawn.h>
 
-extern char ** environ;
-
 /* Implementation based on posix_spawn() */
 
-CAMLprim value unix_spawn(value executable, /* string */
+CAMLprim value caml_unix_spawn(value executable, /* string */
                           value args,       /* string array */
                           value optenv,     /* string array option */
                           value usepath,    /* bool */
@@ -43,9 +43,9 @@ CAMLprim value unix_spawn(value executable, /* string */
 
   caml_unix_check_path(executable, "create_process");
   path = String_val(executable);
-  argv = cstringvect(args, "create_process");
+  argv = caml_unix_cstringvect(args, "create_process");
   if (Is_some(optenv)) {
-    envp = cstringvect(Some_val(optenv), "create_process");
+    envp = caml_unix_cstringvect(Some_val(optenv), "create_process");
   } else {
     envp = environ;
   }
@@ -75,9 +75,9 @@ CAMLprim value unix_spawn(value executable, /* string */
   }
  error:
   posix_spawn_file_actions_destroy(&act);
-  cstringvect_free(argv);
-  if (Is_some(optenv)) cstringvect_free(envp);
-  if (r != 0) unix_error(r, "create_process", executable);
+  caml_unix_cstringvect_free(argv);
+  if (Is_some(optenv)) caml_unix_cstringvect_free(envp);
+  if (r != 0) caml_unix_error(r, "create_process", executable);
   return Val_long(pid);
 }
 
@@ -85,18 +85,12 @@ CAMLprim value unix_spawn(value executable, /* string */
 
 /* Fallback implementation based on fork() and exec() */
 
-#ifndef HAS_EXECVPE
-extern int unix_execvpe_emulation(const char * name,
-                                  char * const argv[],
-                                  char * const envp[]);
-#endif
-
 /* Exit code used for the child process to report failure to exec */
 /* This is consistent with system() and allowed by posix_spawn() specs */
 
 #define ERROR_EXIT_STATUS 127
 
-CAMLprim value unix_spawn(value executable, /* string */
+CAMLprim value caml_unix_spawn(value executable, /* string */
                           value args,       /* string array */
                           value optenv,     /* string array option */
                           value usepath,    /* bool */
@@ -110,18 +104,18 @@ CAMLprim value unix_spawn(value executable, /* string */
 
   caml_unix_check_path(executable, "create_process");
   path = String_val(executable);
-  argv = cstringvect(args, "create_process");
+  argv = caml_unix_cstringvect(args, "create_process");
   if (Is_some(optenv)) {
-    envp = cstringvect(Some_val(optenv), "create_process");
+    envp = caml_unix_cstringvect(Some_val(optenv), "create_process");
   } else {
     envp = NULL;
   }
   pid = fork();
   if (pid != 0) {
     /* This is the parent process */
-    cstringvect_free(argv);
-    if (envp != NULL) cstringvect_free(envp);
-    if (pid == -1) uerror("create_process", executable);
+    caml_unix_cstringvect_free(argv);
+    if (envp != NULL) caml_unix_cstringvect_free(envp);
+    if (pid == -1) caml_uerror("create_process", executable);
     return Val_long(pid);
   }
   /* This is the child process */
@@ -148,7 +142,10 @@ CAMLprim value unix_spawn(value executable, /* string */
 #ifdef HAS_EXECVPE
       execvpe(path, argv, envp);
 #else
-      unix_execvpe_emulation(path, argv, envp);
+      /* No other thread is running in the child process, so we can change
+         the global variable [environ] without bothering anyone. */
+      environ = envp;
+      execvp(path, argv);
 #endif
     }
   } else {

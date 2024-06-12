@@ -16,6 +16,9 @@
 (* Definitions for the interactive toplevel loop that are common between
    bytecode and native *)
 
+[@@@ocaml.warning "-60"] module Str = Ast_helper.Str (* For ocamldep *)
+[@@@ocaml.warning "+60"]
+
 open Format
 open Parsetree
 open Outcometree
@@ -31,10 +34,7 @@ let print_warning = Location.print_warning
 let input_name = Location.input_name
 
 let parse_mod_use_file name lb =
-  let modname =
-    String.capitalize_ascii
-      (Filename.remove_extension (Filename.basename name))
-  in
+  let modname = Unit_info.modname_from_source name in
   let items =
     List.concat
       (List.map
@@ -230,8 +230,7 @@ let read_input_default prompt buffer len =
       Buffer.add_char phrase_buffer c;
       incr i;
       if c = '\n' then raise Exit;
-    done;
-    (!i, false)
+    done
   with
   | End_of_file ->
       (!i, true)
@@ -240,13 +239,15 @@ let read_input_default prompt buffer len =
 
 let read_interactive_input = ref read_input_default
 
+let comment_prompt_override = ref false
+
 let refill_lexbuf buffer len =
   if !got_eof then (got_eof := false; 0) else begin
     let prompt =
       if !Clflags.noprompt then ""
       else if !first_line then "# "
       else if !Clflags.nopromptcont then ""
-      else if Lexer.in_comment () then "* "
+      else if Lexer.in_comment () || !comment_prompt_override then "* "
       else "  "
     in
     first_line := false;
@@ -259,23 +260,35 @@ let refill_lexbuf buffer len =
       len
   end
 
-let set_paths () =
+let set_paths ?(auto_include=Compmisc.auto_include) () =
   (* Add whatever -I options have been specified on the command line,
      but keep the directories that user code linked in with ocamlmktop
      may have added to load_path. *)
   let expand = Misc.expand_directory Config.standard_library in
-  let current_load_path = Load_path.get_paths () in
-  let load_path = List.concat [
+  let Load_path.{ visible; hidden } = Load_path.get_paths () in
+  let visible = List.concat [
       [ "" ];
       List.map expand (List.rev !Compenv.first_include_dirs);
       List.map expand (List.rev !Clflags.include_dirs);
       List.map expand (List.rev !Compenv.last_include_dirs);
-      current_load_path;
+      visible;
       [expand "+camlp4"];
     ]
   in
-  Load_path.init load_path;
-  Dll.add_path load_path
+  let hidden = List.concat [
+      List.map expand (List.rev !Clflags.hidden_include_dirs);
+      hidden
+    ]
+  in
+  Load_path.init ~auto_include ~visible ~hidden;
+  Dll.add_path (visible @ hidden)
+
+let update_search_path_from_env () =
+  let extra_paths =
+    let env = Sys.getenv_opt "OCAMLTOP_INCLUDE_PATH" in
+    Option.fold ~none:[] ~some:Misc.split_path_contents env
+  in
+  Clflags.include_dirs := List.rev_append extra_paths !Clflags.include_dirs
 
 let initialize_toplevel_env () =
   toplevel_env := Compmisc.initial_env()
@@ -287,6 +300,11 @@ let override_sys_argv new_argv =
   caml_sys_modify_argv new_argv;
   Arg.current := 0
 
+let is_command_like_name s =
+  not (String.length s = 0
+       || s.[0] = '-'
+       || Filename.basename s <> s
+       || Filename.extension s <> "")
 
 (* The table of toplevel directives.
    Filled by functions from module topdirs. *)
@@ -321,10 +339,12 @@ let get_directive_info name =
 let all_directive_names () =
   Hashtbl.fold (fun dir _ acc -> dir::acc) directive_table []
 
+module Style = Misc.Style
+
 let try_run_directive ppf dir_name pdir_arg =
   begin match get_directive dir_name with
   | None ->
-      fprintf ppf "Unknown directive `%s'." dir_name;
+      fprintf ppf "Unknown directive %a." Style.inline_code dir_name;
       let directives = all_directive_names () in
       Misc.did_you_mean ppf
         (fun () -> Misc.spellcheck directives dir_name);
@@ -339,32 +359,85 @@ let try_run_directive ppf dir_name pdir_arg =
          | n -> f n; true
          | exception _ ->
            fprintf ppf "Integer literal exceeds the range of \
-                        representable integers for directive `%s'.@."
-                   dir_name;
+                        representable integers for directive %a.@."
+                   Style.inline_code dir_name;
            false
          end
       | Directive_int _, Some {pdira_desc = Pdir_int (_, Some _)} ->
-          fprintf ppf "Wrong integer literal for directive `%s'.@."
-            dir_name;
+          fprintf ppf "Wrong integer literal for directive %a.@."
+            Style.inline_code dir_name;
           false
       | Directive_ident f, Some {pdira_desc = Pdir_ident lid} -> f lid; true
       | Directive_bool f, Some {pdira_desc = Pdir_bool b} -> f b; true
       | _ ->
-          let dir_type = match d with
-          | Directive_none _   -> "no argument"
-          | Directive_string _ -> "a `string' literal"
-          | Directive_int _    -> "an `int' literal"
-          | Directive_ident _  -> "an identifier"
-          | Directive_bool _   -> "a `bool' literal"
+          let dir_type  = match d with
+          | Directive_none _   -> `None
+          | Directive_string _ -> `String
+          | Directive_int _    -> `Int
+          | Directive_ident _  -> `Ident
+          | Directive_bool _   -> `Bool
           in
           let arg_type = match pdir_arg with
-          | None                              -> "no argument"
-          | Some {pdira_desc = Pdir_string _} -> "a `string' literal"
-          | Some {pdira_desc = Pdir_int _}    -> "an `int' literal"
-          | Some {pdira_desc = Pdir_ident _}  -> "an identifier"
-          | Some {pdira_desc = Pdir_bool _}   -> "a `bool' literal"
+          | None                              -> `None
+          | Some {pdira_desc = Pdir_string _} -> `String
+          | Some {pdira_desc = Pdir_int _}    -> `Int
+          | Some {pdira_desc = Pdir_ident _}  -> `Ident
+          | Some {pdira_desc = Pdir_bool _}   -> `Bool
           in
-          fprintf ppf "Directive `%s' expects %s, got %s.@."
-            dir_name dir_type arg_type;
+          let pp_type ppf = function
+          | `None -> Format.fprintf ppf "no argument"
+          | `String ->
+              Format.fprintf ppf "a %a literal" Style.inline_code "string"
+          | `Int ->
+              Format.fprintf ppf "an %a literal" Style.inline_code "string"
+          | `Ident ->
+              Format.fprintf ppf "an identifier"
+          | `Bool ->
+              Format.fprintf ppf "a %a literal" Style.inline_code "bool"
+          in
+          fprintf ppf "Directive %a expects %a, got %a.@."
+            Style.inline_code dir_name pp_type dir_type pp_type arg_type;
           false
   end
+
+(* Overriding exception printers with toplevel-specific ones *)
+
+let loading_hint_printer ppf cu =
+  let global = Symtable.Global.Glob_compunit (Cmo_format.Compunit cu) in
+  Symtable.report_error ppf (Symtable.Undefined_global global);
+  let find_with_ext ext =
+    try Some (Load_path.find_normalized (cu ^ ext)) with Not_found -> None
+  in
+  fprintf ppf
+    "@.Hint: @[\
+     This means that the interface of a module is loaded, \
+     but its implementation is not.@,";
+  (* Filenames don't have to correspond to module names,
+     especially for archives (cmas), which bundle multiple modules.
+     But very often they do. *)
+  begin match List.find_map find_with_ext [".cma"; ".cmo"] with
+  | Some path ->
+    let load ppf path = Format.fprintf ppf "#load \"%s\"" path in
+    fprintf ppf
+      "Found %a @,in the load paths. \
+       @,Did you mean to load it using @,%a \
+       @,or by passing it as an argument to the toplevel?"
+      Style.inline_code path
+      (Style.as_inline_code load) (Filename.basename path)
+  | None ->
+    fprintf ppf
+      "Did you mean to load a compiled implementation of the module \
+       @,using %a or by passing it as an argument to the toplevel?"
+      Style.inline_code "#load"
+  end;
+  fprintf ppf "@]"
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Symtable.Error
+        (Symtable.Undefined_global (Symtable.Global.Glob_compunit
+          (Cmo_format.Compunit cu))) ->
+          Some (Location.error_of_printer_file loading_hint_printer cu)
+      | _ -> None
+    )
