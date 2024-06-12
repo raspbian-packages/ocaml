@@ -12,20 +12,21 @@ Bug-Debian: https://bugs.debian.org/702349
 Forwarded: no
 Last-Update: <2021-12-21>
 ---
- configure.ac | 3 +++
- 1 file changed, 3 insertions(+)
+ configure.ac | 4 ++++
+ 1 file changed, 4 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index ebb8bbd..d27d47b 100644
+index 0c9d638..c62f23d 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -987,6 +987,9 @@ AS_IF([test x"$enable_shared" != "xno"],
-       natdynlinkopts="-Wl,-E"
-       supports_shared_libraries=true])])
+@@ -1249,6 +1249,10 @@ AS_CASE([$host],
+     [oc_ldflags="$oc_ldflags -Wl,-z,nobtcfi"
+      natdynlinkopts="$natdynlinkopts -Wl,-z,nobtcfi"])
  
++# Use CCLINKFLAGS for linking all executables and shared libraries
++
 +mksharedlib="$mksharedlib $CCLINKFLAGS"
 +mkexe="$mkexe $CCLINKFLAGS"
-+
- AS_IF([test -z "$mkmaindll"], [mkmaindll=$mksharedlib])
  
  # Configure native dynlink
+ 

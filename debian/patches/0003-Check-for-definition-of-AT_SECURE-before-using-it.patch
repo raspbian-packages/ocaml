@@ -6,14 +6,14 @@ This fixes compilation on kfreebsd-*.
 
 Forwarded: https://github.com/ocaml/ocaml/pull/8842
 ---
- otherlibs/unix/envir.c | 2 +-
+ otherlibs/unix/envir_unix.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/otherlibs/unix/envir.c b/otherlibs/unix/envir.c
-index 3ad4b9c..bdc4193 100644
---- a/otherlibs/unix/envir.c
-+++ b/otherlibs/unix/envir.c
-@@ -39,7 +39,7 @@ CAMLprim value unix_environment_unsafe(value unit)
+diff --git a/otherlibs/unix/envir_unix.c b/otherlibs/unix/envir_unix.c
+index cef6cb0..977db1c 100644
+--- a/otherlibs/unix/envir_unix.c
++++ b/otherlibs/unix/envir_unix.c
+@@ -39,7 +39,7 @@ CAMLprim value caml_unix_environment_unsafe(value unit)
  
  static char **secure_environ(void)
  {
