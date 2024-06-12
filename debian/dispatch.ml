@@ -1,6 +1,6 @@
 (*
   Description: called from debian/rules, generates debhelper's .install files
-  Copyright © 2019-2021 Stéphane Glondu <glondu@debian.org>
+  Copyright © 2019-2024 Stéphane Glondu <glondu@debian.org>
 *)
 
 let read_lines fn =
@@ -23,14 +23,24 @@ let chop_prefix ~prefix str =
   else
     None
 
+let chop_suffix ~suffix str =
+  let p = String.length suffix and n = String.length str in
+  if n >= p && String.sub str (n - p) p = suffix then
+    Some (String.sub str 0 (n - p))
+  else
+    None
+
 let get_base str =
   let n = String.length str in
   let last_slash = String.rindex_from str (n - 1) '/' in
   let first_dot = try String.index_from str last_slash '.' with Not_found -> n in
   let try_prefix prefix x = Option.value ~default:x (chop_prefix ~prefix x) in
+  let try_suffix suffix x = Option.value ~default:x (chop_suffix ~suffix x) in
   String.sub str (last_slash + 1) (first_dot - last_slash - 1)
   |> try_prefix "dll"
   |> try_prefix "lib"
+  |> try_suffix "nat"
+  |> try_suffix "byt"
   |> try_prefix "stdlib__"
 
 module SMap = Map.Make (String)
@@ -103,6 +113,8 @@ let () =
       "usr/lib/ocaml/target_camlheaderd", ocaml;
       "usr/lib/ocaml/objinfo_helper", ocaml;
       "usr/lib/ocaml/target_camlheaderi", ocaml;
+      "usr/lib/ocaml/runtime-launch-info", ocaml;
+      "usr/lib/ocaml/sys.ml.in", ocaml;
       "usr/bin/ocamlmklib.opt", ocaml;
       "usr/bin/ocamllex.byte", ocaml;
       "usr/bin/ocamldebug", ocaml;
@@ -174,6 +186,8 @@ let () =
       "camlrun"; "camlrund"; "camlruni"; "camlrun_pic"; "camlrun_shared";
       "asmrun"; "asmrund"; "asmruni"; "asmrunp"; "asmrun_shared"; "asmrun_pic";
       "raw_spacetime_lib";
+      "comprmarsh";
+      "camlruntime_events";
     ]
 
 let exts_dev = [ ".ml"; ".mli"; ".cmi"; ".cmt"; ".cmti"; ".cmx"; ".cmxa"; ".a"; ".cmo"; ".o" ]
@@ -200,7 +214,10 @@ let process_file x =
      ) else if List.exists (fun suffix -> String.ends_with ~suffix x) exts_run then (
        push run_stdlib x
      ) else Some x
-  | false -> Some x
+  | false ->
+     if String.ends_with ~suffix:"/META" x then (
+       push run_stdlib x
+     ) else Some x
 
 let remaining =
   installed_files
@@ -214,11 +231,18 @@ let remaining =
   |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/topdirs.")
   |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/compiler-libs/")
   |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/ocamldoc/")
+  |> move_all_to dev_compiler_libs (String.starts_with ~prefix:"usr/lib/ocaml/runtime_events/")
   |> move_all_to ocaml_man (String.ends_with ~suffix:".3o")
   |> List.filter_map process_static
   |> List.filter_map process_file
 
-let () = assert (remaining = [])
+let () =
+  match remaining with
+  | [] -> ()
+  | _ ->
+     print_endline "Not all files are installed; remaining files are:";
+     List.iter print_endline remaining;
+     exit 1
 
 let () =
   List.iter (fun (pkg, name) ->
