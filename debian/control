@@ -51,6 +51,7 @@ Depends:
  libncurses-dev,
  gcc,
  binutils,
+ libzstd-dev,
  ${shlibs:Depends},
  ${misc:Depends},
  ${ocaml:Depends}
