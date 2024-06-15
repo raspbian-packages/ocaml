@@ -3,7 +3,7 @@ ocaml (5.2.0-1~exp2) UNRELEASED; urgency=medium
   * Remove ppc64 from native architectures
   * ocaml Depends on libzstd-dev
   * libstdlib-ocaml Breaks/Replaces libfindlib-ocaml (because of META
-    files)
+    files) (Closes: #1073243)
 
  -- Stéphane Glondu <glondu@debian.org>  Thu, 13 Jun 2024 10:32:13 +0200
 
