@@ -143,7 +143,6 @@ build-stamp: config-stamp
 	fi
 ifeq ($(BUILDCACHE),)
 	$(MAKE) world
-	$(MAKE) bootstrap
 	$(MAKE) -C tools dumpobj
 ifneq (,$(OCAML_OPT_ARCH))
 	@echo "Building native compilers"
