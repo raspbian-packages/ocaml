@@ -1,4 +1,4 @@
-ocaml (5.2.0-1~exp2) UNRELEASED; urgency=medium
+ocaml (5.2.0-1~exp2) experimental; urgency=medium
 
   * Remove ppc64 from native architectures
   * ocaml Depends on libzstd-dev
@@ -8,7 +8,7 @@ ocaml (5.2.0-1~exp2) UNRELEASED; urgency=medium
   * Fix FTBFS on m68k
   * Make runtime_events optional and disable it on armel (fixes FTBFS)
 
- -- Stéphane Glondu <glondu@debian.org>  Thu, 13 Jun 2024 10:32:13 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 20 Jun 2024 04:31:52 +0200
 
 ocaml (5.2.0-1~exp1) experimental; urgency=medium
 
