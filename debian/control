@@ -102,8 +102,16 @@ Provides:
  ${ocaml:Provides}
 Recommends:
  ocaml-man
-Breaks: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
-Replaces: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Breaks:
+ libfindlib-ocaml (<< 1.9.6-2~),
+ ocaml (<< 4.13.1-5~),
+ ocaml-base (<< 4.13.1-5~),
+ ocaml-compiler-libs (<< 4.13.1-5~)
+Replaces:
+ libfindlib-ocaml (<< 1.9.6-2~),
+ ocaml (<< 4.13.1-5~),
+ ocaml-base (<< 4.13.1-5~),
+ ocaml-compiler-libs (<< 4.13.1-5~)
 Description: OCaml standard library (development files)
  OCaml is an implementation of the ML language, based on the Caml
  Light dialect extended with a complete class-based object system and
@@ -148,8 +156,16 @@ Depends:
  ${ocaml:Depends}
 Provides:
  ${ocaml:Provides}
-Breaks: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
-Replaces: ocaml (<< 4.13.1-5~), ocaml-base (<< 4.13.1-5~), ocaml-compiler-libs (<< 4.13.1-5~)
+Breaks:
+ libfindlib-ocaml (<< 1.9.6-2~),
+ ocaml (<< 4.13.1-5~),
+ ocaml-base (<< 4.13.1-5~),
+ ocaml-compiler-libs (<< 4.13.1-5~)
+Replaces:
+ libfindlib-ocaml (<< 1.9.6-2~),
+ ocaml (<< 4.13.1-5~),
+ ocaml-base (<< 4.13.1-5~),
+ ocaml-compiler-libs (<< 4.13.1-5~)
 Description: OCaml compiler library (development files)
  OCaml is an implementation of the ML language, based on the Caml
  Light dialect extended with a complete class-based object system and
