@@ -1,3 +1,10 @@
+ocaml (5.2.0-1~exp3) UNRELEASED; urgency=medium
+
+  * Add Breaks/Replaces for lib{stdlib,compiler-libs}-ocaml-dev as well
+    (Closes: #1073995)
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 21 Jun 2024 13:24:03 +0200
+
 ocaml (5.2.0-1~exp2) experimental; urgency=medium
 
   * Remove ppc64 from native architectures
