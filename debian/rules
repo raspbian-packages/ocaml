@@ -67,11 +67,6 @@ ifeq (,$(OCAML_OPT_ARCH))
 CONFIGURE_OPTS += --disable-native-compiler
 endif
 
-# See https://github.com/ocaml/ocaml/issues/13234
-ifeq (armel,$(DEB_BUILD_ARCH))
-CONFIGURE_OPTS += --disable-runtime-events-lib
-endif
-
 # fma does not work on m68k, enable emulation as instructed by configure script
 ifeq (m68k,$(DEB_BUILD_ARCH))
 CONFIGURE_OPTS += --enable-imprecise-c99-float-ops
