@@ -7,3 +7,4 @@
 0008-Filter-out-f-debug-file-prefix-map-from-ocamlc_cflag.patch
 0008-Fix-call-to-test-in-configure.ac.patch
 0009-Remove-fixed-register-assignments-on-m68k.patch
+0010-Detect-if-atomic-64-bit-load-from-RO-memory-works.patch
