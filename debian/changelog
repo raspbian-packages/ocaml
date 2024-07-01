@@ -1,11 +1,11 @@
-ocaml (5.2.0-1~exp3) UNRELEASED; urgency=medium
+ocaml (5.2.0-1~exp3) experimental; urgency=medium
 
   * Add Breaks/Replaces for lib{stdlib,compiler-libs}-ocaml-dev as well
     (Closes: #1073995)
   * Re-enable runtime_events on armel and mmap runtime event state in
     RW mode there
 
- -- Stéphane Glondu <glondu@debian.org>  Fri, 21 Jun 2024 13:24:03 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 01 Jul 2024 14:37:18 +0200
 
 ocaml (5.2.0-1~exp2) experimental; urgency=medium
 
