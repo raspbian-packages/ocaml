@@ -103,12 +103,12 @@ Provides:
 Recommends:
  ocaml-man
 Breaks:
- libfindlib-ocaml (<< 1.9.6-2~),
+ libfindlib-ocaml (<< 1.9.6-3~),
  ocaml (<< 4.13.1-5~),
  ocaml-base (<< 4.13.1-5~),
  ocaml-compiler-libs (<< 4.13.1-5~)
 Replaces:
- libfindlib-ocaml (<< 1.9.6-2~),
+ libfindlib-ocaml (<< 1.9.6-3~),
  ocaml (<< 4.13.1-5~),
  ocaml-base (<< 4.13.1-5~),
  ocaml-compiler-libs (<< 4.13.1-5~)
@@ -131,13 +131,13 @@ Provides:
  libstdlib-shims-ocaml,
  ${ocaml:Provides}
 Breaks:
- libfindlib-ocaml (<< 1.9.6-2~),
+ libfindlib-ocaml (<< 1.9.6-3~),
  ocaml (<< 4.13.1-5~),
  ocaml-base (<< 4.13.1-5~),
  ocaml-compiler-libs (<< 4.13.1-5~),
  dh-ocaml (<< 2)
 Replaces:
- libfindlib-ocaml (<< 1.9.6-2~),
+ libfindlib-ocaml (<< 1.9.6-3~),
  ocaml (<< 4.13.1-5~),
  ocaml-base (<< 4.13.1-5~),
  ocaml-compiler-libs (<< 4.13.1-5~)
@@ -157,12 +157,12 @@ Depends:
 Provides:
  ${ocaml:Provides}
 Breaks:
- libfindlib-ocaml (<< 1.9.6-2~),
+ libfindlib-ocaml (<< 1.9.6-3~),
  ocaml (<< 4.13.1-5~),
  ocaml-base (<< 4.13.1-5~),
  ocaml-compiler-libs (<< 4.13.1-5~)
 Replaces:
- libfindlib-ocaml (<< 1.9.6-2~),
+ libfindlib-ocaml (<< 1.9.6-3~),
  ocaml (<< 4.13.1-5~),
  ocaml-base (<< 4.13.1-5~),
  ocaml-compiler-libs (<< 4.13.1-5~)
