@@ -213,7 +213,7 @@ install-stamp:
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 # Remove Debian-specific file
-	rm -f $(INSTDIR)/lib/ocaml/ld.conf
+	rm -f debian/tmp$(OCAML_STDLIB_DIR)/ld.conf
 # Remove uninstalled files
 	rm -f \
 	  $(INSTDIR)/share/man/man1/ocamlopt.opt.1 \
@@ -232,7 +232,7 @@ endif
 	  $(INSTDIR)/share/doc/ocaml/LICENSE
 # Dispatch files with dh_install
 	find debian/tmp \( -type f -or -type l \) -printf '%P\n' > debian/installed-files
-	boot/ocamlrun ./ocaml -nostdlib -I debian/tmp/usr/lib/ocaml debian/dispatch.ml
+	boot/ocamlrun ./ocaml -nostdlib -I debian/tmp$(OCAML_STDLIB_DIR) debian/dispatch.ml
 	dh_install
 endif
 	touch $@
