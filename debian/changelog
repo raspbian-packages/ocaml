@@ -1,3 +1,10 @@
+ocaml (5.2.0-1~exp5) UNRELEASED; urgency=medium
+
+  * Add bytes and bigarray compatibility packages
+  * Change OCaml stdlib dir to /usr/lib/<multiarch>/ocaml/<abi>
+
+ -- Stéphane Glondu <glondu@debian.org>  Sat, 03 Aug 2024 02:26:54 +0200
+
 ocaml (5.2.0-1~exp4) experimental; urgency=medium
 
   * Bump version of findlib in Breaks/Replaces (Closes: #1074589)
