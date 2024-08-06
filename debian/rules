@@ -205,6 +205,12 @@ install-stamp-arch: install-stamp
 # Install the stdlib-shims compatibility package (OCaml >= 4.07)
 	mkdir -p debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/stdlib-shims
 	cp debian/META.stdlib-shims debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/stdlib-shims/META
+# Install the bigarray compatibility package (OCaml >= 5.2)
+	mkdir -p debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/bigarray
+	cp debian/META.bigarray debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/bigarray/META
+# Install the bytes compatibility package (OCaml >= 5.2)
+	mkdir -p debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/bytes
+	cp debian/META.bytes debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/bytes/META
 # Remaining stuff
 	touch $@
 
