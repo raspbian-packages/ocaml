@@ -1,9 +1,10 @@
-ocaml (5.2.0-1~exp5) UNRELEASED; urgency=medium
+ocaml (5.2.0-1) unstable; urgency=medium
 
+  * Upload to unstable (Closes: #1073289)
   * Add bytes and bigarray compatibility packages
   * Change OCaml stdlib dir to /usr/lib/<multiarch>/ocaml/<abi>
 
- -- Stéphane Glondu <glondu@debian.org>  Sat, 03 Aug 2024 02:26:54 +0200
+ -- Stéphane Glondu <glondu@debian.org>  Wed, 07 Aug 2024 14:12:25 +0200
 
 ocaml (5.2.0-1~exp4) experimental; urgency=medium
 
