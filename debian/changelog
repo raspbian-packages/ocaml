@@ -1,3 +1,9 @@
+ocaml (5.2.0-2) unstable; urgency=medium
+
+  * Add ocaml-base to Build-Conflicts
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 09 Aug 2024 06:55:14 +0200
+
 ocaml (5.2.0-1) unstable; urgency=medium
 
   * Upload to unstable (Closes: #1073289)
