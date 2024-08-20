@@ -19,7 +19,8 @@
 
 #if defined(_WIN32) && defined(CAML_INTERNALS)
 
-#include <windef.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 
 /*
  * This structure is defined inconsistently. mingw64 has it in ntdef.h (which
@@ -59,6 +60,11 @@ typedef struct _REPARSE_DATA_BUFFER
   };
 } REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
 #endif
+
+typedef union {
+  FILETIME ft;
+  ULONGLONG ul;
+} CAML_ULONGLONG_FILETIME;
 
 #endif
 

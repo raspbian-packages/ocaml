@@ -2,14 +2,14 @@ From: Peter Michael Green <plugwash@raspbian.org>
 Subject: Remove gitattributes that cause problems for dgit.
 
 diff --git a/.gitattributes b/.gitattributes
-index 956d2136..a278ffe0 100644
+index 0693c28c..87bbecc0 100644
 --- a/.gitattributes
 +++ b/.gitattributes
-@@ -151,7 +151,6 @@ menhir-bench.bash typo.missing-header typo.utf8
+@@ -154,7 +154,6 @@ tools/magic                       typo.missing-header
  *.check-program-output text eol=lf
  *.run text eol=lf
  
 -/tools/ci/appveyor/appveyor_build.cmd text eol=crlf
  
- aclocal.m4 typo.tab
- configure.ac text eol=lf
+ Makefile* linguist-language=Makefile
+ *.c linguist-language=C

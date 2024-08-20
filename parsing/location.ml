@@ -16,21 +16,18 @@
 open Lexing
 
 type t = Warnings.loc =
-  { loc_start: position; loc_end: position; loc_ghost: bool };;
+  { loc_start: position; loc_end: position; loc_ghost: bool }
 
-let in_file name =
-  let loc = { dummy_pos with pos_fname = name } in
-  { loc_start = loc; loc_end = loc; loc_ghost = true }
-;;
+let in_file = Warnings.ghost_loc_in_file
 
-let none = in_file "_none_";;
-let is_none l = (l = none);;
+let none = in_file "_none_"
+let is_none l = (l = none)
 
 let curr lexbuf = {
   loc_start = lexbuf.lex_start_p;
   loc_end = lexbuf.lex_curr_p;
   loc_ghost = false
-};;
+}
 
 let init lexbuf fname =
   lexbuf.lex_curr_p <- {
@@ -39,36 +36,34 @@ let init lexbuf fname =
     pos_bol = 0;
     pos_cnum = 0;
   }
-;;
 
 let symbol_rloc () = {
   loc_start = Parsing.symbol_start_pos ();
   loc_end = Parsing.symbol_end_pos ();
   loc_ghost = false;
-};;
+}
 
 let symbol_gloc () = {
   loc_start = Parsing.symbol_start_pos ();
   loc_end = Parsing.symbol_end_pos ();
   loc_ghost = true;
-};;
+}
 
 let rhs_loc n = {
   loc_start = Parsing.rhs_start_pos n;
   loc_end = Parsing.rhs_end_pos n;
   loc_ghost = false;
-};;
+}
 
 let rhs_interval m n = {
   loc_start = Parsing.rhs_start_pos m;
   loc_end = Parsing.rhs_end_pos n;
   loc_ghost = false;
-};;
+}
 
 (* return file, line, char from the given position *)
 let get_pos_info pos =
   (pos.pos_fname, pos.pos_lnum, pos.pos_cnum - pos.pos_bol)
-;;
 
 type 'a loc = {
   txt : 'a;
@@ -100,8 +95,19 @@ let setup_terminal () =
    input in the terminal. This would not be possible without this information,
    since printing several warnings/errors adds text between the user input and
    the bottom of the terminal.
+
+   We also use for {!is_first_report}, see below.
 *)
 let num_loc_lines = ref 0
+
+(* We use [num_loc_lines] to determine if the report about to be
+   printed is the first or a follow-up report of the current
+   "batch" -- contiguous reports without user input in between, for
+   example for the current toplevel phrase. We use this to print
+   a blank line between messages of the same batch.
+*)
+let is_first_message () =
+  !num_loc_lines = 0
 
 (* This is used by the toplevel to reset [num_loc_lines] before each phrase *)
 let reset () =
@@ -111,6 +117,13 @@ let reset () =
 let echo_eof () =
   print_newline ();
   incr num_loc_lines
+
+(* This is used by the toplevel and the report printers below. *)
+let separate_new_message ppf =
+  if not (is_first_message ()) then begin
+    Format.pp_print_newline ppf ();
+    incr num_loc_lines
+  end
 
 (* Code printing errors and warnings must be wrapped using this function, in
    order to update [num_loc_lines].
@@ -133,8 +146,8 @@ let print_updating_num_loc_lines ppf f arg =
   pp_print_flush ppf ();
   pp_set_formatter_out_functions ppf out_functions
 
-let setup_colors () =
-  Misc.Color.setup !Clflags.color
+let setup_tags () =
+  Misc.Style.setup !Clflags.color
 
 (******************************************************************************)
 (* Printing locations, e.g. 'File "foo.ml", line 3, characters 10-12' *)
@@ -144,12 +157,39 @@ let rewrite_absolute_path path =
   | None -> path
   | Some map -> Build_path_prefix_map.rewrite map path
 
+let rewrite_find_first_existing path =
+  match Misc.get_build_path_prefix_map () with
+  | None ->
+      if Sys.file_exists path then Some path
+      else None
+  | Some prefix_map ->
+    match Build_path_prefix_map.rewrite_all prefix_map path with
+    | [] ->
+      if Sys.file_exists path then Some path
+      else None
+    | matches ->
+      Some (List.find Sys.file_exists matches)
+
+let rewrite_find_all_existing_dirs path =
+  let ok path = Sys.file_exists path && Sys.is_directory path in
+  match Misc.get_build_path_prefix_map () with
+  | None ->
+      if ok path then [path]
+      else []
+  | Some prefix_map ->
+    match Build_path_prefix_map.rewrite_all prefix_map path with
+    | [] ->
+        if ok path then [path]
+        else []
+    | matches ->
+      match (List.filter ok matches) with
+      | [] -> raise Not_found
+      | results -> results
+
 let absolute_path s = (* This function could go into Filename *)
   let open Filename in
-  let s =
-    if not (is_relative s) then s
-    else (rewrite_absolute_path (concat (Sys.getcwd ()) s))
-  in
+  let s = if (is_relative s) then (concat (Sys.getcwd ()) s) else s in
+  let s = rewrite_absolute_path s in
   (* Now simplify . and .. components *)
   let rec aux s =
     let base = basename s in
@@ -174,7 +214,7 @@ let print_filename ppf file =
    location might be invalid; in which case we do not print it.
  *)
 let print_loc ppf loc =
-  setup_colors ();
+  setup_tags ();
   let file_valid = function
     | "_none_" ->
         (* This is a dummy placeholder, but we print it anyway to please editors
@@ -464,20 +504,28 @@ let highlight_quote ppf
         (* Single-line error *)
         Format.fprintf ppf "%s | %s@," line_nb line;
         Format.fprintf ppf "%*s   " (String.length line_nb) "";
-        String.iteri (fun i c ->
+        (* Iterate up to [rightmost], which can be larger than the length of
+           the line because we may point to a location after the end of the
+           last token on the line, for instance:
+           {[
+             token
+                       ^
+             Did you forget ...
+           ]} *)
+        for i = 0 to rightmost.pos_cnum - line_start_cnum - 1 do
           let pos = line_start_cnum + i in
           if ISet.is_start iset ~pos <> None then
             Format.fprintf ppf "@{<%s>" highlight_tag;
           if ISet.mem iset ~pos then Format.pp_print_char ppf '^'
-          else if pos < rightmost.pos_cnum then begin
+          else if i < String.length line then begin
             (* For alignment purposes, align using a tab for each tab in the
                source code *)
-            if c = '\t' then Format.pp_print_char ppf '\t'
+            if line.[i] = '\t' then Format.pp_print_char ppf '\t'
             else Format.pp_print_char ppf ' '
           end;
           if ISet.is_end iset ~pos <> None then
             Format.fprintf ppf "@}"
-        ) line;
+        done;
         Format.fprintf ppf "@}@,"
     | _ ->
         (* Multi-line error *)
@@ -530,7 +578,7 @@ let lines_around
   loop ();
   List.rev !lines
 
-(* Try to get lines from a lexbuf *)
+(* Attempt to get lines from the lexing buffer. *)
 let lines_around_from_lexbuf
     ~(start_pos: position) ~(end_pos: position)
     (lb: lexbuf):
@@ -571,61 +619,16 @@ let lines_around_from_phrasebuf
   in
   lines_around ~start_pos ~end_pos ~seek ~read_char
 
-(* Get lines from a file *)
-let lines_around_from_file
-    ~(start_pos: position) ~(end_pos: position)
-    (filename: string):
-  input_line list
-  =
-  try
-    let cin = open_in_bin filename in
-    let read_char () =
-      try Some (input_char cin) with End_of_file -> None
-    in
-    let lines =
-      lines_around ~start_pos ~end_pos ~seek:(seek_in cin) ~read_char
-    in
-    close_in cin;
-    lines
-  with Sys_error _ -> []
-
 (* A [get_lines] function for [highlight_quote] that reads from the current
-   input.
-
-   It first tries to read from [!input_lexbuf], then if that fails (because the
-   lexbuf no longer contains the input we want), it reads from [!input_name]
-   directly *)
+   input. *)
 let lines_around_from_current_input ~start_pos ~end_pos =
-  (* Be a bit defensive, and do not try to open one of the possible
-     [!input_name] values that we know do not denote valid filenames. *)
-  let file_valid = function
-    | "//toplevel//" | "_none_" | "" -> false
-    | _ -> true
-  in
-  let from_file () =
-    if file_valid !input_name then
-      lines_around_from_file !input_name ~start_pos ~end_pos
-    else
-      []
-  in
   match !input_lexbuf, !input_phrase_buffer, !input_name with
   | _, Some pb, "//toplevel//" ->
-      begin match lines_around_from_phrasebuf pb ~start_pos ~end_pos with
-      | [] -> (* Could not read the input from the phrase buffer. This is likely
-                 a sign that we were given a buggy location. *)
-          []
-      | lines ->
-          lines
-      end
+      lines_around_from_phrasebuf pb ~start_pos ~end_pos
   | Some lb, _, _ ->
-      begin match lines_around_from_lexbuf lb ~start_pos ~end_pos with
-      | [] -> (* The input is likely not in the lexbuf anymore *)
-          from_file ()
-      | lines ->
-          lines
-      end
+      lines_around_from_lexbuf lb ~start_pos ~end_pos
   | None, _, _ ->
-      from_file ()
+      []
 
 (******************************************************************************)
 (* Reporting errors and warnings *)
@@ -726,7 +729,8 @@ let batch_mode_printer : report_printer =
   in
   let pp_txt ppf txt = Format.fprintf ppf "@[%t@]" txt in
   let pp self ppf report =
-    setup_colors ();
+    setup_tags ();
+    separate_new_message ppf;
     (* Make sure we keep [num_loc_lines] updated.
        The tabulation box is here to give submessage the option
        to be aligned with the main message box
@@ -779,7 +783,7 @@ let batch_mode_printer : report_printer =
 
 let terminfo_toplevel_printer (lb: lexbuf): report_printer =
   let pp self ppf err =
-    setup_colors ();
+    setup_tags ();
     (* Highlight all toplevel locations of the report, instead of displaying
        the main location. Do it now instead of in [pp_main_loc], to avoid
        messing with Format boxes. *)
@@ -899,6 +903,43 @@ let alert ?(def = none) ?(use = none) ~kind loc message =
 
 let deprecated ?def ?use loc message =
   alert ?def ?use ~kind:"deprecated" loc message
+
+module Style = Misc.Style
+
+let auto_include_alert lib =
+  let message = Format.asprintf "\
+    OCaml's lib directory layout changed in 5.0. The %a subdirectory has been \
+    automatically added to the search path, but you should add %a to the \
+    command-line to silence this alert (e.g. by adding %a to the list of \
+    libraries in your dune file, or adding %a to your %a file for \
+    ocamlbuild, or using %a for ocamlfind)."
+      Style.inline_code lib
+      Style.inline_code ("-I +" ^lib)
+      Style.inline_code lib
+      Style.inline_code ("use_"^lib)
+      Style.inline_code "_tags"
+      Style.inline_code ("-package " ^ lib) in
+  let alert =
+    {Warnings.kind="ocaml_deprecated_auto_include"; use=none; def=none;
+     message = Format.asprintf "@[@\n%a@]" Format.pp_print_text message}
+  in
+  prerr_alert none alert
+
+let deprecated_script_alert program =
+  let message = Format.asprintf "\
+    Running %a where the first argument is an implicit basename with no \
+    extension (e.g. %a) is deprecated. Either rename the script \
+    (%a) or qualify the basename (%a)"
+      Style.inline_code program
+      Style.inline_code (program ^ " script-file")
+      Style.inline_code (program ^ " script-file.ml")
+      Style.inline_code (program ^ " ./script-file")
+  in
+  let alert =
+    {Warnings.kind="ocaml_deprecated_cli"; use=none; def=none;
+     message = Format.asprintf "@[@\n%a@]" Format.pp_print_text message}
+  in
+  prerr_alert none alert
 
 (******************************************************************************)
 (* Reporting errors on exceptions *)

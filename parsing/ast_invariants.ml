@@ -26,6 +26,8 @@ let empty_type loc = err loc "Type declarations cannot be empty."
 let complex_id loc = err loc "Functor application not allowed here."
 let module_type_substitution_missing_rhs loc =
   err loc "Module type substitution with no right hand side"
+let function_without_value_parameters loc =
+  err loc "Function without any value parameters"
 
 let simple_longident id =
   let rec is_simple = function
@@ -91,6 +93,14 @@ let iterator =
     | Pexp_new id -> simple_longident id
     | Pexp_record (fields, _) ->
       List.iter (fun (id, _) -> simple_longident id) fields
+    | Pexp_function (params, _, Pfunction_body _) ->
+        if
+          List.for_all
+            (function
+              | { pparam_desc = Pparam_newtype _ } -> true
+              | { pparam_desc = Pparam_val _ } -> false)
+            params
+        then function_without_value_parameters loc
     | _ -> ()
   in
   let extension_constructor self ec =
@@ -170,6 +180,14 @@ let iterator =
           "In object types, attaching attributes to inherited \
            subtypes is not allowed."
   in
+  let attribute self attr =
+    (* The change to `self` here avoids registering attributes within attributes
+       for the purposes of warning 53, while keeping all the other invariant
+       checks for attribute payloads.  See comment on [current_phase] in
+       [builtin_attributes.mli]. *)
+    super.attribute { self with attribute = super.attribute } attr;
+    Builtin_attributes.(register_attr Invariant_check attr.attr_name)
+  in
   { super with
     type_declaration
   ; typ
@@ -185,6 +203,7 @@ let iterator =
   ; signature_item
   ; row_field
   ; object_field
+  ; attribute
   }
 
 let structure st = iterator.structure iterator st

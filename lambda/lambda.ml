@@ -48,14 +48,18 @@ type primitive =
   | Psetglobal of Ident.t
   (* Operations on heap blocks *)
   | Pmakeblock of int * mutable_flag * block_shape
-  | Pfield of int
+  | Pfield of int * immediate_or_pointer * mutable_flag
   | Pfield_computed
   | Psetfield of int * immediate_or_pointer * initialization_or_assignment
   | Psetfield_computed of immediate_or_pointer * initialization_or_assignment
   | Pfloatfield of int
   | Psetfloatfield of int * initialization_or_assignment
   | Pduprecord of Types.record_representation * int
-  (* Force lazy values *)
+  (* Context switches *)
+  | Prunstack
+  | Pperform
+  | Presume
+  | Preperform
   (* External call *)
   | Pccall of Primitive.description
   (* Exceptions *)
@@ -138,8 +142,15 @@ type primitive =
   | Pbbswap of boxed_integer
   (* Integer to external pointer *)
   | Pint_as_pointer
+  (* Atomic operations *)
+  | Patomic_load of {immediate_or_pointer : immediate_or_pointer}
+  | Patomic_exchange
+  | Patomic_cas
+  | Patomic_fetch_add
   (* Inhibition of optimisation *)
   | Popaque
+  (* Fetching domain-local state *)
+  | Pdls_get
 
 and integer_comparison =
     Ceq | Cne | Clt | Cgt | Cle | Cge
@@ -161,7 +172,7 @@ and boxed_integer = Primitive.boxed_integer =
 
 and bigarray_kind =
     Pbigarray_unknown
-  | Pbigarray_float32 | Pbigarray_float64
+  | Pbigarray_float16 | Pbigarray_float32 | Pbigarray_float64
   | Pbigarray_sint8 | Pbigarray_uint8
   | Pbigarray_sint16 | Pbigarray_uint16
   | Pbigarray_int32 | Pbigarray_int64
@@ -274,6 +285,7 @@ type function_attribute = {
   is_a_functor: bool;
   stub: bool;
   tmc_candidate: bool;
+  may_fuse_arity: bool;
 }
 
 type scoped_location = Debuginfo.Scoped_location.t
@@ -286,7 +298,7 @@ type lambda =
   | Lfunction of lfunction
   | Llet of let_kind * value_kind * Ident.t * lambda * lambda
   | Lmutlet of value_kind * Ident.t * lambda * lambda
-  | Lletrec of (Ident.t * lambda) list * lambda
+  | Lletrec of rec_binding list * lambda
   | Lprim of primitive * lambda list * scoped_location
   | Lswitch of lambda * lambda_switch * scoped_location
   | Lstringswitch of
@@ -302,6 +314,11 @@ type lambda =
   | Lsend of meth_kind * lambda * lambda * lambda list * scoped_location
   | Levent of lambda * lambda_event
   | Lifused of Ident.t * lambda
+
+and rec_binding = {
+  id : Ident.t;
+  def : lfunction;
+}
 
 and lfunction =
   { kind: function_kind;
@@ -337,7 +354,6 @@ and lambda_event_kind =
   | Lev_after of Types.type_expr
   | Lev_function
   | Lev_pseudo
-  | Lev_module_definition of Ident.t
 
 type program =
   { module_ident : Ident.t;
@@ -349,14 +365,19 @@ let const_int n = Const_base (Const_int n)
 
 let const_unit = const_int 0
 
+let dummy_constant = Lconst (const_int (0xBBBB / 2))
+
 let max_arity () =
   if !Clflags.native_code then 126 else max_int
   (* 126 = 127 (the maximal number of parameters supported in C--)
            - 1 (the hidden parameter containing the environment) *)
 
-let lfunction ~kind ~params ~return ~body ~attr ~loc =
+let lfunction' ~kind ~params ~return ~body ~attr ~loc =
   assert (List.length params <= max_arity ());
-  Lfunction { kind; params; return; body; attr; loc }
+  { kind; params; return; body; attr; loc }
+
+let lfunction ~kind ~params ~return ~body ~attr ~loc =
+  Lfunction (lfunction' ~kind ~params ~return ~body ~attr ~loc)
 
 let lambda_unit = Lconst const_unit
 
@@ -368,6 +389,15 @@ let default_function_attribute = {
   is_a_functor = false;
   stub = false;
   tmc_candidate = false;
+  (* Plain functions ([fun] and [function]) set [may_fuse_arity] to [false] so
+     that runtime arity matches syntactic arity in more situations.
+
+     Many things compile to functions without having a notion of syntactic arity
+     that survives typechecking, e.g. functors. Multi-arg functors are compiled
+     as nested unary functions, and rely on the arity fusion in simplif to make
+     them multi-argument. So, we keep arity fusion turned on by default for now.
+  *)
+  may_fuse_arity = true;
 }
 
 let default_stub_attribute =
@@ -503,7 +533,7 @@ let shallow_iter ~tail ~non_tail:f = function
       f arg; tail body
   | Lletrec(decl, body) ->
       tail body;
-      List.iter (fun (_id, exp) -> f exp) decl
+      List.iter (fun { def } -> f (Lfunction def)) decl
   | Lprim (Psequand, [l1; l2], _)
   | Lprim (Psequor, [l1; l2], _) ->
       f l1;
@@ -560,8 +590,12 @@ let rec free_variables = function
         (free_variables arg)
         (Ident.Set.remove id (free_variables body))
   | Lletrec(decl, body) ->
-      let set = free_variables_list (free_variables body) (List.map snd decl) in
-      Ident.Set.diff set (Ident.Set.of_list (List.map fst decl))
+      let set =
+        free_variables_list (free_variables body)
+          (List.map (fun { def } -> Lfunction def) decl)
+      in
+      Ident.Set.diff set
+        (Ident.Set.of_list (List.map (fun { id } -> id) decl))
   | Lprim(_p, args, _loc) ->
       free_variables_list Ident.Set.empty args
   | Lswitch(arg, sw,_) ->
@@ -658,7 +692,8 @@ let rec transl_address loc = function
       then Lprim(Pgetglobal id, [], loc)
       else Lvar id
   | Env.Adot(addr, pos) ->
-      Lprim(Pfield pos, [transl_address loc addr], loc)
+      Lprim(Pfield(pos, Pointer, Immutable),
+                   [transl_address loc addr], loc)
 
 let transl_path find loc env path =
   match find path env with
@@ -701,12 +736,17 @@ let rec make_sequence fn = function
    Assumes that the image of the substitution is out of reach
    of the bound variables of the lambda-term (no capture). *)
 
-let subst update_env ?(freshen_bound_variables = false) s input_lam =
+type substitution_functions = {
+  subst_lambda : lambda -> lambda;
+  subst_lfunction : lfunction -> lfunction;
+}
+
+let build_substs update_env ?(freshen_bound_variables = false) s =
   (* [s] contains a partial substitution for the free variables of the
-     input term [input_lam].
+     input term.
 
      During our traversal of the term we maintain a second environment
-     [l] with all the bound variables of [input_lam] in the current
+     [l] with all the bound variables of the input term in the current
      scope, mapped to either themselves or freshened versions of
      themselves when [freshen_bound_variables] is set. *)
   let bind id l =
@@ -717,6 +757,12 @@ let subst update_env ?(freshen_bound_variables = false) s input_lam =
     List.fold_right (fun (id, rhs) (ids', l) ->
         let id', l = bind id l in
         ((id', rhs) :: ids' , l)
+      ) ids ([], l)
+  in
+  let bind_rec ids l =
+    List.fold_right (fun rb (ids', l) ->
+        let id', l = bind rb.id l in
+        ({ rb with id = id' } :: ids' , l)
       ) ids ([], l)
   in
   let rec subst s l lam =
@@ -743,8 +789,7 @@ let subst update_env ?(freshen_bound_variables = false) s input_lam =
         Lapply{ap with ap_func = subst s l ap.ap_func;
                       ap_args = subst_list s l ap.ap_args}
     | Lfunction lf ->
-        let params, l' = bind_many lf.params l in
-        Lfunction {lf with params; body = subst s l' lf.body}
+        Lfunction (subst_lfun s l lf)
     | Llet(str, k, id, arg, body) ->
         let id, l' = bind id l in
         Llet(str, k, id, subst s l arg, subst s l' body)
@@ -752,7 +797,7 @@ let subst update_env ?(freshen_bound_variables = false) s input_lam =
         let id, l' = bind id l in
         Lmutlet(k, id, subst s l arg, subst s l' body)
     | Lletrec(decl, body) ->
-        let decl, l' = bind_many decl l in
+        let decl, l' = bind_rec decl l in
         Lletrec(List.map (subst_decl s l') decl, subst s l' body)
     | Lprim(p, args, loc) -> Lprim(p, subst_list s l args, loc)
     | Lswitch(arg, sw, loc) ->
@@ -818,14 +863,22 @@ let subst update_env ?(freshen_bound_variables = false) s input_lam =
         let id = try Ident.Map.find id l with Not_found -> id in
         Lifused (id, subst s l e)
   and subst_list s l li = List.map (subst s l) li
-  and subst_decl s l (id, exp) = (id, subst s l exp)
+  and subst_decl s l decl = { decl with def = subst_lfun s l decl.def }
+  and subst_lfun s l lf =
+    let params, l' = bind_many lf.params l in
+    { lf with params; body = subst s l' lf.body }
   and subst_case s l (key, case) = (key, subst s l case)
   and subst_strcase s l (key, case) = (key, subst s l case)
   and subst_opt s l = function
     | None -> None
     | Some e -> Some (subst s l e)
   in
-  subst s Ident.Map.empty input_lam
+  { subst_lambda = (fun lam -> subst s Ident.Map.empty lam);
+    subst_lfunction = (fun lfun -> subst_lfun s Ident.Map.empty lfun);
+  }
+
+let subst update_env ?freshen_bound_variables s =
+  (build_substs update_env ?freshen_bound_variables s).subst_lambda
 
 let rename idmap lam =
   let update_env oldid vd env =
@@ -835,12 +888,15 @@ let rename idmap lam =
   let s = Ident.Map.map (fun new_id -> Lvar new_id) idmap in
   subst update_env s lam
 
-let duplicate lam =
-  subst
-    (fun _ _ env -> env)
-    ~freshen_bound_variables:true
-    Ident.Map.empty
-    lam
+let duplicate_function =
+  (build_substs
+     (fun _ _ env -> env)
+     ~freshen_bound_variables:true
+     Ident.Map.empty).subst_lfunction
+
+let map_lfunction f { kind; params; return; body; attr; loc } =
+  let body = f body in
+  { kind; params; return; body; attr; loc }
 
 let shallow_map f = function
   | Lvar _
@@ -856,14 +912,18 @@ let shallow_map f = function
         ap_inlined;
         ap_specialised;
       }
-  | Lfunction { kind; params; return; body; attr; loc; } ->
-      Lfunction { kind; params; return; body = f body; attr; loc; }
+  | Lfunction lfun ->
+      Lfunction (map_lfunction f lfun)
   | Llet (str, k, v, e1, e2) ->
       Llet (str, k, v, f e1, f e2)
   | Lmutlet (k, v, e1, e2) ->
       Lmutlet (k, v, f e1, f e2)
   | Lletrec (idel, e2) ->
-      Lletrec (List.map (fun (v, e) -> (v, f e)) idel, f e2)
+      Lletrec
+        (List.map (fun rb ->
+             { rb with def = map_lfunction f rb.def })
+            idel,
+         f e2)
   | Lprim (p, el, loc) ->
       Lprim (p, List.map f el, loc)
   | Lswitch (e, sw, loc) ->

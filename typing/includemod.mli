@@ -43,6 +43,9 @@ module Error: sig
     | Anonymous
     | Named of Path.t
     | Unit
+    | Empty_struct
+     (** For backward compatibility's sake, an empty struct can be implicitly
+         converted to an unit module. *)
 
   type core_sigitem_symptom =
     | Value_descriptions of
@@ -212,10 +215,16 @@ type pos =
   | Body of functor_parameter
 
 exception Error of explanation
+
+type application_name =
+  | Anonymous_functor (** [(functor (_:sig end) -> struct end)(Int)] *)
+  | Full_application_path of Longident.t (** [F(G(X).P)(Y)] *)
+  | Named_leftmost_functor of Longident.t (** [F(struct end)...(...)] *)
+
 exception Apply_error of {
     loc : Location.t ;
     env : Env.t ;
-    lid_app : Longident.t option ;
+    app_name : application_name ;
     mty_f : module_type ;
     args : (Error.functor_arg_descr * Types.module_type)  list ;
   }

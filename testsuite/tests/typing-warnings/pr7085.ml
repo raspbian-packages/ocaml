@@ -1,6 +1,6 @@
 (* TEST
-   flags = " -w +A -strict-sequence "
-   * expect
+ flags = " -w +A -strict-sequence ";
+ expect;
 *)
 
 module TypEq = struct
@@ -34,6 +34,7 @@ Line 17, characters 5-35:
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
 Here is an example of a case that is not matched:
 Some (Is Eq)
+
 module Make : functor (M : T) -> sig val f : unit -> int end
 |}]
 
@@ -46,5 +47,5 @@ Line 3, characters 30-31:
 3 |   let g : t -> int = function _ -> .
                                   ^
 Error: This match case could not be refuted.
-       Here is an example of a value that would reach it: T (Is Eq)
+       Here is an example of a value that would reach it: "T (Is Eq)"
 |}]

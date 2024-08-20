@@ -40,6 +40,17 @@ let bind_nonvar name arg fn =
 let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
     (* cf. runtime/caml/gc.h *)
 
+(* Loads *)
+
+let mk_load_immut memory_chunk =
+  Cload {memory_chunk; mutability=Immutable; is_atomic=false}
+
+let mk_load_mut memory_chunk =
+  Cload {memory_chunk; mutability=Mutable; is_atomic=false}
+
+let mk_load_atomic memory_chunk =
+  Cload {memory_chunk; mutability=Mutable; is_atomic=true}
+
 (* Block headers. Meaning of the tag field: see stdlib/obj.ml *)
 
 let floatarray_tag dbg = Cconst_int (Obj.double_array_tag, dbg)
@@ -524,7 +535,7 @@ let safe_divmod_bi mkop is_safe mkm1 c1 c2 bi dbg =
   bind "dividend" c1 (fun c1 ->
     let c = mkop c1 c2 is_safe dbg in
     if Arch.division_crashes_on_overflow
-    && (size_int = 4 || bi <> Primitive.Pint32)
+    && bi <> Primitive.Pint32
     && not (is_different_from (-1) c2)
     then
       Cifthenelse(Cop(Ccmpi Cne, [c2; Cconst_int (-1, dbg)], dbg),
@@ -569,20 +580,28 @@ let unbox_float dbg =
           | Some (Uconst_float x) ->
               Cconst_float (x, dbg) (* or keep _dbg? *)
           | _ ->
-              Cop(Cload (Double, Immutable), [cmm], dbg)
+              Cop(mk_load_immut Double, [cmm], dbg)
           end
-      | cmm -> Cop(Cload (Double, Immutable), [cmm], dbg)
+      | cmm -> Cop(mk_load_immut Double, [cmm], dbg)
     )
+
+(* Conversions for 16-bit floats *)
+
+let float_of_float16 dbg c =
+  Cop(Cextcall("caml_double_of_float16", typ_float, [XInt], false), [c], dbg)
+let float16_of_float dbg c =
+  Cop(Cextcall("caml_float16_of_double", typ_int, [XFloat], false), [c], dbg)
 
 (* Complex *)
 
 let box_complex dbg c_re c_im =
   Cop(Calloc, [alloc_floatarray_header 2 dbg; c_re; c_im], dbg)
 
-let complex_re c dbg = Cop(Cload (Double, Immutable), [c], dbg)
-let complex_im c dbg = Cop(Cload (Double, Immutable),
-                        [Cop(Cadda, [c; Cconst_int (size_float, dbg)], dbg)],
-                        dbg)
+let complex_re c dbg =
+  Cop(mk_load_immut Double, [c], dbg)
+let complex_im c dbg =
+  Cop(mk_load_immut Double,
+      [Cop(Cadda, [c; Cconst_int (size_float, dbg)], dbg)], dbg)
 
 (* Unit *)
 
@@ -617,33 +636,36 @@ let rec remove_unit = function
   | Ctuple [] as c -> c
   | c -> Csequence(c, Ctuple [])
 
-(* Access to block fields *)
-
 let field_address ptr n dbg =
   if n = 0
   then ptr
   else Cop(Cadda, [ptr; Cconst_int(n * size_addr, dbg)], dbg)
 
-let get_field_gen mut ptr n dbg =
-  Cop(Cload (Word_val, mut), [field_address ptr n dbg], dbg)
+let get_field_gen mutability ptr n dbg =
+  Cop(Cload {memory_chunk=Word_val; mutability; is_atomic=false},
+      [field_address ptr n dbg], dbg)
+
+let get_field_codepointer mutability ptr n dbg =
+  Cop(Cload {memory_chunk=Word_int; mutability; is_atomic=false},
+      [field_address ptr n dbg], dbg)
 
 let set_field ptr n newval init dbg =
   Cop(Cstore (Word_val, init), [field_address ptr n dbg; newval], dbg)
 
-let non_profinfo_mask =
-  if Config.profinfo
-  then (1 lsl (64 - Config.profinfo_width)) - 1
-  else 0 (* [non_profinfo_mask] is unused in this case *)
-
 let get_header ptr dbg =
-  (* We cannot deem this as [Immutable] due to the presence of [Obj.truncate]
-     and [Obj.set_tag]. *)
-  Cop(Cload (Word_int, Mutable),
+  (* Headers can be mutated when forcing a lazy value. However, for all
+     purposes that the mutability tag currently serves in the compiler, header
+     loads can be marked as [Immutable], since the runtime should ensure that
+     there is no data race on headers. This saves performance with
+     ThreadSanitizer instrumentation by avoiding to instrument header loads. *)
+  Cop(
+    mk_load_immut Word_int,
     [Cop(Cadda, [ptr; Cconst_int(-size_int, dbg)], dbg)], dbg)
 
-let get_header_without_profinfo ptr dbg =
-  if Config.profinfo then
-    Cop(Cand, [get_header ptr dbg; Cconst_int (non_profinfo_mask, dbg)], dbg)
+let get_header_masked ptr dbg =
+  if Config.reserved_header_bits > 0 then
+    let header_mask = (1 lsl (64 - Config.reserved_header_bits)) - 1
+    in Cop(Cand, [get_header ptr dbg; Cconst_int (header_mask, dbg)], dbg)
   else
     get_header ptr dbg
 
@@ -655,11 +677,12 @@ let get_tag ptr dbg =
     Cop(Cand, [get_header ptr dbg; Cconst_int (255, dbg)], dbg)
   else                                  (* If byte loads are efficient *)
     (* Same comment as [get_header] above *)
-    Cop(Cload (Byte_unsigned, Mutable),
-        [Cop(Cadda, [ptr; Cconst_int(tag_offset, dbg)], dbg)], dbg)
+    Cop(
+      mk_load_immut Byte_unsigned,
+      [Cop(Cadda, [ptr; Cconst_int(tag_offset, dbg)], dbg)], dbg)
 
 let get_size ptr dbg =
-  Cop(Clsr, [get_header_without_profinfo ptr dbg; Cconst_int (10, dbg)], dbg)
+  Cop(Clsr, [get_header_masked ptr dbg; Cconst_int (10, dbg)], dbg)
 
 (* Array indexing *)
 
@@ -722,13 +745,13 @@ let array_indexing ?typ log2size ptr ofs dbg =
                     Cconst_int((-1) lsl (log2size - 1), dbg)], dbg)
 
 let addr_array_ref arr ofs dbg =
-  Cop(Cload (Word_val, Mutable),
+  Cop(mk_load_mut Word_val,
     [array_indexing log2_size_addr arr ofs dbg], dbg)
 let int_array_ref arr ofs dbg =
-  Cop(Cload (Word_int, Mutable),
+  Cop(mk_load_mut Word_int,
     [array_indexing log2_size_addr arr ofs dbg], dbg)
 let unboxed_float_array_ref arr ofs dbg =
-  Cop(Cload (Double, Mutable),
+  Cop(mk_load_mut Double,
     [array_indexing log2_size_float arr ofs dbg], dbg)
 let float_array_ref arr ofs dbg =
   box_float dbg (unboxed_float_array_ref arr ofs dbg)
@@ -763,11 +786,11 @@ let string_length exp dbg =
              dbg),
          Cop(Csubi,
              [Cvar tmp_var;
-               Cop(Cload (Byte_unsigned, Mutable),
+               Cop(mk_load_mut Byte_unsigned,
                      [Cop(Cadda, [str; Cvar tmp_var], dbg)], dbg)], dbg)))
 
 let bigstring_length ba dbg =
-  Cop(Cload (Word_int, Mutable), [field_address ba 5 dbg], dbg)
+  Cop(mk_load_mut Word_int, [field_address ba 5 dbg], dbg)
 
 (* Message sending *)
 
@@ -779,7 +802,7 @@ let lookup_tag obj tag dbg =
 
 let lookup_label obj lab dbg =
   bind "lab" lab (fun lab ->
-    let table = Cop (Cload (Word_val, Mutable), [obj], dbg) in
+    let table = Cop (mk_load_mut Word_val, [obj], dbg) in
     addr_array_ref table lab dbg)
 
 let call_cached_method obj tag cache pos args dbg =
@@ -803,7 +826,7 @@ let make_alloc_generic set_fn dbg tag wordsize args =
     | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int (idx, dbg)) e1 dbg,
                           fill_fields (idx + 2) el) in
     Clet(VP.create id,
-         Cop(Cextcall("caml_alloc", typ_val, [], true),
+         Cop(Cextcall("caml_alloc_shr_check_gc", typ_val, [], true),
                  [Cconst_int (wordsize, dbg); Cconst_int (tag, dbg)], dbg),
          fill_fields 1 args)
   end
@@ -842,6 +865,7 @@ let curry_function_sym n =
 
 let bigarray_elt_size : Lambda.bigarray_kind -> int = function
     Pbigarray_unknown -> assert false
+  | Pbigarray_float16 -> 2
   | Pbigarray_float32 -> 4
   | Pbigarray_float64 -> 8
   | Pbigarray_sint8 -> 1
@@ -872,7 +896,7 @@ let bigarray_indexing unsafe elt_kind layout b args dbg =
         bind "idx" arg (fun idx ->
           (* Load the untagged int bound for the given dimension *)
           let bound =
-            Cop(Cload (Word_int, Mutable),
+            Cop(mk_load_mut Word_int,
                 [field_address b dim_ofs dbg], dbg)
           in
           let idxn = untag_int idx dbg in
@@ -883,7 +907,7 @@ let bigarray_indexing unsafe elt_kind layout b args dbg =
       let rem = ba_indexing (dim_ofs + delta_ofs) delta_ofs argl in
       (* Load the untagged int bound for the given dimension *)
       let bound =
-        Cop(Cload (Word_int, Mutable),
+        Cop(mk_load_mut Word_int,
             [field_address b dim_ofs dbg], dbg)
       in
       if unsafe then add_int (mul_int (decr_int rem dbg) bound dbg) arg1 dbg
@@ -910,11 +934,12 @@ let bigarray_indexing unsafe elt_kind layout b args dbg =
     bigarray_elt_size elt_kind in
   (* [array_indexing] can simplify the given expressions *)
   array_indexing ~typ:Addr (Misc.log2 elt_size)
-                 (Cop(Cload (Word_int, Mutable),
+                 (Cop(mk_load_mut Word_int,
                     [field_address b 1 dbg], dbg)) offset dbg
 
 let bigarray_word_kind : Lambda.bigarray_kind -> memory_chunk = function
     Pbigarray_unknown -> assert false
+  | Pbigarray_float16 -> Sixteen_unsigned
   | Pbigarray_float32 -> Single
   | Pbigarray_float64 -> Double
   | Pbigarray_sint8 -> Byte_signed
@@ -937,13 +962,13 @@ let bigarray_get unsafe elt_kind layout b args dbg =
         bind "addr"
           (bigarray_indexing unsafe elt_kind layout b args dbg) (fun addr ->
             bind "reval"
-              (Cop(Cload (kind, Mutable), [addr], dbg)) (fun reval ->
+              (Cop(mk_load_mut kind, [addr], dbg)) (fun reval ->
                 bind "imval"
-                  (Cop(Cload (kind, Mutable),
+                  (Cop(mk_load_mut kind,
                        [Cop(Cadda, [addr; Cconst_int (sz, dbg)], dbg)], dbg))
                   (fun imval -> box_complex dbg reval imval)))
     | _ ->
-        Cop(Cload (bigarray_word_kind elt_kind, Mutable),
+        Cop(mk_load_mut (bigarray_word_kind elt_kind),
             [bigarray_indexing unsafe elt_kind layout b args dbg],
             dbg))
 
@@ -967,12 +992,11 @@ let bigarray_set unsafe elt_kind layout b args newval dbg =
             [bigarray_indexing unsafe elt_kind layout b args dbg; newval],
             dbg))
 
-(* the three functions below assume either 32-bit or 64-bit words *)
-let () = assert (size_int = 4 || size_int = 8)
+(* the three functions below assume 64-bit words *)
+let () = assert (size_int = 8)
 
 (* low_32 x is a value which agrees with x on at least the low 32 bits *)
 let rec low_32 dbg = function
-  | x when size_int = 4 -> x
     (* Ignore sign and zero extensions, which do not affect the low bits *)
   | Cop(Casr, [Cop(Clsl, [x; Cconst_int (32, _)], _);
                Cconst_int (32, _)], _)
@@ -982,18 +1006,14 @@ let rec low_32 dbg = function
     Clet(id, e, low_32 dbg body)
   | x -> x
 
-(* sign_extend_32 sign-extends values from 32 bits to the word size.
-   (if the word size is 32, this is a no-op) *)
+(* sign_extend_32 sign-extends values from 32 bits to the word size. *)
 let sign_extend_32 dbg e =
-  if size_int = 4 then e else
-    Cop(Casr, [Cop(Clsl, [low_32 dbg e; Cconst_int(32, dbg)], dbg);
-               Cconst_int(32, dbg)], dbg)
+  Cop(Casr, [Cop(Clsl, [low_32 dbg e; Cconst_int(32, dbg)], dbg);
+             Cconst_int(32, dbg)], dbg)
 
-(* zero_extend_32 zero-extends values from 32 bits to the word size.
-   (if the word size is 32, this is a no-op) *)
+(* zero_extend_32 zero-extends values from 32 bits to the word size. *)
 let zero_extend_32 dbg e =
-  if size_int = 4 then e else
-    Cop(Cand, [low_32 dbg e; natint_const_untagged dbg 0xFFFFFFFFn], dbg)
+  Cop(Cand, [low_32 dbg e; natint_const_untagged dbg 0xFFFFFFFFn], dbg)
 
 (* Boxed integers *)
 
@@ -1011,7 +1031,7 @@ let alloc_header_boxed_int (bi : Primitive.boxed_integer) =
 
 let box_int_gen dbg (bi : Primitive.boxed_integer) arg =
   let arg' =
-    if bi = Primitive.Pint32 && size_int = 8 then
+    if bi = Primitive.Pint32 then
       if big_endian
       then Cop(Clsl, [arg; Cconst_int (32, dbg)], dbg)
       else sign_extend_32 dbg arg
@@ -1020,13 +1040,6 @@ let box_int_gen dbg (bi : Primitive.boxed_integer) arg =
   Cop(Calloc, [alloc_header_boxed_int bi dbg;
                Cconst_symbol(operations_boxed_int bi, dbg);
                arg'], dbg)
-
-let split_int64_for_32bit_target arg dbg =
-  bind "split_int64" arg (fun arg ->
-    let first = Cop (Cadda, [Cconst_int (size_int, dbg); arg], dbg) in
-    let second = Cop (Cadda, [Cconst_int (2 * size_int, dbg); arg], dbg) in
-    Ctuple [Cop (Cload (Thirtytwo_unsigned, Mutable), [first], dbg);
-            Cop (Cload (Thirtytwo_unsigned, Mutable), [second], dbg)])
 
 let alloc_matches_boxed_int bi ~hdr ~ops =
   match (bi : Primitive.boxed_integer), hdr, ops with
@@ -1043,26 +1056,25 @@ let alloc_matches_boxed_int bi ~hdr ~ops =
 
 let unbox_int dbg bi =
   let default arg =
-    if size_int = 4 && bi = Primitive.Pint64 then
-      split_int64_for_32bit_target arg dbg
-    else
-      Cop(
-        Cload((if bi = Primitive.Pint32 then Thirtytwo_signed else Word_int),
-              Immutable),
-        [Cop(Cadda, [arg; Cconst_int (size_addr, dbg)], dbg)], dbg)
+    let memory_chunk = if bi = Primitive.Pint32
+      then Thirtytwo_signed else Word_int
+    in
+    Cop(
+      mk_load_immut memory_chunk,
+      [Cop(Cadda, [arg; Cconst_int (size_addr, dbg)], dbg)], dbg)
   in
   map_tail
     (function
       | Cop(Calloc,
             [hdr; ops;
              Cop(Clsl, [contents; Cconst_int (32, _)], _dbg')], _dbg)
-        when bi = Primitive.Pint32 && size_int = 8 && big_endian
+        when bi = Primitive.Pint32 && big_endian
              && alloc_matches_boxed_int bi ~hdr ~ops ->
           (* Force sign-extension of low 32 bits *)
           sign_extend_32 dbg contents
       | Cop(Calloc,
             [hdr; ops; contents], _dbg)
-        when bi = Primitive.Pint32 && size_int = 8 && not big_endian
+        when bi = Primitive.Pint32 && not big_endian
              && alloc_matches_boxed_int bi ~hdr ~ops ->
           (* Force sign-extension of low 32 bits *)
           sign_extend_32 dbg contents
@@ -1076,19 +1088,7 @@ let unbox_int dbg bi =
           | Some (Uconst_int32 n), Primitive.Pint32 ->
               natint_const_untagged dbg (Nativeint.of_int32 n)
           | Some (Uconst_int64 n), Primitive.Pint64 ->
-              if size_int = 8 then
-                natint_const_untagged dbg (Int64.to_nativeint n)
-              else
-                let low = Int64.to_nativeint n in
-                let high =
-                  Int64.to_nativeint (Int64.shift_right_logical n 32)
-                in
-                if big_endian then
-                  Ctuple [natint_const_untagged dbg high;
-                          natint_const_untagged dbg low]
-                else
-                  Ctuple [natint_const_untagged dbg low;
-                          natint_const_untagged dbg high]
+              natint_const_untagged dbg (Int64.to_nativeint n)
           | _ ->
               default cmm
           end
@@ -1097,17 +1097,17 @@ let unbox_int dbg bi =
     )
 
 let make_unsigned_int bi arg dbg =
-  if bi = Primitive.Pint32 && size_int = 8
+  if bi = Primitive.Pint32
   then zero_extend_32 dbg arg
   else arg
 
 let unaligned_load_16 ptr idx dbg =
   if Arch.allow_unaligned_access
-  then Cop(Cload (Sixteen_unsigned, Mutable), [add_int ptr idx dbg], dbg)
+  then Cop(mk_load_mut Sixteen_unsigned, [add_int ptr idx dbg], dbg)
   else
     let cconst_int i = Cconst_int (i, dbg) in
-    let v1 = Cop(Cload (Byte_unsigned, Mutable), [add_int ptr idx dbg], dbg) in
-    let v2 = Cop(Cload (Byte_unsigned, Mutable),
+    let v1 = Cop(mk_load_mut Byte_unsigned, [add_int ptr idx dbg], dbg) in
+    let v2 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 1) dbg], dbg) in
     let b1, b2 = if Arch.big_endian then v1, v2 else v2, v1 in
     Cop(Cor, [lsl_int b1 (cconst_int 8) dbg; b2], dbg)
@@ -1132,17 +1132,17 @@ let unaligned_set_16 ptr idx newval dbg =
 
 let unaligned_load_32 ptr idx dbg =
   if Arch.allow_unaligned_access
-  then Cop(Cload (Thirtytwo_unsigned, Mutable), [add_int ptr idx dbg], dbg)
+  then Cop(mk_load_mut Thirtytwo_unsigned, [add_int ptr idx dbg], dbg)
   else
     let cconst_int i = Cconst_int (i, dbg) in
-    let v1 = Cop(Cload (Byte_unsigned, Mutable), [add_int ptr idx dbg], dbg) in
-    let v2 = Cop(Cload (Byte_unsigned, Mutable),
+    let v1 = Cop(mk_load_mut Byte_unsigned, [add_int ptr idx dbg], dbg) in
+    let v2 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 1) dbg], dbg)
     in
-    let v3 = Cop(Cload (Byte_unsigned, Mutable),
+    let v3 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 2) dbg], dbg)
     in
-    let v4 = Cop(Cload (Byte_unsigned, Mutable),
+    let v4 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 3) dbg], dbg)
     in
     let b1, b2, b3, b4 =
@@ -1192,25 +1192,24 @@ let unaligned_set_32 ptr idx newval dbg =
                 dbg)))
 
 let unaligned_load_64 ptr idx dbg =
-  assert(size_int = 8);
   if Arch.allow_unaligned_access
-  then Cop(Cload (Word_int, Mutable), [add_int ptr idx dbg], dbg)
+  then Cop(mk_load_mut Word_int, [add_int ptr idx dbg], dbg)
   else
     let cconst_int i = Cconst_int (i, dbg) in
-    let v1 = Cop(Cload (Byte_unsigned, Mutable), [add_int ptr idx dbg], dbg) in
-    let v2 = Cop(Cload (Byte_unsigned, Mutable),
+    let v1 = Cop(mk_load_mut Byte_unsigned, [add_int ptr idx dbg], dbg) in
+    let v2 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 1) dbg], dbg) in
-    let v3 = Cop(Cload (Byte_unsigned, Mutable),
+    let v3 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 2) dbg], dbg) in
-    let v4 = Cop(Cload (Byte_unsigned, Mutable),
+    let v4 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 3) dbg], dbg) in
-    let v5 = Cop(Cload (Byte_unsigned, Mutable),
+    let v5 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 4) dbg], dbg) in
-    let v6 = Cop(Cload (Byte_unsigned, Mutable),
+    let v6 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 5) dbg], dbg) in
-    let v7 = Cop(Cload (Byte_unsigned, Mutable),
+    let v7 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 6) dbg], dbg) in
-    let v8 = Cop(Cload (Byte_unsigned, Mutable),
+    let v8 = Cop(mk_load_mut Byte_unsigned,
                  [add_int (add_int ptr idx dbg) (cconst_int 7) dbg], dbg) in
     let b1, b2, b3, b4, b5, b6, b7, b8 =
       if Arch.big_endian
@@ -1231,7 +1230,6 @@ let unaligned_load_64 ptr idx dbg =
              dbg)], dbg)
 
 let unaligned_set_64 ptr idx newval dbg =
-  assert(size_int = 8);
   if Arch.allow_unaligned_access
   then Cop(Cstore (Word_int, Assignment), [add_int ptr idx dbg; newval], dbg)
   else
@@ -1355,65 +1353,6 @@ let box_sized size dbg exp =
 let default_prim name =
   Primitive.simple ~name ~arity:0(*ignored*) ~alloc:true
 
-
-let int64_native_prim name arity ~alloc =
-  let u64 = Primitive.Unboxed_integer Primitive.Pint64 in
-  let rec make_args = function 0 -> [] | n -> u64 :: make_args (n - 1) in
-  Primitive.make ~name ~native_name:(name ^ "_native")
-    ~alloc
-    ~native_repr_args:(make_args arity)
-    ~native_repr_res:u64
-
-let simplif_primitive_32bits :
-  Clambda_primitives.primitive -> Clambda_primitives.primitive = function
-    Pbintofint Pint64 -> Pccall (default_prim "caml_int64_of_int")
-  | Pintofbint Pint64 -> Pccall (default_prim "caml_int64_to_int")
-  | Pcvtbint(Pint32, Pint64) -> Pccall (default_prim "caml_int64_of_int32")
-  | Pcvtbint(Pint64, Pint32) -> Pccall (default_prim "caml_int64_to_int32")
-  | Pcvtbint(Pnativeint, Pint64) ->
-      Pccall (default_prim "caml_int64_of_nativeint")
-  | Pcvtbint(Pint64, Pnativeint) ->
-      Pccall (default_prim "caml_int64_to_nativeint")
-  | Pnegbint Pint64 -> Pccall (int64_native_prim "caml_int64_neg" 1
-                                 ~alloc:false)
-  | Paddbint Pint64 -> Pccall (int64_native_prim "caml_int64_add" 2
-                                 ~alloc:false)
-  | Psubbint Pint64 -> Pccall (int64_native_prim "caml_int64_sub" 2
-                                 ~alloc:false)
-  | Pmulbint Pint64 -> Pccall (int64_native_prim "caml_int64_mul" 2
-                                 ~alloc:false)
-  | Pdivbint {size=Pint64} -> Pccall (int64_native_prim "caml_int64_div" 2
-                                        ~alloc:true)
-  | Pmodbint {size=Pint64} -> Pccall (int64_native_prim "caml_int64_mod" 2
-                                        ~alloc:true)
-  | Pandbint Pint64 -> Pccall (int64_native_prim "caml_int64_and" 2
-                                 ~alloc:false)
-  | Porbint Pint64 ->  Pccall (int64_native_prim "caml_int64_or" 2
-                                 ~alloc:false)
-  | Pxorbint Pint64 -> Pccall (int64_native_prim "caml_int64_xor" 2
-                                 ~alloc:false)
-  | Plslbint Pint64 -> Pccall (default_prim "caml_int64_shift_left")
-  | Plsrbint Pint64 -> Pccall (default_prim "caml_int64_shift_right_unsigned")
-  | Pasrbint Pint64 -> Pccall (default_prim "caml_int64_shift_right")
-  | Pbintcomp(Pint64, Lambda.Ceq) -> Pccall (default_prim "caml_equal")
-  | Pbintcomp(Pint64, Lambda.Cne) -> Pccall (default_prim "caml_notequal")
-  | Pbintcomp(Pint64, Lambda.Clt) -> Pccall (default_prim "caml_lessthan")
-  | Pbintcomp(Pint64, Lambda.Cgt) -> Pccall (default_prim "caml_greaterthan")
-  | Pbintcomp(Pint64, Lambda.Cle) -> Pccall (default_prim "caml_lessequal")
-  | Pbintcomp(Pint64, Lambda.Cge) -> Pccall (default_prim "caml_greaterequal")
-  | Pcompare_bints Pint64 -> Pccall (default_prim "caml_int64_compare")
-  | Pbigarrayref(_unsafe, n, Pbigarray_int64, _layout) ->
-      Pccall (default_prim ("caml_ba_get_" ^ Int.to_string n))
-  | Pbigarrayset(_unsafe, n, Pbigarray_int64, _layout) ->
-      Pccall (default_prim ("caml_ba_set_" ^ Int.to_string n))
-  | Pstring_load(Sixty_four, _) -> Pccall (default_prim "caml_string_get64")
-  | Pbytes_load(Sixty_four, _) -> Pccall (default_prim "caml_bytes_get64")
-  | Pbytes_set(Sixty_four, _) -> Pccall (default_prim "caml_bytes_set64")
-  | Pbigstring_load(Sixty_four,_) -> Pccall (default_prim "caml_ba_uint8_get64")
-  | Pbigstring_set(Sixty_four,_) -> Pccall (default_prim "caml_ba_uint8_set64")
-  | Pbbswap Pint64 -> Pccall (default_prim "caml_int64_bswap")
-  | p -> p
-
 let simplif_primitive p : Clambda_primitives.primitive =
   match (p : Clambda_primitives.primitive) with
   | Pduprecord _ ->
@@ -1427,7 +1366,7 @@ let simplif_primitive p : Clambda_primitives.primitive =
   | Pbigarrayset(_unsafe, n, _kind, Pbigarray_unknown_layout) ->
       Pccall (default_prim ("caml_ba_set_" ^ string_of_int n))
   | p ->
-      if size_int = 8 then p else simplif_primitive_32bits p
+      p
 
 (* Build switchers both for constants and blocks *)
 
@@ -1690,7 +1629,7 @@ let generic_apply mut clos args dbg =
   match args with
   | [arg] ->
       bind "fun" clos (fun clos ->
-        Cop(Capply typ_val, [get_field_gen mut clos 0 dbg; arg; clos],
+        Cop(Capply typ_val, [get_field_codepointer mut clos 0 dbg; arg; clos],
           dbg))
   | _ ->
       let arity = List.length args in
@@ -1738,7 +1677,7 @@ let cache_public_method meths tag cache dbg =
   Clet_mut (
   VP.create li, typ_int, cconst_int 3,
   Clet_mut (
-  VP.create hi, typ_int, Cop(Cload (Word_int, Mutable), [meths], dbg),
+  VP.create hi, typ_int, Cop(mk_load_mut Word_int, [meths], dbg),
   Csequence(
   ccatch
     (raise_num, [],
@@ -1754,7 +1693,7 @@ let cache_public_method meths tag cache dbg =
         Cifthenelse
           (Cop (Ccmpi Clt,
                 [tag;
-                 Cop(Cload (Word_int, Mutable),
+                 Cop(mk_load_mut Word_int,
                      [Cop(Cadda,
                           [meths; lsl_const (Cvar mi) log2_size_addr dbg],
                           dbg)],
@@ -1800,7 +1739,7 @@ let apply_function_body arity =
   let rec app_fun clos n =
     if n = arity-1 then
       Cop(Capply typ_val,
-          [get_field_gen Asttypes.Mutable (Cvar clos) 0 (dbg ());
+          [get_field_codepointer Asttypes.Mutable (Cvar clos) 0 (dbg ());
            Cvar arg.(n);
            Cvar clos],
           dbg ())
@@ -1808,7 +1747,7 @@ let apply_function_body arity =
       let newclos = V.create_local "clos" in
       Clet(VP.create newclos,
            Cop(Capply typ_val,
-               [get_field_gen Asttypes.Mutable (Cvar clos) 0 (dbg ());
+               [get_field_codepointer Asttypes.Mutable (Cvar clos) 0 (dbg ());
                 Cvar arg.(n); Cvar clos], dbg ()),
            app_fun newclos (n+1))
     end in
@@ -1823,7 +1762,7 @@ let apply_function_body arity =
                    Cconst_int(arity, dbg())], dbg()),
    dbg (),
    Cop(Capply typ_val,
-       get_field_gen Asttypes.Mutable (Cvar clos) 2 (dbg ())
+       get_field_codepointer Asttypes.Mutable (Cvar clos) 2 (dbg ())
        :: List.map (fun s -> Cvar s) all_args,
        dbg ()),
    dbg (),
@@ -1845,12 +1784,12 @@ let send_function arity =
     let cached_pos = Cvar cached in
     let tag_pos = Cop(Cadda, [Cop (Cadda, [cached_pos; Cvar meths], dbg ());
                               cconst_int(3*size_addr-1)], dbg ()) in
-    let tag' = Cop(Cload (Word_int, Mutable), [tag_pos], dbg ()) in
+    let tag' = Cop(mk_load_mut Word_int, [tag_pos], dbg ()) in
     Clet (
-    VP.create meths, Cop(Cload (Word_val, Mutable), [obj], dbg ()),
+    VP.create meths, Cop(mk_load_mut Word_val, [obj], dbg ()),
     Clet (
     VP.create cached,
-      Cop(Cand, [Cop(Cload (Word_int, Mutable), [cache], dbg ()); mask],
+      Cop(Cand, [Cop(mk_load_mut Word_int, [cache], dbg ()); mask],
           dbg ()),
     Clet (
     VP.create real,
@@ -1860,7 +1799,7 @@ let send_function arity =
                 dbg (),
                 cached_pos,
                 dbg ()),
-    Cop(Cload (Word_val, Mutable),
+    Cop(mk_load_mut Word_val,
       [Cop(Cadda, [Cop (Cadda, [Cvar real; Cvar meths], dbg ());
        cconst_int(2*size_addr-1)], dbg ())], dbg ()))))
 
@@ -1916,7 +1855,7 @@ let tuplify_function arity =
     fun_args = [VP.create arg, typ_val; VP.create clos, typ_val];
     fun_body =
       Cop(Capply typ_val,
-          get_field_gen Asttypes.Mutable (Cvar clos) 2 (dbg ())
+          get_field_codepointer Asttypes.Mutable (Cvar clos) 2 (dbg ())
           :: access_components 0 @ [Cvar clos],
           (dbg ()));
     fun_codegen_options = [];
@@ -1960,7 +1899,7 @@ let final_curry_function arity =
   let rec curry_fun args clos n =
     if n = 0 then
       Cop(Capply typ_val,
-          get_field_gen Asttypes.Mutable (Cvar clos) 2 (dbg ()) ::
+          get_field_codepointer Asttypes.Mutable (Cvar clos) 2 (dbg ()) ::
             args @ [Cvar last_arg; Cvar clos],
           dbg ())
     else
@@ -2040,7 +1979,8 @@ let rec intermediate_curry_functions arity num =
           let rec iter i args clos =
             if i = 0 then
               Cop(Capply typ_val,
-                  (get_field_gen Asttypes.Mutable (Cvar clos) 2 (dbg ()))
+                  (get_field_codepointer
+                     Asttypes.Mutable (Cvar clos) 2 (dbg ()))
                   :: args @ [Cvar clos],
                   dbg ())
             else
@@ -2106,7 +2046,7 @@ let generic_functions shared units =
 type unary_primitive = expression -> Debuginfo.t -> expression
 
 let floatfield n ptr dbg =
-  Cop(Cload (Double, Mutable),
+  Cop(mk_load_mut Double,
       [if n = 0 then ptr
        else Cop(Cadda, [ptr; Cconst_int(n * size_float, dbg)], dbg)],
       dbg)
@@ -2131,12 +2071,12 @@ let offsetref n arg dbg =
     (bind "ref" arg (fun arg ->
          Cop(Cstore (Word_int, Assignment),
              [arg;
-              add_const (Cop(Cload (Word_int, Mutable), [arg], dbg))
+              add_const (Cop(mk_load_mut Word_int, [arg], dbg))
                 (n lsl 1) dbg],
              dbg)))
 
 let arraylength kind arg dbg =
-  let hdr = get_header_without_profinfo arg dbg in
+  let hdr = get_header_masked arg dbg in
   match (kind : Lambda.array_kind) with
     Pgenarray ->
       let len =
@@ -2188,18 +2128,19 @@ let assignment_kind
     (init: Lambda.initialization_or_assignment) =
   match init, ptr with
   | Assignment, Pointer -> Caml_modify
-  | Heap_initialization, Pointer -> Caml_initialize
+  | Heap_initialization, Pointer
+  | Root_initialization, Pointer -> Caml_initialize
   | Assignment, Immediate
   | Heap_initialization, Immediate
-  | Root_initialization, (Immediate | Pointer) -> Simple
+  | Root_initialization, Immediate -> Simple
 
 let setfield n ptr init arg1 arg2 dbg =
   match assignment_kind ptr init with
   | Caml_modify ->
       return_unit dbg
         (Cop(Cextcall("caml_modify", typ_void, [], false),
-             [field_address arg1 n dbg; arg2],
-             dbg))
+            [field_address arg1 n dbg; arg2],
+            dbg))
   | Caml_initialize ->
       return_unit dbg
         (Cop(Cextcall("caml_initialize", typ_void, [], false),
@@ -2278,7 +2219,7 @@ let int_comp_caml cmp arg1 arg2 dbg =
               [arg1; arg2], dbg)) dbg
 
 let stringref_unsafe arg1 arg2 dbg =
-  tag_int(Cop(Cload (Byte_unsigned, Mutable),
+  tag_int(Cop(mk_load_mut Byte_unsigned,
               [add_int arg1 (untag_int arg2 dbg) dbg],
               dbg)) dbg
 
@@ -2288,7 +2229,7 @@ let stringref_safe arg1 arg2 dbg =
       bind "str" arg1 (fun str ->
         Csequence(
           make_checkbound dbg [string_length str dbg; idx],
-          Cop(Cload (Byte_unsigned, Mutable),
+          Cop(mk_load_mut Byte_unsigned,
             [add_int str idx dbg], dbg))))) dbg
 
 let string_load size unsafe arg1 arg2 dbg =
@@ -2301,10 +2242,10 @@ let string_load size unsafe arg1 arg2 dbg =
 
 let bigstring_load size unsafe arg1 arg2 dbg =
   box_sized size dbg
-    (bind "index" (untag_int arg2 dbg) (fun idx ->
-     bind "ba" arg1 (fun ba ->
-     bind "ba_data"
-     (Cop(Cload (Word_int, Mutable), [field_address ba 1 dbg], dbg))
+   (bind "index" (untag_int arg2 dbg) (fun idx ->
+    bind "ba" arg1 (fun ba ->
+    bind "ba_data"
+     (Cop(mk_load_mut Word_int, [field_address ba 1 dbg], dbg))
      (fun ba_data ->
         check_bound unsafe size dbg
           (bigstring_length ba dbg)
@@ -2335,7 +2276,7 @@ let arrayref_safe kind arg1 arg2 dbg =
   | Pgenarray ->
       bind "index" arg2 (fun idx ->
       bind "arr" arg1 (fun arr ->
-      bind "header" (get_header_without_profinfo arr dbg) (fun hdr ->
+      bind "header" (get_header_masked arr dbg) (fun hdr ->
         if wordsize_shift = numfloat_shift then
           Csequence(
             make_checkbound dbg [addr_array_length_shifted hdr dbg; idx],
@@ -2362,7 +2303,7 @@ let arrayref_safe kind arg1 arg2 dbg =
             Csequence(
               make_checkbound dbg [
                 addr_array_length_shifted
-                  (get_header_without_profinfo arr dbg) dbg; idx],
+                  (get_header_masked arr dbg) dbg; idx],
               addr_array_ref arr idx dbg)))
       | Pintarray ->
           bind "index" arg2 (fun idx ->
@@ -2370,7 +2311,7 @@ let arrayref_safe kind arg1 arg2 dbg =
             Csequence(
               make_checkbound dbg [
                 addr_array_length_shifted
-                  (get_header_without_profinfo arr dbg) dbg; idx],
+                  (get_header_masked arr dbg) dbg; idx],
               int_array_ref arr idx dbg)))
       | Pfloatarray ->
           box_float dbg (
@@ -2379,7 +2320,7 @@ let arrayref_safe kind arg1 arg2 dbg =
               Csequence(
                 make_checkbound dbg [
                   float_array_length_shifted
-                    (get_header_without_profinfo arr dbg) dbg;
+                    (get_header_masked arr dbg) dbg;
                   idx],
                 unboxed_float_array_ref arr idx dbg))))
 
@@ -2438,7 +2379,7 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
       bind "newval" arg3 (fun newval ->
       bind "index" arg2 (fun idx ->
       bind "arr" arg1 (fun arr ->
-      bind "header" (get_header_without_profinfo arr dbg) (fun hdr ->
+      bind "header" (get_header_masked arr dbg) (fun hdr ->
         if wordsize_shift = numfloat_shift then
           Csequence(
             make_checkbound dbg [addr_array_length_shifted hdr dbg; idx],
@@ -2470,7 +2411,7 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
         Csequence(
           make_checkbound dbg [
             addr_array_length_shifted
-              (get_header_without_profinfo arr dbg) dbg;
+              (get_header_masked arr dbg) dbg;
             idx],
           addr_array_set arr idx newval dbg))))
   | Pintarray ->
@@ -2480,7 +2421,7 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
         Csequence(
           make_checkbound dbg [
             addr_array_length_shifted
-              (get_header_without_profinfo arr dbg) dbg;
+              (get_header_masked arr dbg) dbg;
             idx],
           int_array_set arr idx newval dbg))))
   | Pfloatarray ->
@@ -2490,7 +2431,7 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
         Csequence(
           make_checkbound dbg [
             float_array_length_shifted
-              (get_header_without_profinfo arr dbg) dbg;
+              (get_header_masked arr dbg) dbg;
             idx],
           float_array_set arr idx newval dbg))))
   )
@@ -2509,7 +2450,7 @@ let bigstring_set size unsafe arg1 arg2 arg3 dbg =
     bind "index" (untag_int arg2 dbg) (fun idx ->
     bind "ba" arg1 (fun ba ->
     bind "ba_data"
-         (Cop(Cload (Word_int, Mutable), [field_address ba 1 dbg], dbg))
+         (Cop(mk_load_mut Word_int, [field_address ba 1 dbg], dbg))
          (fun ba_data ->
             check_bound unsafe size dbg (bigstring_length ba dbg)
               idx (unaligned_set size ba_data idx newval dbg))))))
@@ -2533,22 +2474,11 @@ let emit_string_constant_fields s cont =
 
 let emit_boxed_int32_constant_fields n cont =
   let n = Nativeint.of_int32 n in
-  if size_int = 8 then
-    Csymbol_address caml_int32_ops :: Cint32 n :: Cint32 0n :: cont
-  else
-    Csymbol_address caml_int32_ops :: Cint n :: cont
+  Csymbol_address caml_int32_ops :: Cint32 n :: Cint32 0n :: cont
 
 let emit_boxed_int64_constant_fields n cont =
   let lo = Int64.to_nativeint n in
-  if size_int = 8 then
-    Csymbol_address caml_int64_ops :: Cint lo :: cont
-  else begin
-    let hi = Int64.to_nativeint (Int64.shift_right n 32) in
-    if big_endian then
-      Csymbol_address caml_int64_ops :: Cint hi :: Cint lo :: cont
-    else
-      Csymbol_address caml_int64_ops :: Cint lo :: Cint hi :: cont
-  end
+  Csymbol_address caml_int64_ops :: Cint lo :: cont
 
 let emit_boxed_nativeint_constant_fields n cont =
   Csymbol_address caml_nativeint_ops :: Cint n :: cont
@@ -2585,7 +2515,7 @@ let entry_point namelist =
   let incr_global_inited () =
     Cop(Cstore (Word_int, Assignment),
         [cconst_symbol "caml_globals_inited";
-         Cop(Caddi, [Cop(Cload (Word_int, Mutable),
+         Cop(Caddi, [Cop(mk_load_mut Word_int,
                        [cconst_symbol "caml_globals_inited"], dbg ());
                      cconst_int 1], dbg ())], dbg ()) in
   let body =

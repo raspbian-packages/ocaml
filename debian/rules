@@ -54,6 +54,7 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+bindnow
 export CCLINKFLAGS=$(shell dpkg-buildflags --get LDFLAGS)
 
 CONFIGURE_OPTS := \
+  --enable-ocamltest \
   --host $(DEB_BUILD_GNU_TYPE)\
   -prefix $(DEB_TEST_BUILD_PREFIX)/usr \
   -libdir $(DEB_TEST_BUILD_PREFIX)$(OCAML_STDLIB_DIR) \
@@ -86,12 +87,6 @@ export BUILD_PATH_PREFIX_MAP=.=$(CURDIR)
 .PHONY: build
 build:
 	dh $@
-
-# Generate ocaml-native-compilers' Architecture field.
-# Should never be called automatically.
-.PHONY: debian/control
-debian/control:
-	sed -e 's/@OCamlNativeArchs@/$(OCAML_NATIVE_ARCHS)/g' debian/control.in > $@
 
 pre-config-stamp: $(TARBALL_TARGET)
 # Backup upstream config.{sub,guess}, and use most up-to-date ones
@@ -148,7 +143,6 @@ build-stamp: config-stamp
 	fi
 ifeq ($(BUILDCACHE),)
 	$(MAKE) world
-	$(MAKE) bootstrap
 	$(MAKE) -C tools dumpobj
 ifneq (,$(OCAML_OPT_ARCH))
 	@echo "Building native compilers"
@@ -215,6 +209,12 @@ install-stamp-arch: install-stamp
 # Install the stdlib-shims compatibility package (OCaml >= 4.07)
 	mkdir -p debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/stdlib-shims
 	cp debian/META.stdlib-shims debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/stdlib-shims/META
+# Install the bigarray compatibility package (OCaml >= 5.2)
+	mkdir -p debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/bigarray
+	cp debian/META.bigarray debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/bigarray/META
+# Install the bytes compatibility package (OCaml >= 5.2)
+	mkdir -p debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/bytes
+	cp debian/META.bytes debian/libstdlib-ocaml-dev$(OCAML_STDLIB_DIR)/bytes/META
 # Remaining stuff
 	touch $@
 
@@ -223,7 +223,7 @@ install-stamp:
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 # Remove Debian-specific file
-	rm -f $(INSTDIR)/lib/ocaml/ld.conf
+	rm -f debian/tmp$(OCAML_STDLIB_DIR)/ld.conf
 # Remove uninstalled files
 	rm -f \
 	  $(INSTDIR)/share/man/man1/ocamlopt.opt.1 \
@@ -242,7 +242,7 @@ endif
 	  $(INSTDIR)/share/doc/ocaml/LICENSE
 # Dispatch files with dh_install
 	find debian/tmp \( -type f -or -type l \) -printf '%P\n' > debian/installed-files
-	boot/ocamlrun ./ocaml -nostdlib -I debian/tmp/usr/lib/ocaml debian/dispatch.ml
+	boot/ocamlrun ./ocaml -nostdlib -I debian/tmp$(OCAML_STDLIB_DIR) debian/dispatch.ml
 	dh_install
 endif
 	touch $@
@@ -287,22 +287,8 @@ ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
-ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
-	rm -f testsuite/tests/lib-threads/beat.ml
-	rm -f testsuite/tests/lib-systhreads/threadsigmask.ml
-	# Takes forever
-	rm -f testsuite/tests/lib-systhreads/testyield.ml
-	# Fail
-	rm -f testsuite/tests/lib-unix/unix-socket/recvfrom_unix.ml
-	rm -f testsuite/tests/tool-debugger/no_debug_event/noev.ml
-	rm -f testsuite/tests/tool-debugger/printer/debuggee.ml
-	rm -f testsuite/tests/misc/weaklifetime.ml
-	rm -f testsuite/tests/tool-debugger/basic/debuggee.ml
-	rm -f testsuite/tests/tool-debugger/dynlink/host.ml
-endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
-	make -C ocamltest
-	make -C testsuite all $(IGNORE_TESTS_FAILURE)
+	make tests $(IGNORE_TESTS_FAILURE)
 endif
 endif
 

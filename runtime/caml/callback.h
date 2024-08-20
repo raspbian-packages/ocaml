@@ -18,21 +18,26 @@
 #ifndef CAML_CALLBACK_H
 #define CAML_CALLBACK_H
 
-#ifndef CAML_NAME_SPACE
-#include "compatibility.h"
-#endif
 #include "mlvalues.h"
+#include "memory.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+void caml_init_callbacks (void);
+
+/* If the callback raises an exception, the functions caml_callback{,2,3,N}
+   propagate it to their caller. */
 CAMLextern value caml_callback (value closure, value arg);
 CAMLextern value caml_callback2 (value closure, value arg1, value arg2);
 CAMLextern value caml_callback3 (value closure, value arg1, value arg2,
                                  value arg3);
 CAMLextern value caml_callbackN (value closure, int narg, value args[]);
 
+/* If the callback raises an exception, the functions
+   caml_callback{,2,3,N}_exn do not propagate it, they return the exception
+   as an 'encoded exceptional result value' (see mlvalues.h) */
 CAMLextern value caml_callback_exn (value closure, value arg);
 CAMLextern value caml_callback2_exn (value closure, value arg1, value arg2);
 CAMLextern value caml_callback3_exn (value closure,
@@ -49,8 +54,6 @@ CAMLextern value caml_startup_exn (char_os ** argv);
 CAMLextern void caml_startup_pooled (char_os ** argv);
 CAMLextern value caml_startup_pooled_exn (char_os ** argv);
 CAMLextern void caml_shutdown (void);
-
-CAMLextern int caml_callback_depth;
 
 #ifdef __cplusplus
 }

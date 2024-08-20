@@ -231,22 +231,16 @@ let get_dyn : type a. a typ -> dyn -> a option =
 
 \section{s:existential-names}{Existential type names in error messages}
 
-The typing of pattern matching in presence of GADT can generate many
+The typing of pattern matching in the presence of GADTs can generate many
 existential types. When necessary, error messages refer to these
 existential types using compiler-generated names. Currently, the
 compiler generates these names according to the following nomenclature:
 \begin{itemize}
 \item First, types whose name starts with a "$" are existentials.
-\item "$Constr_'a" denotes an existential type introduced for the type
-variable "'a" of the GADT constructor "Constr":
+\item "$a" denotes an existential type introduced for the type
+variable "'a" of a GADT constructor:
 \begin{caml_example}{verbatim}[error]
 type any = Any : 'name -> any
-let escape (Any x) = x
-\end{caml_example}
-\item "$Constr" denotes an existential type introduced for an anonymous %$
-type variable in the GADT constructor "Constr":
-\begin{caml_example}{verbatim}[error]
-type any = Any : _ -> any
 let escape (Any x) = x
 \end{caml_example}
 \item "$'a" if the existential variable was unified with the type %$

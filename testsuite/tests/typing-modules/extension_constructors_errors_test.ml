@@ -1,5 +1,5 @@
 (* TEST
- * expect
+ expect;
 *)
 
 type t = ..;;
@@ -20,9 +20,9 @@ Error: Signature mismatch:
        is not included in
          type t += F
        Constructors do not match:
-         F of int
+         "F of int"
        is not the same as:
-         F
+         "F"
        They have different arities.
 |}];;
 
