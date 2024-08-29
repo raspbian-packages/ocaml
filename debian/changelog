@@ -1,3 +1,10 @@
+ocaml (5.2.0-3) UNRELEASED; urgency=medium
+
+  * Import upstream patch to fix coq-elpi ppc64el failure (Closes:
+    #1078549)
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 29 Aug 2024 16:04:18 +0200
+
 ocaml (5.2.0-2) unstable; urgency=medium
 
   * Add ocaml-base to Build-Conflicts
