@@ -1,4 +1,4 @@
-ocaml (5.2.0-2+rpi1) trixie-staging; urgency=medium
+ocaml (5.2.0-3+rpi1) trixie-staging; urgency=medium
 
   [changes brought forward from 4.08.1-4+rpi2 by Peter Michael Green <plugwash@raspbian.org> at Tue, 26 Nov 2019 19:38:59 +0000]
   * Revert previous raspbian changes, changing the triplet 
@@ -10,7 +10,14 @@ ocaml (5.2.0-2+rpi1) trixie-staging; urgency=medium
   [changes introduced in 4.08.1-5+rpi1 by Peter Michael Green]
   * Remove gitattributes that cause problems for dgit.
 
- -- Peter Micheal Greem <plugwash@raspbian.org>  Thu, 05 Sep 2024 02:43:22 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Sat, 07 Sep 2024 11:31:50 +0000
+
+ocaml (5.2.0-3) unstable; urgency=medium
+
+  * Import upstream patch to fix coq-elpi ppc64el failure (Closes:
+    #1078549)
+
+ -- Stéphane Glondu <glondu@debian.org>  Thu, 29 Aug 2024 18:03:23 +0200
 
 ocaml (5.2.0-2) unstable; urgency=medium
 

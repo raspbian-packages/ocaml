@@ -8,5 +8,6 @@
 0008-Fix-call-to-test-in-configure.ac.patch
 0009-Rework-fixed-register-assignments-on-m68k.patch
 0010-Avoid-atomic-64-bit-load-on-Debian-armel.patch
+0011-Don-t-use-r12-to-pass-size-to-caml_call_realloc_stac.patch
 use-armv6-for-raspbian.patch
 remove-gitattributes-that-cause-problems.patch
