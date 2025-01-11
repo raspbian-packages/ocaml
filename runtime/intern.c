@@ -230,7 +230,8 @@ static void intern_init(struct caml_intern_state* s, const void * src,
   /* This is asserted at the beginning of demarshaling primitives.
      If it fails, it probably means that an exception was raised
      without calling intern_cleanup() during the previous demarshaling. */
-  CAMLassert (s->intern_input == NULL && s->intern_obj_table == NULL);
+  CAMLassert(s->intern_input == NULL);
+  CAMLassert(s->intern_obj_table == NULL);
   s->intern_src = src;
   s->intern_input = input;
 }
@@ -303,7 +304,6 @@ static void readfloat(struct caml_intern_state* s,
 static void readfloats(struct caml_intern_state* s,
                        double * dest, mlsize_t len, unsigned int code)
 {
-  mlsize_t i;
   if (sizeof(double) != 8) {
     intern_cleanup(s);
     caml_invalid_argument("input_value: non-standard floats");
@@ -314,22 +314,22 @@ static void readfloats(struct caml_intern_state* s,
   /* Host is big-endian; fix up if data read is little-endian */
   if (code != CODE_DOUBLE_ARRAY8_BIG &&
       code != CODE_DOUBLE_ARRAY32_BIG) {
-    for (i = 0; i < len; i++) Reverse_64(dest + i, dest + i);
+    for (mlsize_t i = 0; i < len; i++) Reverse_64(dest + i, dest + i);
   }
 #elif ARCH_FLOAT_ENDIANNESS == 0x01234567
   /* Host is little-endian; fix up if data read is big-endian */
   if (code != CODE_DOUBLE_ARRAY8_LITTLE &&
       code != CODE_DOUBLE_ARRAY32_LITTLE) {
-    for (i = 0; i < len; i++) Reverse_64(dest + i, dest + i);
+    for (mlsize_t i = 0; i < len; i++) Reverse_64(dest + i, dest + i);
   }
 #else
   /* Host is neither big nor little; permute as appropriate */
   if (code == CODE_DOUBLE_ARRAY8_LITTLE ||
       code == CODE_DOUBLE_ARRAY32_LITTLE) {
-    for (i = 0; i < len; i++)
+    for (mlsize_t i = 0; i < len; i++)
       Permute_64(dest + i, ARCH_FLOAT_ENDIANNESS, dest + i, 0x01234567);
   } else {
-    for (i = 0; i < len; i++)
+    for (mlsize_t i = 0; i < len; i++)
       Permute_64(dest + i, ARCH_FLOAT_ENDIANNESS, dest + i, 0x76543210);
   }
 #endif
@@ -396,7 +396,9 @@ static void intern_alloc_storage(struct caml_intern_state* s, mlsize_t whsize,
   wosize = Wosize_whsize(whsize);
 
   if (wosize <= Max_young_wosize && wosize != 0) {
-    v = caml_alloc_small (wosize, String_tag);
+    /* don't track bulk allocation in minor heap with statmemprof;
+     * individual block allocations are tracked instead */
+    Alloc_small(v, wosize, String_tag, Alloc_small_enter_GC_no_track);
     s->intern_dest = (header_t *) Hp_val(v);
   } else {
     CAMLassert (s->intern_dest == NULL);
@@ -426,16 +428,22 @@ static value intern_alloc_obj(struct caml_intern_state* s, caml_domain_state* d,
                 (value*)s->intern_dest < d->young_end);
     p = s->intern_dest;
     *s->intern_dest = Make_header (wosize, tag, 0);
+    caml_memprof_sample_block(Val_hp(p), wosize, 1 + wosize,
+                              CAML_MEMPROF_SRC_MARSHAL);
     s->intern_dest += 1 + wosize;
   } else {
     p = caml_shared_try_alloc(d->shared_heap, wosize, tag,
                               0 /* no reserved bits */);
-    d->allocated_words += Whsize_wosize(wosize);
     if (p == NULL) {
       intern_cleanup (s);
       caml_raise_out_of_memory();
     }
+    d->allocated_words += Whsize_wosize(wosize);
+    d->allocated_words_direct += Whsize_wosize(wosize);
     Hd_hp(p) = Make_header (wosize, tag, caml_global_heap_state.MARKED);
+    caml_memprof_sample_block(Val_hp(p), wosize,
+                              Whsize_wosize(wosize),
+                              CAML_MEMPROF_SRC_MARSHAL);
   }
   return Val_hp(p);
 }
@@ -718,8 +726,6 @@ static void intern_rec(struct caml_intern_state* s,
      may crash. */
   *dest = v;
   break;
-  default:
-    CAMLassert(0);
   }
   }
   /* We are done. Cleanup the stack and leave the function */

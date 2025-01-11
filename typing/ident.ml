@@ -16,7 +16,8 @@
 open Local_store
 
 let lowest_scope  = 0
-let highest_scope = 100000000
+let highest_scope = 100_000_000
+  (* assumed to fit in 27 bits, see Types.scope_field *)
 
 type t =
   | Local of { name: string; stamp: int }
@@ -111,6 +112,9 @@ let stamp = function
   | Scoped { stamp; _ } -> stamp
   | _ -> 0
 
+let compare_stamp id1 id2 =
+  compare (stamp id1) (stamp id2)
+
 let scope = function
   | Scoped { scope; _ } -> scope
   | Local _ -> highest_scope
@@ -134,24 +138,24 @@ let is_predef = function
   | _ -> false
 
 let print ~with_scope ppf =
-  let open Format in
+  let open Format_doc in
   function
   | Global name -> fprintf ppf "%s!" name
   | Predef { name; stamp = n } ->
       fprintf ppf "%s%s!" name
-        (if !Clflags.unique_ids then sprintf "/%i" n else "")
+        (if !Clflags.unique_ids then asprintf "/%i" n else "")
   | Local { name; stamp = n } ->
       fprintf ppf "%s%s" name
-        (if !Clflags.unique_ids then sprintf "/%i" n else "")
+        (if !Clflags.unique_ids then asprintf "/%i" n else "")
   | Scoped { name; stamp = n; scope } ->
       fprintf ppf "%s%s%s" name
-        (if !Clflags.unique_ids then sprintf "/%i" n else "")
-        (if with_scope then sprintf "[%i]" scope else "")
+        (if !Clflags.unique_ids then asprintf "/%i" n else "")
+        (if with_scope then asprintf "[%i]" scope else "")
 
 let print_with_scope ppf id = print ~with_scope:true ppf id
 
-let print ppf id = print ~with_scope:false ppf id
-
+let doc_print ppf id = print ~with_scope:false ppf id
+let print ppf id = Format_doc.compat doc_print ppf id
 (* For the documentation of ['a Ident.tbl], see ident.mli.
 
    The implementation is a copy-paste specialization of

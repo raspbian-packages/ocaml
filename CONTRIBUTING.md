@@ -60,15 +60,16 @@ contribution.
 
 The current list of maintainers is as follows:
 
+- @abbysmal Abigael
 - @alainfrisch Alain Frisch
 - @Armael Armaël Guéneau
 - @avsm Anil Madhavapeddy
 - @chambart Pierre Chambart
 - @damiendoligez Damien Doligez
 - @dra27 David Allsopp
-- @Engil Enguerrand
 - @garrigue Jacques Garrigue
 - @gasche Gabriel Scherer
+- @goldfirere Richard Eisenberg
 - @jhjourdan Jacques-Henri Jourdan
 - @kayceesrk KC Sivaramakrishnan
 - @let-def Frédéric Bour
@@ -78,6 +79,7 @@ The current list of maintainers is as follows:
 - @mshinwell Mark Shinwell
 - @nojb Nicolás Ojeda Bär
 - @Octachron Florian Angeletti
+- @OlivierNicole Olivier Nicole
 - @sadiqj Sadiq Jaffer
 - @shindere Sébastien Hinderer
 - @stedolan Stephen Dolan
@@ -90,6 +92,9 @@ page](https://github.com/orgs/ocaml/teams/ocaml-dev/members), plus
 Anil as co-owner of the github/ocaml/ organization. Oddly enough,
 Github does not make the page publicly accessible. -->
 
+### Releases
+
+For more information about when and how new releases are published, see [the release introduction](release-info/introduction.md).
 
 ## Coding guidelines
 
@@ -407,7 +412,7 @@ We distinguish two kind of contributions:
   (as requested by the Free Software Foundation for example),
   contributors retain the copyright on their contribution, and can use
   it as they see fit. The OCaml CLA is lightly adapted from [the
-  CLA](https://www.apache.org/licenses/icla.txt) of the Apache
+  CLA](https://apache.org/licenses/icla.pdf) of the Apache
   Foundation, and is available in two versions: [for individual
   contributors](http://caml.inria.fr/pub/docs/CLA-individual.doc) and
   [for corporations](http://caml.inria.fr/pub/docs/CLA-corporate.doc).

@@ -1,7 +1,7 @@
 opam-version: "2.0"
-version: "5.2.1"
+version: "5.3.0"
 license: "LGPL-2.1-or-later WITH OCaml-LGPL-linking-exception"
-synopsis: "Official release of OCaml 5.2.1"
+synopsis: "Official release of OCaml 5.3.0"
 maintainer: "caml-list@inria.fr"
 authors: [
   "Xavier Leroy"
@@ -14,8 +14,8 @@ authors: [
 homepage: "https://github.com/ocaml/ocaml/"
 bug-reports: "https://github.com/ocaml/ocaml/issues"
 depends: [
-  # This is OCaml 5.2.1
-  "ocaml" {= "5.2.1" & post}
+  # This is OCaml 5.3.0
+  "ocaml" {= "5.3.0" & post}
 
   # General base- packages
   "base-unix" {post}
@@ -23,6 +23,7 @@ depends: [
   "base-threads" {post}
   "base-domains" {post}
   "base-nnp" {post}
+  "base-effects" {post}
 
   # Architecture (non-Windows)
   # opam-repository at present requires that ocaml-base-compiler is installed
@@ -41,12 +42,14 @@ depends: [
   "host-arch-unknown" {os != "win32" & arch != "arm32" & arch != "arm64" & arch != "ppc64" & arch != "riscv64" & arch != "s390x" & arch != "x86_32" & arch != "x86_64" & post}
 
   # Port selection (Windows)
-  # amd64 mingw-w64 only
+  # amd64 mingw-w64 / MSVC
   (("arch-x86_64" {os = "win32" & arch = "x86_64"} &
-     "system-mingw" & "mingw-w64-shims" {os-distribution = "cygwin" & build}) |
-  # i686 mingw-w64 only
+     (("system-mingw" & "mingw-w64-shims" {os-distribution = "cygwin" & build}) |
+      ("system-msvc" & "winpthreads" & "ocaml-option-no-compression" {os = "win32"}))) |
+  # i686 mingw-w64 / MSVC
    ("arch-x86_32" {os = "win32"} & "ocaml-option-bytecode-only" {os = "win32"} &
-     "system-mingw" & "mingw-w64-shims" {os-distribution = "cygwin" & build}) |
+     (("system-mingw" & "mingw-w64-shims" {os-distribution = "cygwin" & build}) |
+      ("system-msvc" & "winpthreads" & "ocaml-option-no-compression" {os = "win32"}))) |
   # Non-Windows systems
    "host-system-other" {os != "win32" & post})
 
@@ -66,11 +69,14 @@ build-env: [
 build: [
   [
     "./configure"
+    "--host=x86_64-pc-windows"  {system-msvc:installed & arch-x86_64:installed}
     "--host=x86_64-w64-mingw32" {os-distribution = "cygwin" & system-mingw:installed & arch-x86_64:installed}
+    "--host=i686-pc-windows"    {system-msvc:installed & arch-x86_32:installed}
     "--host=i686-w64-mingw32"   {os-distribution = "cygwin" & system-mingw:installed & arch-x86_32:installed}
     "--prefix=%{prefix}%"
     "--docdir=%{doc}%/ocaml"
     "--with-flexdll=%{flexdll:share}%" {os = "win32" & flexdll:installed}
+    "--with-winpthreads-msvc=%{winpthreads:share}%" {system-msvc:installed}
     "-C"
     "--with-afl" {ocaml-option-afl:installed}
     "--disable-native-compiler" {ocaml-option-bytecode-only:installed}
@@ -98,9 +104,6 @@ build: [
   [make "-j%{jobs}%"]
 ]
 install: [make "install"]
-conflicts: [
-  "system-msvc"
-]
 depopts: [
   "ocaml-option-32bit"
   "ocaml-option-afl"

@@ -106,7 +106,7 @@ let load_lambda ppf ~module_ident ~required_globals phrase_name lam size =
 (* Print the outcome of an evaluation *)
 
 let pr_item =
-  Printtyp.print_items
+  Out_type.print_items
     (fun env -> function
       | Sig_value(id, {val_kind = Val_reg; val_type}, _) ->
           Some (outval_of_value env (toplevel_value id) val_type)
@@ -169,7 +169,7 @@ let execute_phrase print_outcome ppf phr =
       in
       if !Clflags.dump_typedtree then Printtyped.implementation ppf str;
       let sg' = Typemod.Signature_names.simplify newenv names sg in
-      ignore (Includemod.signatures oldenv ~mark:Mark_positive sg sg');
+      Includemod.check_implementation oldenv sg sg';
       Typecore.force_delayed_checks ();
       let shape = Shape_reduce.local_reduce Env.empty shape in
       if !Clflags.dump_shape then Shape.print ppf shape;
@@ -232,7 +232,10 @@ let execute_phrase print_outcome ppf phr =
                             outval_of_value newenv (toplevel_value id)
                               vd.val_type
                           in
-                          let ty = Printtyp.tree_of_type_scheme vd.val_type in
+                          let ty =
+                            Out_type.prepare_for_printing [vd.val_type];
+                            Out_type.tree_of_typexp Type_scheme vd.val_type
+                          in
                           Ophr_eval (outv, ty)
                       | _ -> assert false
                     else

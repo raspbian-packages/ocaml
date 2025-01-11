@@ -374,6 +374,7 @@ let primitives_table =
     "%perform", Primitive (Pperform, 1);
     "%resume", Primitive (Presume, 4);
     "%dls_get", Primitive (Pdls_get, 1);
+    "%poll", Primitive (Ppoll, 1);
   ]
 
 
@@ -645,7 +646,7 @@ let lambda_of_loc kind sloc =
   | Loc_FILE -> Lconst (Const_immstring file)
   | Loc_MODULE ->
     let filename = Filename.basename file in
-    let name = Env.get_unit_name () in
+    let name = Env.get_current_unit_name () in
     let module_name = if name = "" then "//"^filename^"//" else name in
     Lconst (Const_immstring module_name)
   | Loc_LOC ->
@@ -813,7 +814,7 @@ let lambda_primitive_needs_event_after = function
   | Pbigstring_load_16 _ | Pbigstring_load_32 _ | Pbigstring_load_64 _
   | Pbigstring_set_16 _ | Pbigstring_set_32 _ | Pbigstring_set_64 _
   | Prunstack | Pperform | Preperform | Presume
-  | Pbbswap _ -> true
+  | Pbbswap _ | Ppoll -> true
 
   | Pbytes_to_string | Pbytes_of_string | Pignore | Psetglobal _
   | Pgetglobal _ | Pmakeblock _ | Pfield _ | Pfield_computed | Psetfield _
@@ -869,10 +870,10 @@ let transl_primitive_application loc p env ty path exp args arg_exps =
 
 (* Error report *)
 
-open Format
+open Format_doc
 module Style = Misc.Style
 
-let report_error ppf = function
+let report_error_doc ppf = function
   | Unknown_builtin_primitive prim_name ->
       fprintf ppf "Unknown builtin primitive %a" Style.inline_code prim_name
   | Wrong_arity_builtin_primitive prim_name ->
@@ -883,7 +884,9 @@ let () =
   Location.register_error_of_exn
     (function
       | Error (loc, err) ->
-          Some (Location.error_of_printer ~loc report_error err)
+          Some (Location.error_of_printer ~loc report_error_doc err)
       | _ ->
         None
     )
+
+let report_error = Format_doc.compat report_error_doc

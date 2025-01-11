@@ -77,7 +77,7 @@ class ['a] c = object
 end
 [%%expect {|
 module F :
-  functor (X : sig type t end) ->
+  (X : sig type t end) ->
     sig class type ['a] c = object method m : 'a -> X.t end end
 class ['a] c : object constraint 'a = < m : 'a -> Int.t; .. > end
 |}]
@@ -416,8 +416,8 @@ class c () = object val x = - true val y = -. () end;;
 Line 1, characters 30-34:
 1 | class c () = object val x = - true val y = -. () end;;
                                   ^^^^
-Error: This expression has type "bool" but an expression was expected of type
-         "int"
+Error: The constructor "true" has type "bool"
+       but an expression was expected of type "int"
 |}];;
 
 class c () = object method f = 1 method g = 1 method h = 1 end;;
@@ -765,7 +765,7 @@ val x : '_weak2 list ref = {contents = []}
 module F(X : sig end) =
   struct type t = int let _ = (x : < m : t> list ref) end;;
 [%%expect{|
-module F : functor (X : sig end) -> sig type t = int end
+module F : (X : sig end) -> sig type t = int end
 |}];;
 x;;
 [%%expect{|
@@ -789,8 +789,7 @@ fun (x : 'a t) -> (x : 'a); ();;
 Line 1, characters 19-20:
 1 | fun (x : 'a t) -> (x : 'a); ();;
                        ^
-Error: This expression has type "'a t" but an expression was expected of type
-         "'a"
+Error: The value "x" has type "'a t" but an expression was expected of type "'a"
        The type variable "'a" occurs inside "'a t"
 |}];;
 fun ((x : 'a) | (x : 'a t)) -> ();;
@@ -1143,7 +1142,7 @@ val is_empty : <  > -> unit = <fun>
 Line 2, characters 54-58:
 2 | class c = object (self) method private foo = is_empty self end;;
                                                           ^^^^
-Error: This expression has type "< .. >" but an expression was expected of type
+Error: The value "self" has type "< .. >" but an expression was expected of type
          "<  >"
        Self type cannot be unified with a closed object type
 |}];;
@@ -1237,7 +1236,7 @@ let o = object(self) initializer has_foo self end;;
 Line 1, characters 41-45:
 1 | let o = object(self) initializer has_foo self end;;
                                              ^^^^
-Error: This expression has type "<  >" but an expression was expected of type
+Error: The value "self" has type "<  >" but an expression was expected of type
          "< foo : int; .. >"
        The first object type has no method "foo"
 |}];;

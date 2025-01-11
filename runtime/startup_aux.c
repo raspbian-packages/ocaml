@@ -52,6 +52,7 @@ static void init_startup_params(void)
   params.init_custom_minor_ratio = Custom_minor_ratio_def;
   params.init_custom_minor_max_bsz = Custom_minor_max_bsz_def;
   params.init_max_stack_wsz = Max_stack_def;
+  params.max_domains = Max_domains_def;
   params.runtime_events_log_wsize = Default_runtime_events_log_wsize;
 
 #ifdef DEBUG
@@ -80,7 +81,6 @@ static void scanmult (char_os *opt, uintnat *var)
   case 'k':   *var = (uintnat) val * 1024; break;
   case 'M':   *var = (uintnat) val * (1024 * 1024); break;
   case 'G':   *var = (uintnat) val * (1024 * 1024 * 1024); break;
-  case 'v':   atomic_store_relaxed((atomic_uintnat *)var, val); break;
   default:    *var = (uintnat) val; break;
   }
 }
@@ -88,6 +88,7 @@ static void scanmult (char_os *opt, uintnat *var)
 void caml_parse_ocamlrunparam(void)
 {
   init_startup_params();
+  uintnat val;
 
   char_os *opt = caml_secure_getenv (T("OCAMLRUNPARAM"));
   if (opt == NULL) opt = caml_secure_getenv (T("CAMLRUNPARAM"));
@@ -97,6 +98,7 @@ void caml_parse_ocamlrunparam(void)
       switch (*opt++){
       case 'b': scanmult (opt, &params.backtrace_enabled); break;
       case 'c': scanmult (opt, &params.cleanup_on_exit); break;
+      case 'd': scanmult (opt, &params.max_domains); break;
       case 'e': scanmult (opt, &params.runtime_events_log_wsize); break;
       case 'l': scanmult (opt, &params.init_max_stack_wsz); break;
       case 'M': scanmult (opt, &params.init_custom_major_ratio); break;
@@ -107,7 +109,10 @@ void caml_parse_ocamlrunparam(void)
       case 'R': break; /*  see stdlib/hashtbl.mli */
       case 's': scanmult (opt, &params.init_minor_heap_wsz); break;
       case 't': scanmult (opt, &params.trace_level); break;
-      case 'v': scanmult (opt, (uintnat *)&caml_verb_gc); break;
+      case 'v':
+        scanmult (opt, &val);
+        atomic_store_relaxed(&caml_verb_gc, val);
+        break;
       case 'V': scanmult (opt, &params.verify_heap); break;
       case 'W': scanmult (opt, &caml_runtime_warnings); break;
       case ',': continue;
@@ -116,6 +121,15 @@ void caml_parse_ocamlrunparam(void)
         if (*opt++ == ',') break;
       }
     }
+  }
+
+  /* Validate */
+  if (params.max_domains < 1) {
+    caml_fatal_error("OCAMLRUNPARAM: max_domains(d) must be at least 1");
+  }
+  if (params.max_domains > Max_domains_max) {
+    caml_fatal_error("OCAMLRUNPARAM: max_domains(d) is too large. "
+                     "The maximum value is %d.", Max_domains_max);
   }
 }
 
@@ -133,6 +147,12 @@ int caml_startup_aux(int pooling)
     caml_fatal_error("caml_startup was called after the runtime "
                      "was shut down with caml_shutdown");
 
+#ifdef DEBUG
+  /* Note this must be executed after the call to caml_parse_ocamlrunparam. */
+  caml_gc_message (-1, "### OCaml runtime: debug mode ###\n");
+  caml_gc_message (-1, "### set OCAMLRUNPARAM=v=0 to silence this message\n");
+#endif
+
   /* Second and subsequent calls are ignored,
      since the runtime has already started */
   startup_count++;
@@ -149,7 +169,7 @@ static void call_registered_value(char* name)
 {
   const value *f = caml_named_value(name);
   if (f != NULL)
-    caml_callback_exn(*f, Val_unit);
+    caml_callback_res(*f, Val_unit);
 }
 
 CAMLexport void caml_shutdown(void)

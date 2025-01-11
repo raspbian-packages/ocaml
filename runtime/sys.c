@@ -28,6 +28,7 @@
 #include <sys/stat.h>
 #ifdef _WIN32
 #include <direct.h> /* for _wchdir and _wgetcwd */
+#include <io.h> /* for _wopen and close */
 #else
 #include <sys/wait.h>
 #endif
@@ -45,8 +46,8 @@
 #ifdef HAS_GETTIMEOFDAY
 #include <sys/time.h>
 #endif
-#ifdef __APPLE__
-#include <sys/random.h> /* for getentropy */
+#if defined(HAS_GETENTROPY) && defined(__APPLE__)
+#include <sys/random.h>
 #endif
 #include "caml/alloc.h"
 #include "caml/debugger.h"
@@ -180,8 +181,6 @@ CAMLexport void caml_do_exit(int retcode)
                     heap_words);
       caml_gc_message(0x400, "top_heap_words: %"ARCH_INTNAT_PRINTF_FORMAT"d\n",
                       top_heap_words);
-      caml_gc_message(0x400, "mean_space_overhead: %lf\n",
-                      caml_mean_space_overhead());
     }
   }
 
@@ -603,7 +602,7 @@ int caml_unix_random_seed(intnat data[16])
   int nread = 0;
 
   /* Try kernel entropy first */
-#if defined(HAS_GETENTROPY) || defined(__APPLE__)
+#ifdef HAS_GETENTROPY
   if (getentropy(buffer, 12) != -1) {
     nread = 12;
   } else
@@ -642,7 +641,7 @@ int caml_unix_random_seed(intnat data[16])
 CAMLprim value caml_sys_random_seed (value unit)
 {
   intnat data[16];
-  int n, i;
+  int n;
   value res;
 #ifdef _WIN32
   n = caml_win32_random_seed(data);
@@ -651,7 +650,7 @@ CAMLprim value caml_sys_random_seed (value unit)
 #endif
   /* Convert to an OCaml array of ints */
   res = caml_alloc_small(n, 0);
-  for (i = 0; i < n; i++) Field(res, i) = Val_long(data[i]);
+  for (int i = 0; i < n; i++) Field(res, i) = Val_long(data[i]);
   return res;
 }
 

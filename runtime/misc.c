@@ -15,16 +15,6 @@
 
 #define CAML_INTERNALS
 
-#if defined(_MSC_VER) && _MSC_VER >= 1400 && _MSC_VER < 1700
-/* Microsoft introduced a regression in Visual Studio 2005 (technically it's
-   not present in the Windows Server 2003 SDK which has a pre-release version)
-   and the abort function ceased to be declared __declspec(noreturn). This was
-   fixed in Visual Studio 2012. Trick stdlib.h into not defining abort (this
-   means exit and _exit are not defined either, but they aren't required). */
-#define _CRT_TERMINATE_DEFINED
-__declspec(noreturn) void __cdecl abort(void);
-#endif
-
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -54,6 +44,9 @@ void caml_failed_assert (char * expr, char_os * file_os, int line)
           (Caml_state_opt != NULL) ? Caml_state_opt->id : -1, file, line, expr);
   fflush(stderr);
   caml_stat_free(file);
+#if __has_builtin(__builtin_trap) || defined(__GNUC__)
+  __builtin_trap();
+#endif
   abort();
 }
 #endif
@@ -182,8 +175,7 @@ int caml_ext_table_add(struct ext_table * tbl, caml_stat_block data)
 
 void caml_ext_table_remove(struct ext_table * tbl, caml_stat_block data)
 {
-  int i;
-  for (i = 0; i < tbl->size; i++) {
+  for (int i = 0; i < tbl->size; i++) {
     if (tbl->contents[i] == data) {
       caml_stat_free(tbl->contents[i]);
       memmove(&tbl->contents[i], &tbl->contents[i + 1],
@@ -195,9 +187,8 @@ void caml_ext_table_remove(struct ext_table * tbl, caml_stat_block data)
 
 void caml_ext_table_clear(struct ext_table * tbl, int free_entries)
 {
-  int i;
   if (free_entries) {
-    for (i = 0; i < tbl->size; i++) caml_stat_free(tbl->contents[i]);
+    for (int i = 0; i < tbl->size; i++) caml_stat_free(tbl->contents[i]);
   }
   tbl->size = 0;
 }
@@ -210,7 +201,8 @@ void caml_ext_table_free(struct ext_table * tbl, int free_entries)
 
 /* Integer arithmetic with overflow detection */
 
-#if ! (__GNUC__ >= 5 || Caml_has_builtin(__builtin_mul_overflow))
+#if ! (__has_builtin(__builtin_mul_overflow) || \
+       defined(__GNUC__) && __GNUC__ >= 5)
 CAMLexport int caml_umul_overflow(uintnat a, uintnat b, uintnat * res)
 {
 #define HALF_SIZE (sizeof(uintnat) * 4)
@@ -280,7 +272,8 @@ void caml_bad_caml_state(void)
    un-instruments function, this simply silences reports when the call stack
    contains a frame matching one of the lines starting with "race:". */
 const char * __tsan_default_suppressions(void) {
-  return "deadlock:caml_plat_lock\n" /* Avoids deadlock inversion messages */
+  return "deadlock:caml_plat_lock_blocking\n" /* Avoids deadlock inversion
+                                                 messages */
          "deadlock:pthread_mutex_lock\n"; /* idem */
 }
 #endif /* WITH_THREAD_SANITIZER */

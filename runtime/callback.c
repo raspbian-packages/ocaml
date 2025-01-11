@@ -55,19 +55,24 @@
 Caml_inline value alloc_and_clear_stack_parent(caml_domain_state* domain_state)
 {
   struct stack_info* parent_stack = Stack_parent(domain_state->current_stack);
-  value cont = caml_alloc_2(Cont_tag, Val_ptr(parent_stack), Val_long(0));
-  Stack_parent(domain_state->current_stack) = NULL;
-  return cont;
+  if (parent_stack == NULL) {
+    return Val_unit;
+  } else {
+    value cont = caml_alloc_2(Cont_tag, Val_ptr(parent_stack), Val_long(0));
+    Stack_parent(domain_state->current_stack) = NULL;
+    return cont;
+  }
 }
 
 Caml_inline void restore_stack_parent(caml_domain_state* domain_state,
                                       value cont)
 {
-  struct stack_info* parent_stack = Ptr_val(Op_val(cont)[0]);
   CAMLassert(Stack_parent(domain_state->current_stack) == NULL);
-  Stack_parent(domain_state->current_stack) = parent_stack;
+  if (Is_block(cont)) {
+    struct stack_info* parent_stack = Ptr_val(Op_val(cont)[0]);
+    Stack_parent(domain_state->current_stack) = parent_stack;
+  }
 }
-
 
 #ifndef NATIVE_CODE
 
@@ -294,27 +299,68 @@ CAMLexport value caml_callbackN_exn(value closure, int narg, value args[]) {
 
 #endif
 
+/* Result-returning variants of the above */
+
+Caml_inline caml_result Result_encoded(value encoded)
+{
+  if (Is_exception_result(encoded))
+    return Result_exception(Extract_exception(encoded));
+  else
+    return Result_value(encoded);
+}
+
+CAMLexport caml_result caml_callbackN_res(
+  value closure, int narg, value args[])
+{
+  return Result_encoded(caml_callbackN_exn(closure, narg, args));
+}
+
+CAMLexport caml_result caml_callback_res(
+  value closure, value arg)
+{
+  return Result_encoded(caml_callback_exn(closure, arg));
+}
+
+CAMLexport caml_result caml_callback2_res(
+  value closure, value arg1, value arg2)
+{
+  return Result_encoded(caml_callback2_exn(closure, arg1, arg2));
+}
+
+CAMLexport caml_result caml_callback3_res(
+  value closure, value arg1, value arg2, value arg3)
+{
+  return Result_encoded(caml_callback3_exn(closure, arg1, arg2, arg3));
+}
+
+
 /* Exception-propagating variants of the above */
+
+static value encoded_value_or_raise(value res)
+{
+  if (Is_exception_result(res)) caml_raise(Extract_exception(res));
+  return res;
+}
 
 CAMLexport value caml_callback (value closure, value arg)
 {
-  return caml_raise_if_exception(caml_callback_exn(closure, arg));
+  return encoded_value_or_raise(caml_callback_exn(closure, arg));
 }
 
 CAMLexport value caml_callback2 (value closure, value arg1, value arg2)
 {
-  return caml_raise_if_exception(caml_callback2_exn(closure, arg1, arg2));
+  return encoded_value_or_raise(caml_callback2_exn(closure, arg1, arg2));
 }
 
 CAMLexport value caml_callback3 (value closure, value arg1, value arg2,
                                  value arg3)
 {
-  return caml_raise_if_exception(caml_callback3_exn(closure, arg1, arg2, arg3));
+  return encoded_value_or_raise(caml_callback3_exn(closure, arg1, arg2, arg3));
 }
 
 CAMLexport value caml_callbackN (value closure, int narg, value args[])
 {
-  return caml_raise_if_exception(caml_callbackN_exn(closure, narg, args));
+  return encoded_value_or_raise(caml_callbackN_exn(closure, narg, args));
 }
 
 /* Naming of OCaml values */
@@ -340,14 +386,15 @@ static unsigned int hash_value_name(char const *name)
 
 CAMLprim value caml_register_named_value(value vname, value val)
 {
-  struct named_value * nv;
   const char * name = String_val(vname);
   size_t namelen = strlen(name);
   unsigned int h = hash_value_name(name);
   int found = 0;
 
-  caml_plat_lock(&named_value_lock);
-  for (nv = named_value_table[h]; nv != NULL; nv = nv->next) {
+  caml_plat_lock_blocking(&named_value_lock);
+  for (struct named_value *nv = named_value_table[h];
+       nv != NULL;
+       nv = nv->next) {
     if (strcmp(name, nv->name) == 0) {
       caml_modify_generational_global_root(&nv->val, val);
       found = 1;
@@ -355,7 +402,7 @@ CAMLprim value caml_register_named_value(value vname, value val)
     }
   }
   if (!found) {
-    nv = (struct named_value *)
+    struct named_value * nv = (struct named_value *)
       caml_stat_alloc(sizeof(struct named_value) + namelen);
     memcpy(nv->name, name, namelen + 1);
     nv->val = val;
@@ -369,9 +416,8 @@ CAMLprim value caml_register_named_value(value vname, value val)
 
 CAMLexport const value* caml_named_value(char const *name)
 {
-  struct named_value * nv;
-  caml_plat_lock(&named_value_lock);
-  for (nv = named_value_table[hash_value_name(name)];
+  caml_plat_lock_blocking(&named_value_lock);
+  for (struct named_value *nv = named_value_table[hash_value_name(name)];
        nv != NULL;
        nv = nv->next) {
     if (strcmp(name, nv->name) == 0){
@@ -385,11 +431,11 @@ CAMLexport const value* caml_named_value(char const *name)
 
 CAMLexport void caml_iterate_named_values(caml_named_action f)
 {
-  int i;
-  caml_plat_lock(&named_value_lock);
-  for(i = 0; i < Named_value_size; i++){
-    struct named_value * nv;
-    for (nv = named_value_table[i]; nv != NULL; nv = nv->next) {
+  caml_plat_lock_blocking(&named_value_lock);
+  for (int i = 0; i < Named_value_size; i++){
+    for (struct named_value *nv = named_value_table[i];
+         nv != NULL;
+         nv = nv->next) {
       f( Op_val(nv->val), nv->name );
     }
   }
