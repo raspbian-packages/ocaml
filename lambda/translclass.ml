@@ -215,6 +215,9 @@ let rec build_object_init_0
     Tcl_let (_rec_flag, _defs, vals, cl) ->
       build_object_init_0
         ~scopes cl_table (vals@params) cl copy_env subst_env top ids
+  | Tcl_open (_descr, cl) ->
+      build_object_init_0
+        ~scopes cl_table params cl copy_env subst_env top ids
   | _ ->
       let self = Ident.create_local "self" in
       let env = Ident.create_local "env" in
@@ -284,7 +287,7 @@ let rec build_class_init ~scopes cla cstr super inh_init cl_init msubst top cl =
            Llet (Strict, Pgenval, obj_init,
                  mkappl(Lprim(Pfield (1, Pointer, Mutable),
                               [path_lam], Loc_unknown), Lvar cla ::
-                        if top then [Lprim(Pfield (3, Pointer, Mutable),
+                        if top then [Lprim(Pfield (2, Pointer, Mutable),
                                      [path_lam], Loc_unknown)]
                         else []),
                  bind_super cla super cl_init))
@@ -413,6 +416,11 @@ let rec build_class_lets ~scopes cl =
       (env, fun lam_and_kind ->
           let lam, rkind = wrap lam_and_kind in
           Translcore.transl_let ~scopes rec_flag defs lam, rkind)
+  | Tcl_open (open_descr, cl) ->
+      (* Failsafe to ensure we get a compilation error if arbitrary
+         module expressions become allowed *)
+      let _ : Path.t * Longident.t loc = open_descr.open_expr in
+      build_class_lets ~scopes cl
   | _ ->
       (cl.cl_env, fun lam_and_kind -> lam_and_kind)
 
@@ -529,8 +537,7 @@ let transl_class_rebind ~scopes cl vf =
                    lfunction [envs, Pgenval]
                      (mkappl(Lvar new_init,
                              [mkappl(Lvar env_init, [Lvar envs])]))));
-           lfield cla 2;
-           lfield cla 3],
+           lfield cla 2],
           Loc_unknown)))
   with Exit ->
     lambda_unit
@@ -636,16 +643,26 @@ open M
     * class without local dependencies -> direct translation
     * with local dependencies -> generate a stubs tree,
       with a node for every local classes inherited
-   A class is a 4-tuple:
-    (obj_init, class_init, env_init, env)
-    obj_init: creation function (unit -> obj)
-    class_init: inheritance function (table -> env_init)
+   A class is a 3-tuple:
+    (obj_init, class_init, env)
+    obj_init: creation function (unit -> params -> obj)
+    class_init: inheritance function (table -> env -> obj_init)
       (one by source code)
-    env_init: parameterisation by the local environment
-      (env -> params -> obj_init)
-      (one for each combination of inherited class_init )
     env: local environment
-   If ids=0 (immediate object), then only env_init is conserved.
+
+   The local environment is used for cached classes. When a
+   class definition occurs under a call to Translobj.oo_wrap
+   (typically inside a functor), the class creation code is
+   split between a static part (depending only on toplevel names)
+   and a dynamic part, the environment. The static part is cached
+   in a toplevel structure, so that only the first class creation
+   computes it and the subsequent classes can reuse it.
+   Because of that, the (static) [class_init] function takes both
+   the class table to be filled and the environment as parameters,
+   and when called is given the [env] field of the class.
+   For the [obj_init] part, an [env_init] function (of type [env -> obj_init])
+   is stored in the cache, and called on the environment to generate
+   the [obj_init] at class creation time.
 *)
 
 (*
@@ -822,7 +839,7 @@ let transl_class ~scopes ids cl_id pub_meths cl vflag =
       mkappl (oo_prim "init_class", [Lvar table]),
       Lprim(Pmakeblock(0, Immutable, None),
             [mkappl (Lvar env_init, [lambda_unit]);
-             Lvar class_init; Lvar env_init; lambda_unit],
+             Lvar class_init; lambda_unit],
             Loc_unknown)))),
       Static
   and lbody_virt lenvs =
@@ -833,7 +850,7 @@ let transl_class ~scopes ids cl_id pub_meths cl vflag =
                           ~loc:Loc_unknown
                           ~return:Pgenval
                           ~params:[cla, Pgenval] ~body:cl_init;
-           lambda_unit; lenvs],
+           lenvs],
          Loc_unknown),
     Static
   in
@@ -861,7 +878,7 @@ let transl_class ~scopes ids cl_id pub_meths cl vflag =
   and linh_envs =
     List.map
       (fun (_, path_lam, _) ->
-        Lprim(Pfield (3, Pointer, Mutable), [path_lam], Loc_unknown))
+        Lprim(Pfield (2, Pointer, Mutable), [path_lam], Loc_unknown))
       (List.rev inh_init)
   in
   let make_envs (lam, rkind) =
@@ -951,9 +968,8 @@ let transl_class ~scopes ids cl_id pub_meths cl vflag =
         (if concrete then
           [mkappl (lfield cached 0, [lenvs]);
            lfield cached 1;
-           lfield cached 0;
            lenvs]
-        else [lambda_unit; lfield cached 0; lambda_unit; lenvs]),
+        else [lambda_unit; lfield cached 0; lenvs]),
         Loc_unknown
        ),
     Static)))
@@ -978,10 +994,10 @@ let () =
 
 (* Error report *)
 
-open Format
+open Format_doc
 module Style = Misc.Style
 
-let report_error ppf = function
+let report_error_doc ppf = function
   | Tags (lab1, lab2) ->
       fprintf ppf "Method labels %a and %a are incompatible.@ %s"
         Style.inline_code lab1
@@ -992,7 +1008,9 @@ let () =
   Location.register_error_of_exn
     (function
       | Error (loc, err) ->
-        Some (Location.error_of_printer ~loc report_error err)
+        Some (Location.error_of_printer ~loc report_error_doc err)
       | _ ->
         None
     )
+
+let report_error = Format_doc.compat report_error_doc

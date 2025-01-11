@@ -28,6 +28,7 @@
 #include <winsock2.h>
 #include <winioctl.h>
 #include <shlobj.h>
+#include <shlwapi.h>
 #include <direct.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -72,7 +73,7 @@ unsigned short caml_win32_minor = 0;
 unsigned short caml_win32_build = 0;
 unsigned short caml_win32_revision = 0;
 
-static CAMLnoret void caml_win32_sys_error(int errnum)
+CAMLnoret static void caml_win32_sys_error(int errnum)
 {
   wchar_t buffer[512];
   value msg;
@@ -153,14 +154,12 @@ wchar_t * caml_search_in_path(struct ext_table * path, const wchar_t * name)
 {
   wchar_t * dir, * fullname;
   char * u8;
-  const wchar_t * p;
-  int i;
   struct _stati64 st;
 
-  for (p = name; *p != 0; p++) {
+  for (const wchar_t *p = name; *p != 0; p++) {
     if (*p == '/' || *p == '\\') goto not_found;
   }
-  for (i = 0; i < path->size; i++) {
+  for (int i = 0; i < path->size; i++) {
     dir = path->contents[i];
     if (dir[0] == 0) continue;
          /* not sure what empty path components mean under Windows */
@@ -349,9 +348,7 @@ static void store_argument(wchar_t * arg)
 
 static void expand_argument(wchar_t * arg)
 {
-  wchar_t * p;
-
-  for (p = arg; *p != 0; p++) {
+  for (wchar_t *p = arg; *p != 0; p++) {
     if (*p == L'*' || *p == L'?') {
       expand_pattern(arg);
       return;
@@ -362,7 +359,7 @@ static void expand_argument(wchar_t * arg)
 
 static void expand_pattern(wchar_t * pat)
 {
-  wchar_t * prefix, * p, * name;
+  wchar_t * prefix, * name;
   intptr_t handle;
   struct _wfinddata_t ffblk;
   size_t i;
@@ -394,12 +391,11 @@ static void expand_pattern(wchar_t * pat)
 
 CAMLexport void caml_expand_command_line(int * argcp, wchar_t *** argvp)
 {
-  int i;
   argc = 0;
   argvsize = 16;
   argv = (wchar_t **) caml_stat_alloc_noexc(argvsize * sizeof(wchar_t *));
   if (argv == NULL) out_of_memory();
-  for (i = 0; i < *argcp; i++) expand_argument((*argvp)[i]);
+  for (int i = 0; i < *argcp; i++) expand_argument((*argvp)[i]);
   argv[argc] = NULL;
   *argcp = argc;
   *argvp = argv;
@@ -809,7 +805,8 @@ int caml_win32_rename(const wchar_t * oldpath, const wchar_t * newpath)
   if ((old_attribs != INVALID_FILE_ATTRIBUTES) &&
       (old_attribs & FILE_ATTRIBUTE_DIRECTORY) != 0 &&
       (new_attribs != INVALID_FILE_ATTRIBUTES) &&
-      (new_attribs & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+      (new_attribs & FILE_ATTRIBUTE_DIRECTORY) != 0 &&
+      !PathIsPrefix(oldpath, newpath)) {
     /* Try to delete: RemoveDirectoryW fails on non-empty dirs as intended.
        Then try again. */
     RemoveDirectoryW(newpath);
@@ -967,15 +964,25 @@ CAMLexport wchar_t* caml_stat_strdup_to_utf16(const char *s)
   return ws;
 }
 
-CAMLexport caml_stat_string caml_stat_strdup_of_utf16(const wchar_t *s)
+CAMLexport caml_stat_string caml_stat_strdup_noexc_of_utf16(const wchar_t *s)
 {
   caml_stat_string out;
   int retcode;
 
   retcode = caml_win32_wide_char_to_multi_byte(s, -1, NULL, 0);
-  out = caml_stat_alloc(retcode);
-  caml_win32_wide_char_to_multi_byte(s, -1, out, retcode);
+  out = caml_stat_alloc_noexc(retcode);
+  if (out != NULL) {
+    caml_win32_wide_char_to_multi_byte(s, -1, out, retcode);
+  }
 
+  return out;
+}
+
+CAMLexport caml_stat_string caml_stat_strdup_of_utf16(const wchar_t *s)
+{
+  caml_stat_string out = caml_stat_strdup_noexc_of_utf16(s);
+  if (out == NULL)
+    caml_raise_out_of_memory();
   return out;
 }
 
@@ -1095,7 +1102,6 @@ CAMLexport clock_t caml_win32_clock(void)
 {
   FILETIME _creation, _exit;
   CAML_ULONGLONG_FILETIME stime, utime;
-  ULARGE_INTEGER tmp;
   ULONGLONG clocks_per_sec;
 
   if (!(GetProcessTimes(GetCurrentProcess(), &_creation, &_exit,
@@ -1162,7 +1168,7 @@ void caml_plat_mem_unmap(void* mem, uintnat size)
 
 struct error_entry { DWORD win_code; int range; int posix_code; };
 
-static struct error_entry win_error_table[] = {
+static const struct error_entry win_error_table[] = {
   { ERROR_INVALID_FUNCTION, 0, EINVAL},
   { ERROR_FILE_NOT_FOUND, 0, ENOENT},
   { ERROR_PATH_NOT_FOUND, 0, ENOENT},

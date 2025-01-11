@@ -45,12 +45,6 @@ CAMLextern void caml_modify (volatile value *, value);
 CAMLextern void caml_initialize (volatile value *, value);
 CAMLextern int caml_atomic_cas_field (value, intnat, value, value);
 CAMLextern value caml_check_urgent_gc (value);
-#ifdef CAML_INTERNALS
-CAMLextern char *caml_alloc_for_heap (asize_t request);   /* Size in bytes. */
-CAMLextern void caml_free_for_heap (char *mem);
-CAMLextern int caml_add_to_heap (char *mem);
-#endif /* CAML_INTERNALS */
-
 
 /* [caml_stat_*] functions below provide an interface to the static memory
    manager built into the runtime, which can be used for managing static
@@ -138,25 +132,31 @@ CAMLextern caml_stat_block caml_stat_resize(caml_stat_block, asize_t);
 CAMLextern caml_stat_block caml_stat_resize_noexc(caml_stat_block, asize_t);
 
 
-/* A [caml_stat_block] containing a NULL-terminated string */
+/* A [caml_stat_block] containing a null-terminated string */
 typedef char* caml_stat_string;
 
 /* [caml_stat_strdup(s)] returns a pointer to a heap-allocated string which is a
-   copy of the NULL-terminated string [s]. It throws an OCaml exception in case
+   copy of the null-terminated string [s]. It throws an OCaml exception in case
    the request fails, and so requires the runtime lock to be held.
 */
 CAMLextern caml_stat_string caml_stat_strdup(const char *s);
-#ifdef _WIN32
-CAMLextern wchar_t* caml_stat_wcsdup(const wchar_t *s);
-#endif
 
 /* [caml_stat_strdup_noexc] is a variant of [caml_stat_strdup] that returns NULL
    in case the request fails, and doesn't require the runtime lock.
 */
 CAMLextern caml_stat_string caml_stat_strdup_noexc(const char *s);
 
-/* [caml_stat_strconcat(nargs, strings)] concatenates NULL-terminated [strings]
-   (an array of [char*] of size [nargs]) into a new string, dropping all NULLs,
+#ifdef _WIN32
+/* On Windows, [caml_stat_wcsdup] and [caml_stat_wcsdup_noexc] are the
+ * obvious equivalents of [caml_stat_strdup] and
+ * [caml_stat_strdup_noexc] for wide characters.
+ */
+CAMLextern wchar_t* caml_stat_wcsdup(const wchar_t *s);
+CAMLextern wchar_t* caml_stat_wcsdup_noexc(const wchar_t *s);
+#endif
+
+/* [caml_stat_strconcat(nargs, strings)] concatenates null-terminated [strings]
+   (an array of [char*] of size [nargs]) into a new string, dropping all NULs,
    except for the very last one. It throws an OCaml exception in case the
    request fails, and so requires the runtime lock to be held.
 */
@@ -199,6 +199,9 @@ enum caml_alloc_small_flags {
 // Do not call asynchronous callbacks from allocation functions
 #define Alloc_small_enter_GC(dom_st, wosize)    \
   Alloc_small_enter_GC_flags(CAML_DO_TRACK | CAML_FROM_C, dom_st, wosize)
+
+#define Alloc_small_enter_GC_no_track(dom_st, wosize)    \
+  Alloc_small_enter_GC_flags(CAML_DONT_TRACK | CAML_FROM_C, dom_st, wosize)
 
 #define Alloc_small_with_reserved(result, wosize, tag, GC, reserved) do{    \
                                                 CAMLassert ((wosize) >= 1); \
@@ -374,6 +377,17 @@ struct caml__roots_block {
     0) \
   CAMLunused_end
 
+#define CAMLxparamresult(x) \
+  struct caml__roots_block caml__roots_##x; \
+  CAMLunused_start int caml__dummy_##x = ( \
+    (caml__roots_##x.next = *caml_local_roots_ptr), \
+    (*caml_local_roots_ptr = &caml__roots_##x), \
+    (caml__roots_##x.nitems = 1), \
+    (caml__roots_##x.ntables = 1), \
+    (caml__roots_##x.tables [0] = &(x.data)), \
+    0) \
+   CAMLunused_end
+
 #define CAMLlocal1(x) \
   value x = Val_unit; \
   CAMLxparam1 (x)
@@ -401,6 +415,10 @@ struct caml__roots_block {
   for (caml__i_##x = 0; caml__i_##x < size; caml__i_##x ++) { \
     x[caml__i_##x] = Val_unit; \
   }
+
+#define CAMLlocalresult(res) \
+  caml_result res = Result_unit; \
+  CAMLxparamresult (res)
 
 #define CAMLdrop do{              \
   *caml_local_roots_ptr = caml__frame; \

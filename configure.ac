@@ -36,7 +36,6 @@ CONFIGURE_ARGS="$*"
 # rely on $CFLAGS because these cannot be processed by flexlink (and are not
 # passed)
 mkexe_cmd='$(CC)'
-mkexe_cflags='$(OC_CFLAGS) $(CFLAGS)'
 mkexe_extra_flags=''
 mkexe_via_cc_extra_cmd=''
 mkexe_ldflags_prefix=''
@@ -48,17 +47,18 @@ common_cflags=""
 common_cppflags=""
 internal_cflags=""
 internal_cppflags=""
-ocamlc_cflags=""
-ocamlc_cppflags=""
+bytecode_cflags=""
+bytecode_cppflags=""
 oc_ldflags=""
 oc_dll_ldflags=""
 oc_exe_ldflags=""
 
 tsan=false
-# Passed to the linker by ocamlopt when tsan is enabled
-oc_tsan_cflags="-fsanitize=thread"
-oc_tsan_cppflags="-DWITH_THREAD_SANITIZER"
+# TSan flags for each compilation stage
+tsan_cppflags="-DWITH_THREAD_SANITIZER"
+tsan_cflags="-fsanitize=thread"
 tsan_distinguish_volatile_cflags=""
+tsan_ldflags="-fsanitize=thread"
 
 # The C# compiler and its flags
 CSC=""
@@ -107,8 +107,8 @@ AC_SUBST([OCAML_VERSION_EXTRA], [OCAML__VERSION_EXTRA])
 AC_SUBST([OCAML_VERSION_SHORT], [OCAML__VERSION_SHORT])
 AC_DEFINE([MAGIC_NUMBER_PREFIX], ["][MAGIC_NUMBER__PREFIX]["])
 AC_DEFINE([MAGIC_NUMBER_VERSION], ["][MAGIC_NUMBER__VERSION]["])
-AC_SUBST([MAGIC_NUMBER_LENGTH], [MAGIC_NUMBER__LENGTH])
 AC_DEFINE([EXEC_MAGIC_LENGTH], [MAGIC_NUMBER__LENGTH])
+AC_SUBST([MAGIC_LENGTH], [MAGIC_NUMBER__LENGTH])
 AC_DEFINE([EXEC_FORMAT], ["][EXEC__FORMAT]["])
 AC_SUBST([EXEC_MAGIC_NUMBER], [EXEC__MAGIC_NUMBER])
 AC_SUBST([CMI_MAGIC_NUMBER], [CMI__MAGIC_NUMBER])
@@ -140,8 +140,14 @@ AC_SUBST([arch_specific_SOURCES])
 AC_SUBST([arch64])
 AC_SUBST([model])
 AC_SUBST([system])
+AC_SUBST([bytecode_cflags])
+AC_SUBST([bytecode_cppflags])
 AC_SUBST([native_cflags])
 AC_SUBST([native_cppflags])
+AC_SUBST([oc_bytecode_cflags])
+AC_SUBST([oc_bytecode_cppflags])
+AC_SUBST([oc_native_cflags])
+AC_SUBST([oc_native_cppflags])
 AC_SUBST([systhread_support])
 AC_SUBST([ocamlsrcdir])
 AC_SUBST([unix_or_win32])
@@ -154,26 +160,28 @@ AC_SUBST([fpic])
 AC_SUBST([mkexe])
 AC_SUBST([mkexe_exp])
 AC_SUBST([mkexedebugflag])
-AC_SUBST([mkexe_extra_flags])
 AC_SUBST([mkexe_via_cc_ldflags])
+AC_SUBST([mkexe_via_cc_extra_cmd])
 AC_SUBST([ccomptype])
 AC_SUBST([toolchain])
+AC_SUBST([common_cflags])
 AC_SUBST([oc_cflags])
 AC_SUBST([tsan])
 AC_SUBST([tsan_native_runtime_c_sources])
+AC_SUBST([common_cppflags])
 AC_SUBST([oc_cppflags])
 AC_SUBST([oc_ldflags])
 AC_SUBST([oc_dll_ldflags])
-AC_SUBST([oc_exe_ldflags])
 AC_SUBST([cclibs])
 AC_SUBST([native_ldflags])
 AC_SUBST([zstd_libs])
-AC_SUBST([ocamlc_cflags])
-AC_SUBST([ocamlc_cppflags])
+AC_SUBST([bytecode_cflags])
+AC_SUBST([bytecode_cppflags])
 AC_SUBST([flexdll_source_dir])
 AC_SUBST([bootstrapping_flexdll])
 AC_SUBST([flexdll_dir])
-AC_SUBST([flexlink_flags])
+AC_SUBST([winpthreads_source_dir])
+AC_SUBST([winpthreads_source_include_dir])
 AC_SUBST([shebangscripts])
 AC_SUBST([AR])
 AC_SUBST([mklib])
@@ -185,8 +193,8 @@ AC_SUBST([cmxs])
 AC_SUBST([debug_runtime])
 AC_SUBST([instrumented_runtime])
 AC_SUBST([instrumented_runtime_libs])
-AC_SUBST([has_monotonic_clock])
 AC_SUBST([otherlibraries])
+AC_SUBST([otherlibs])
 AC_SUBST([lib_dynlink])
 AC_SUBST([lib_runtime_events])
 AC_SUBST([lib_str])
@@ -210,6 +218,7 @@ AC_SUBST([ocamldoc_opt_target])
 AC_SUBST([with_ocamldoc])
 AC_SUBST([documentation_tool])
 AC_SUBST([documentation_tool_cmd])
+AC_SUBST([build_ocamlobjinfo])
 AC_SUBST([build_ocamltest])
 AC_SUBST([ocamltest])
 AC_SUBST([ocamltest_target])
@@ -239,8 +248,6 @@ AC_SUBST([function_sections])
 AC_SUBST([oc_native_compflags])
 AC_SUBST([afl])
 AC_SUBST([flexdll_chain])
-AC_SUBST([mkdll_ldflags_exp])
-AC_SUBST([mkexe_ldflags_exp])
 AC_SUBST([PACKLD])
 AC_SUBST([build_libraries_manpages])
 AC_SUBST([compute_deps])
@@ -248,7 +255,6 @@ AC_SUBST([ocaml_bindir])
 AC_SUBST([ocaml_libdir])
 AC_SUBST([QS])
 AC_SUBST([ar_supports_response_files])
-AC_SUBST([target_bindir])
 
 ## Generated files
 
@@ -258,6 +264,7 @@ AC_CONFIG_FILES([stdlib/sys.ml])
 AC_CONFIG_FILES([manual/src/version.tex])
 AC_CONFIG_FILES([manual/src/html_processing/src/common.ml])
 AC_CONFIG_FILES([ocamltest/ocamltest_config.ml])
+AC_CONFIG_FILES([otherlibs/dynlink/dynlink_config.ml])
 AC_CONFIG_FILES([utils/config.common.ml])
 AC_CONFIG_FILES([utils/config.generated.ml])
 AC_CONFIG_HEADERS([runtime/caml/exec.h])
@@ -301,8 +308,6 @@ AS_CASE([$host],
 # Systems that are known not to work, even in bytecode only.
 
 AS_CASE([$host],
-  [*-pc-windows],
-    [AC_MSG_ERROR([the MSVC compiler is not supported currently], 69)],
   [i386-*-solaris*],
     [AC_MSG_ERROR([Building for 32 bits target is not supported. \
 If your host is 64 bits, you can try with './configure CC="gcc -m64"' \
@@ -312,7 +317,7 @@ If your host is 64 bits, you can try with './configure CC="gcc -m64"' \
 
 AS_CASE([$host],
   [*-pc-windows],
-    [CC=cl
+    [AS_IF([test -z "$CC"], [CC=cl])
     ccomptype=msvc
     S=asm
     SO=dll
@@ -338,6 +343,15 @@ AS_IF([test -n "$csc"],
 AC_ARG_VAR([AS], [which assembler to use])
 AC_ARG_VAR([ASPP], [which assembler (with preprocessor) to use])
 AC_ARG_VAR([PARTIALLD], [how to build partial (relocatable) object files])
+
+AC_ARG_VAR([COMPILER_BYTECODE_CFLAGS],
+  [CFLAGS for compiling C files to be linked with bytecode])
+AC_ARG_VAR([COMPILER_BYTECODE_CPPFLAGS],
+  [CPPFLAGS for compiling C files to be linked with bytecode])
+AC_ARG_VAR([COMPILER_NATIVE_CFLAGS],
+  [CFLAGS for compiling C files to be linked with native code])
+AC_ARG_VAR([COMPILER_NATIVE_CPPFLAGS],
+  [CPPFLAGS for compiling C files to be linked with native code])
 
 # Command-line arguments to configure
 
@@ -428,6 +442,9 @@ AC_ARG_WITH([odoc],
   [AS_HELP_STRING([--with-odoc],
     [build documentation with odoc])])
 
+AC_ARG_ENABLE([ocamlobjinfo],
+  [AS_HELP_STRING([--disable-ocamlobjinfo],
+    [do not build ocamlobjinfo])])
 
 AC_ARG_ENABLE([ocamltest],
   [AS_HELP_STRING([--disable-ocamltest],
@@ -555,6 +572,11 @@ AC_ARG_WITH([flexdll],
     [bootstrap FlexDLL from the given sources])],
   [AS_IF([test x"$withval" = 'xyes'],[with_flexdll=flexdll])])
 
+AC_ARG_WITH([winpthreads-msvc],
+  [AS_HELP_STRING([--with-winpthreads-msvc],
+    [build winpthreads (only for the MSVC port) from the given sources])],
+  [AS_IF([test x"$withval" = 'xyes'], [with_winpthreads_msvc=winpthreads])])
+
 AC_ARG_WITH([zstd],
   [AS_HELP_STRING([--without-zstd],
     [disable compression of compilation artefacts])])
@@ -671,7 +693,7 @@ AS_CASE([$ocaml_cc_vendor],
     [CPP="$CC -E -Qn" # suppress generation of Sun PRO ident string
     ocamltest_CPP="$CPP"],
   [msvc-*],
-    [CPP="$CC -nologo -EP"
+    [CPP="$CC -nologo -EP -TC"
     ocamltest_CPP="$CPP 2> nul"],
   [CPP="$CC -E -P"
   ocamltest_CPP="$CPP"])
@@ -693,7 +715,7 @@ ocamlsrcdir=${ocamlsrcdir%X}
 
 # Whether ar supports @FILE arguments
 
-AS_CASE([lt_cv_ar_at_file],
+AS_CASE([$lt_cv_ar_at_file],
   [no], [ar_supports_response_files=false],
   [ar_supports_response_files=true])
 
@@ -717,12 +739,21 @@ AS_CASE([$host],
   [exeext=''])
 
 otherlibraries="dynlink runtime_events"
+otherlibs="runtime_events"
+optional_libraries="$optional_libraries otherlibs/dynlink/dynlink"
 lib_dynlink=true
+dldir=otherlibs/dynlink
+AC_CONFIG_LINKS([
+  $dldir/dynlink_cmo_format.mli:file_formats/cmo_format.mli
+  $dldir/dynlink_cmxs_format.mli:file_formats/cmxs_format.mli
+  $dldir/dynlink_platform_intf.mli:$dldir/dynlink_platform_intf.ml
+])
 lib_runtime_events=true
 AS_IF([test x"$enable_unix_lib" != "xno"],
   [enable_unix_lib=yes
   AC_CONFIG_FILES([otherlibs/unix/META])
   otherlibraries="$otherlibraries unix"
+  otherlibs="$otherlibs unix"
   lib_unix=true
   AC_CONFIG_LINKS([
     otherlibs/unix/unix.ml:otherlibs/unix/unix_${unix_or_win32}.ml
@@ -734,6 +765,7 @@ AS_IF([test x"$enable_unix_lib" != "xno"],
 
 AS_IF([test x"$enable_str_lib" != "xno"],
   [otherlibraries="$otherlibraries str"
+  otherlibs="$otherlibs str"
   lib_str=true
   AC_CONFIG_FILES([otherlibs/str/META])])
 
@@ -806,8 +838,12 @@ AS_CASE([$ocaml_cc_vendor],
     [outputobj='-o '; cc_warnings=""],
   [msvc-*],
     [outputobj='-Fo'
-    warn_error_flag='-WX'
-    cc_warnings=''],
+    AS_CASE([$ocaml_cc_vendor],
+      [msvc-*-clang-*],
+        [cc_warnings='-W4 -Wno-unused-parameter -Wno-sign-compare -Wundef'
+         warn_error_flag='-WX'],
+      [cc_warnings='-W2'
+       warn_error_flag='-WX -options:strict'])],
   [outputobj='-o '
   warn_error_flag='-Werror'
   cc_warnings="-Wall -Wint-conversion -Wstrict-prototypes \
@@ -818,9 +854,25 @@ AX_CHECK_COMPILE_FLAG([-Wold-style-declaration],
   [cc_warnings="$cc_warnings -Wold-style-declaration"], [],
   [$warn_error_flag])
 
+# Use -Wimplicit-fallthrough if supported
+for flag in '-Wimplicit-fallthrough=5' '-Wimplicit-fallthrough'; do
+  AX_CHECK_COMPILE_FLAG([$flag],
+    [cc_warnings="$cc_warnings $flag"; break], [], [$warn_error_flag])
+done
+
 AS_CASE([$enable_warn_error,OCAML__DEVELOPMENT_VERSION],
   [yes,*|,true],
     [cc_warnings="$cc_warnings $warn_error_flag"])
+
+AS_CASE([$host],
+  [*-*-mingw32*|*-pc-windows],
+    [AS_CASE([$WINDOWS_UNICODE_MODE],
+      [ansi],
+        [windows_unicode=0],
+      [compatible|""],
+        [windows_unicode=1],
+      [AC_MSG_ERROR([unexpected windows unicode mode])])],
+  [windows_unicode=0])
 
 # We select high optimization levels, provided we can turn off:
 # - strict type-based aliasing analysis (too risky for the OCaml runtime)
@@ -847,25 +899,29 @@ AS_CASE([$ocaml_cc_vendor],
     # TODO: see whether the code can be fixed to avoid -Wno-unused
     common_cflags="-O2 -fno-strict-aliasing -fwrapv -mms-bitfields"
     internal_cppflags='-D__USE_MINGW_ANSI_STDIO=0 -DUNICODE -D_UNICODE'
-    internal_cppflags="$internal_cppflags -DWINDOWS_UNICODE="
-    internal_cppflags="${internal_cppflags}\$(WINDOWS_UNICODE)"],
+    internal_cppflags="$internal_cppflags -DWINDOWS_UNICODE=$windows_unicode"],
   [mingw-*],
     [AC_MSG_ERROR([Unsupported C compiler for a MinGW-w64 build])],
+  [msvc-0*|msvc-1[[0-8]]*|msvc-19[[012]]*|msvc-193[[0-7]]],
+    # No C11 atomics support
+    [AC_MSG_ERROR(m4_normalize([This version of MSVC is too old.
+    Please use Visual Studio version 17.8 or above.]), 69)],
   [msvc-*],
-    [common_cflags="-nologo -O2 -Gy- -MD $cc_warnings"
+    [common_cflags='-nologo -O2 -Gy- -MD'
     common_cppflags="-D_CRT_SECURE_NO_DEPRECATE"
-    internal_cppflags='-DUNICODE -D_UNICODE'
-    OCAML_CL_HAS_VOLATILE_METADATA
-    AS_IF([test "x$cl_has_volatile_metadata" = "xtrue"],
-          [internal_cflags='-d2VolatileMetadata-'])
-    internal_cppflags="$internal_cppflags -DWINDOWS_UNICODE="
-    internal_cppflags="${internal_cppflags}\$(WINDOWS_UNICODE)"],
+    internal_cflags="$cc_warnings"
+    internal_cppflags='-DUNICODE -D_UNICODE -D_CRT_NONSTDC_NO_WARNINGS'
+    AX_CHECK_COMPILE_FLAG([-volatileMetadata-],
+      [internal_cflags="$internal_cflags -volatileMetadata-"], [],
+      [$warn_error_flag])
+    internal_cppflags="$internal_cppflags -DWINDOWS_UNICODE=$windows_unicode"],
   [xlc-*],
     [common_cflags="-O5 -qtune=balanced -qnoipa -qinline";
     internal_cflags="$cc_warnings"],
   [sunc-*], # Optimization should be >= O4 to inline functions
             # and prevent unresolved externals
-    [common_cflags="-O4 -xc99=all -D_XPG6 $CFLAGS";
+    [common_cflags="-O4 -xc99=all"
+    common_cppflags="-D_XPG6"
     internal_cflags="$cc_warnings"],
   [common_cflags="-O"])
 
@@ -938,9 +994,7 @@ AS_IF([test x"$supports_shared_libraries" != 'xfalse'], [
       AS_IF([m4_normalize([test x"$with_flexdll" = 'x'
                             || test x"$with_flexdll" = 'xflexdll'])],
         [AS_IF([test -f 'flexdll/flexdll.h'],
-          [flexdll_source_dir=flexdll
-          iflexdir='$(ROOTDIR)/flexdll'
-          with_flexdll="$iflexdir"],
+          [flexdll_source_dir=flexdll],
           [AS_IF([test x"$with_flexdll" != 'x'],
             [AC_MSG_RESULT([requested but not available])
             AC_MSG_ERROR([exiting])])])],
@@ -949,17 +1003,14 @@ AS_IF([test x"$supports_shared_libraries" != 'xfalse'], [
           [mkdir -p flexdll-sources
           cp -r "$with_flexdll"/* flexdll-sources/
           flexdll_source_dir='flexdll-sources'
-          iflexdir='$(ROOTDIR)/flexdll-sources'
           flexmsg=" (from $with_flexdll)"],
           [AC_MSG_RESULT([requested but not available])
           AC_MSG_ERROR([exiting])])])
       AS_IF([test x"$flexdll_source_dir" = 'x'],
         [AC_MSG_RESULT([no])],
-        [AC_MSG_RESULT([$iflexdir$flexmsg])
+        [AC_MSG_RESULT([$flexdll_source_dir$flexmsg])
         bootstrapping_flexdll=true
-        flexdll_dir=\"+flexdll\"
-        # The submodule should be searched *before* any other -I paths
-        internal_cppflags="-I $iflexdir $internal_cppflags"])],
+        flexdll_dir=\"+flexdll\"])],
       [AS_IF([test x"$with_flexdll" != 'x'],
         [AC_MSG_RESULT([requested but not supported])
         AC_MSG_ERROR([exiting])])])])
@@ -970,12 +1021,18 @@ AS_IF([test x"$supports_shared_libraries" != 'xfalse'], [
     OCAML_TEST_FLEXLINK([$flexlink], [$flexdll_chain],
                         [$internal_cppflags], [$host])
 
-    AS_CASE([$host],
-      [*-w64-mingw32*|*-pc-windows],
-        [flexlink_where="$(cmd /c "$flexlink" -where 2>/dev/null)"
-        AS_IF([test -z "$flexlink_where"],
-          [AC_MSG_ERROR(m4_normalize([$flexlink is not executable from a native
-            Win32 process]))])])
+    # When building on Cygwin/MSYS2, flexlink may be a shell script which
+    # then cannot be executed by ocamlc/ocamlopt. Having located flexlink,
+    # ensure it can be executed from a native Windows process. The check
+    # is only necessary when cross-compiling.
+    AS_IF([test x"$build" != x"$host"],[
+      AS_CASE([$build],
+        [*-pc-msys|*-pc-cygwin*],
+          [flexlink_where="$(cmd /c "$flexlink" -where 2>/dev/null)"
+          AS_IF([test -z "$flexlink_where"],
+            [AC_MSG_ERROR(m4_normalize([$flexlink is not executable from a
+            native Win32 process]))])])
+    ])
   ])
 
   OCAML_TEST_FLEXDLL_H([$flexdll_source_dir])
@@ -1014,7 +1071,6 @@ AS_CASE([$ocaml_cc_vendor,$host],
     AS_IF([$supports_shared_libraries],
       [mkexe_cmd_exp="flexlink -exe -chain ${flexdll_chain} ${flexlink_flags}"
       mkexe_cmd="flexlink -exe -chain ${flexdll_chain} ${flexlink_flags}"
-      mkexe_cflags=''
       mkexe_ldflags_prefix='-link '],
       [mkexe_extra_flags=''
       oc_ldflags='-Wl,--stack,16777216']
@@ -1027,7 +1083,6 @@ AS_CASE([$ocaml_cc_vendor,$host],
     toolchain="mingw"
     mkexe_cmd_exp="flexlink -exe -chain ${flexdll_chain} ${flexlink_flags}"
     mkexe_cmd="flexlink -exe -chain ${flexdll_chain} ${flexlink_flags}"
-    mkexe_cflags=''
     mkexe_ldflags_prefix='-link '
     oc_exe_ldflags='-municode'
     mkexe_extra_flags="$mkexe_ldflags_prefix$oc_exe_ldflags"
@@ -1037,7 +1092,6 @@ AS_CASE([$ocaml_cc_vendor,$host],
     ostype="Win32"
     mkexe_cmd_exp="flexlink -exe -chain ${flexdll_chain} ${flexlink_flags}"
     mkexe_cmd="flexlink -exe -chain ${flexdll_chain} ${flexlink_flags}"
-    mkexe_cflags=''
     mkexe_ldflags_prefix='-link '
     mkexe_via_cc_ldflags_prefix='/link '
     oc_exe_ldflags='/ENTRY:wmainCRTStartup'
@@ -1050,6 +1104,44 @@ AS_CASE([$ocaml_cc_vendor,$host],
     AC_DEFINE([HAS_ARCH_CODE32], [1])],
   [gcc-*,powerpc-*-linux*],
     [oc_ldflags="-mbss-plt"])
+
+# Winpthreads emulation library for the MSVC port
+AC_MSG_CHECKING([for winpthreads sources])
+AS_IF([test x"$with_winpthreads_msvc" = "xno"],
+  [winpthreads_source_dir=''
+  AC_MSG_RESULT([disabled])],
+  [winpthreadmsg=''
+  AS_CASE([$target],
+    [*-pc-windows],
+    [dnl When bootstrapping from the git submodule (winpthreads directory),
+     dnl just use that, however if another directory has been specified with
+     dnl --with-winpthreads-msvc=<path> then copy the contents of <path> to
+     dnl winpthreads-sources.
+    AS_IF([m4_normalize([test x"$with_winpthreads_msvc" = 'x'
+                          || test x"$with_winpthreads_msvc" = x'winpthreads'])],
+      [AS_IF([test -f 'winpthreads/src/winpthread_internal.h'],
+        [winpthreads_source_dir=winpthreads],
+        [AC_MSG_RESULT([required but not available (uninitialized submodule?)])
+        AC_MSG_ERROR([exiting])])],
+      [rm -rf winpthreads-sources
+      AS_IF([test -f "$with_winpthreads_msvc/src/winpthread_internal.h"],
+        [mkdir -p winpthreads-sources/src winpthreads-sources/include
+        cp "$with_winpthreads_msvc"/src/*.c winpthreads-sources/src
+        cp "$with_winpthreads_msvc"/src/*.h winpthreads-sources/src
+        cp "$with_winpthreads_msvc"/include/*.h winpthreads-sources/include
+        winpthreads_source_dir='winpthreads-sources'
+        winpthreadsmsg=" (from $with_winpthreads_msvc)"],
+        [AC_MSG_RESULT([requested but not available])
+        AC_MSG_ERROR([exiting])])])
+    AS_IF([test x"$winpthreads_source_dir" = 'x'],
+      [AC_MSG_RESULT([no])],
+      [AC_MSG_RESULT([$winpthreads_source_dir$winpthreadsmsg])
+      winpthreads_source_include_dir="$winpthreads_source_dir/include"
+      OCAML_TEST_WINPTHREADS_PTHREAD_H([$winpthreads_source_include_dir])])],
+    [AS_IF([test x"$with_winpthreads_msvc" != 'x'],
+      [AC_MSG_RESULT([requested but not supported])
+      AC_MSG_ERROR([exiting])],
+      [AC_MSG_RESULT([skipping on that platform])])])])
 
 ## Program to use to install files
 AC_PROG_INSTALL
@@ -1068,20 +1160,21 @@ AC_SEARCH_LIBS([cos], [m],
 # Don't check for unistd.h on Windows
 AS_CASE([$host],
   [*-*-mingw32*|*-pc-windows], [],
-  [AC_CHECK_HEADERS([unistd.h],[AC_DEFINE([HAS_UNISTD])])])
+  [AC_CHECK_HEADERS([unistd.h],[AC_DEFINE([HAS_UNISTD], [1])])])
 
 AC_CHECK_HEADER([math.h])
-AC_CHECK_HEADER([stdint.h],[AC_DEFINE([HAS_STDINT_H])])
-AC_CHECK_HEADER([pthread_np.h],[AC_DEFINE([HAS_PTHREAD_NP_H])])
-AC_CHECK_HEADER([dirent.h], [AC_DEFINE([HAS_DIRENT])], [],
+AC_CHECK_HEADER([pthread_np.h],[AC_DEFINE([HAS_PTHREAD_NP_H], [1])])
+AC_CHECK_HEADER([dirent.h], [AC_DEFINE([HAS_DIRENT], [1])], [],
   [#include <sys/types.h>])
 
-AC_CHECK_HEADER([sys/select.h], [AC_DEFINE([HAS_SYS_SELECT_H])], [],
+AC_CHECK_HEADER([sys/select.h], [AC_DEFINE([HAS_SYS_SELECT_H], [1])], [],
   [#include <sys/types.h>])
 
-AC_CHECK_HEADER([stdatomic.h], [AC_DEFINE([HAS_STDATOMIC_H])])
+AC_CHECK_HEADER([sys/mman.h], [AC_DEFINE([HAS_SYS_MMAN_H], [1])])
 
-AC_CHECK_HEADER([sys/mman.h], [AC_DEFINE([HAS_SYS_MMAN_H])])
+AS_CASE([$host],
+  [*-*-linux*],
+    [AC_CHECK_HEADER([linux/futex.h], [AC_DEFINE([HAS_LINUX_FUTEX_H])])])
 
 # Checks for types
 
@@ -1150,6 +1243,8 @@ AS_IF([! $arch64],
       [AC_DEFINE([ARCH_ALIGN_INT64], [1])])])
     ])])
 
+AC_CHECK_TYPES([max_align_t], [], [], [[#include <stddef.h>]])
+
 # Atomics library
 
 AS_IF([! $arch64],
@@ -1158,7 +1253,16 @@ AS_IF([! $arch64],
 
 # Support for C11 atomic types
 
-OCAML_CC_SUPPORTS_ATOMIC([$cclibs])
+OCAML_CC_SUPPORTS_ATOMIC([], [$cclibs])
+AS_CASE([$cc_supports_atomic,$ocaml_cc_vendor],
+  [false,msvc-*],
+    [OCAML_CC_SUPPORTS_ATOMIC([-std:c11])
+     AS_IF([$cc_supports_atomic],
+       [common_cflags="$common_cflags -std:c11"],
+       [OCAML_CC_SUPPORTS_ATOMIC([-std:c11 -experimental:c11atomics])
+        AS_IF([$cc_supports_atomic],
+          [common_cflags="$common_cflags -std:c11 -experimental:c11atomics"])
+])])
 AS_IF([! $cc_supports_atomic],
   [AC_MSG_FAILURE([C11 atomic support is required, use another C compiler])])
 
@@ -1166,8 +1270,8 @@ AS_IF([! $cc_supports_atomic],
 # macOS and MinGW-w64 have problems with thread local storage accessed from DLLs
 
 AS_CASE([$host],
-  [*-apple-darwin*|*-mingw32*], [],
-  [AC_DEFINE([HAS_FULL_THREAD_VARIABLES])]
+  [*-apple-darwin*|*-mingw32*|*-pc-windows], [],
+  [AC_DEFINE([HAS_FULL_THREAD_VARIABLES], [1])]
 )
 
 # Shared library support
@@ -1299,14 +1403,15 @@ AS_CASE([$enable_native_toplevel,$natdynlink],
 # Try to work around the Skylake/Kaby Lake processor bug.
 AS_CASE(["$ocaml_cc_vendor,$host"],
   [*gcc*,x86_64-*|*gcc*,i686-*],
-    [OCAML_CC_HAS_FNO_TREE_VRP
-    AS_IF([$cc_has_fno_tree_vrp],
-      [internal_cflags="$internal_cflags -fno-tree-vrp"])])
-
-OCAML_CC_SUPPORTS_ALIGNED
+    [AX_CHECK_COMPILE_FLAG([-fno-tree-vrp],
+      [internal_cflags="$internal_cflags -fno-tree-vrp"], [],
+      [$warn_error_flag])])
 
 ## Check whether __attribute__((optimize("tree-vectorize")))) is supported
 OCAML_CC_SUPPORTS_TREE_VECTORIZE
+
+# Check whether the C compiler supports the labels as values extension.
+OCAML_CC_SUPPORTS_LABELS_AS_VALUES
 
 # Configure the native-code compiler
 
@@ -1338,7 +1443,7 @@ AS_CASE([$host],
   [i686-pc-windows],
     [arch=i386; system=win32],
   [x86_64-pc-windows],
-    [arch=amd64; system=win64],
+    [has_native_backend=yes; arch=amd64; system=win64],
   [[powerpc64le*-*-linux*]],
     [has_native_backend=yes; arch=power; model=ppc64le; system=linux],
   [[powerpc64*-*-linux-musl*]],
@@ -1424,8 +1529,9 @@ AS_CASE([$arch],
   [arch_specific_SOURCES=''])
 
 native_cflags=''
-native_cppflags="-DTARGET_${arch} -DMODEL_${model} -DSYS_${system}"
-
+oc_native_cflags=''
+oc_native_cppflags="-DNATIVE_CODE\
+ -DTARGET_${arch} -DMODEL_${model} -DSYS_${system}"
 AS_CASE([$ccomptype],
   [msvc],
     [runtime_asm_objects=${arch}nt.${OBJEXT}],
@@ -1542,7 +1648,7 @@ AS_CASE([$as_target,$ocaml_cc_vendor],
 
 AS_IF([test "$with_pic"],
   [fpic=true
-  AC_DEFINE([CAML_WITH_FPIC])
+  AC_DEFINE([CAML_WITH_FPIC], [1])
   internal_cflags="$internal_cflags $sharedlib_cflags"
   default_aspp="$default_aspp $sharedlib_cflags"],
   [fpic=false])
@@ -1570,39 +1676,24 @@ AC_CHECK_FUNCS(m4_normalize([expm1 log1p hypot fma exp2 log2 cbrt acosh asinh
   atanh erf erfc trunc round copysign]), [], [has_c99_float_ops=false])
 
 AS_IF([$has_c99_float_ops],
-  [AC_DEFINE([HAS_C99_FLOAT_OPS])
+  [AC_DEFINE([HAS_C99_FLOAT_OPS], [1])
   # Check whether round works (known bug in mingw-w64)
   OCAML_C99_CHECK_ROUND
-  # Check whether fma works (regressed in mingw-w64 8.0.0; present, but broken,
-  # in VS2013-2017 and present but unimplemented in Cygwin64)
+  # Check whether fma works (regressed in mingw-w64 8.0.0; and present but
+  # unimplemented in Cygwin64)
   OCAML_C99_CHECK_FMA],
   [AS_IF([test x"$enable_imprecise_c99_float_ops" != "xyes" ],
-    [AS_CASE([$enable_imprecise_c99_float_ops,$ocaml_cc_vendor],
-      [no,*], [hard_error=true],
-      [,msvc-*], [AS_IF([test "${ocaml_cc_vendor#msvc-}" -lt 1800 ],
-        [hard_error=false],
-        [hard_error=true])],
-      [hard_error=true])
-     AS_IF([test x"$hard_error" = 'xtrue'],
-       [AC_MSG_ERROR(m4_normalize([
-         C99 float ops unavailable, enable replacements
-         with --enable-imprecise-c99-float-ops]))],
-       [AC_MSG_WARN(m4_normalize([
-         C99 float ops unavailable, replacements enabled
-         (ancient Visual Studio)]))])])])
+    [AC_MSG_ERROR(m4_normalize([C99 float ops unavailable, enable replacements
+    with --enable-imprecise-c99-float-ops]))])])
 
 ## getentropy
-AC_CHECK_HEADER([unistd.h],
-  [AC_CHECK_DECL([getentropy],
-                 [AC_DEFINE([HAS_GETENTROPY])], [],
-                 [[#include <unistd.h>]])],
-  [])
+AC_CHECK_FUNC([getentropy], [AC_DEFINE([HAS_GETENTROPY], [1])])
 
 ## getrusage
-AC_CHECK_FUNC([getrusage], [AC_DEFINE([HAS_GETRUSAGE])])
+AC_CHECK_FUNC([getrusage], [AC_DEFINE([HAS_GETRUSAGE], [1])])
 
 ## times
-AC_CHECK_FUNC([times], [AC_DEFINE([HAS_TIMES])])
+AC_CHECK_FUNC([times], [AC_DEFINE([HAS_TIMES], [1])])
 
 ## secure_getenv and __secure_getenv
 
@@ -1610,21 +1701,20 @@ saved_CPPFLAGS="$CPPFLAGS"
 CPPFLAGS="-D_GNU_SOURCE $CPPFLAGS"
 
 AC_CHECK_FUNC([secure_getenv],
-  [AC_DEFINE([HAS_SECURE_GETENV])],
-  [AC_CHECK_FUNC([__secure_getenv], [AC_DEFINE([HAS___SECURE_GETENV])])])
+  [AC_DEFINE([HAS_SECURE_GETENV], [1])],
+  [AC_CHECK_FUNC([__secure_getenv], [AC_DEFINE([HAS___SECURE_GETENV], [1])])])
 
 CPPFLAGS="$saved_CPPFLAGS"
 
 ## issetugid
 
-AC_CHECK_FUNC([issetugid], [AC_DEFINE([HAS_ISSETUGID])])
+AC_CHECK_FUNC([issetugid], [AC_DEFINE([HAS_ISSETUGID], [1])])
 
 ## Checking for monotonic clock source
 ## On Windows MSVC, QueryPerformanceCounter and QueryPerformanceFrequency
 ## are always available.
 ## On Unix platforms, we check for the appropriate POSIX feature-test macros.
 ## On MacOS clock_gettime's CLOCK_MONOTONIC flag is not actually monotonic.
-## mach_timebase_info and mach_absolute_time are used instead.
 
 AS_CASE([$host],
   [*-*-windows],
@@ -1633,24 +1723,20 @@ AS_CASE([$host],
     AC_CHECK_FUNCS([clock_gettime_nsec_np],
       [
         has_monotonic_clock=true
-        AC_DEFINE([HAS_CLOCK_GETTIME_NSEC_NP])
+        AC_DEFINE([HAS_CLOCK_GETTIME_NSEC_NP], [1])
       ],
       [has_monotonic_clock=false])],
-  [AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+  [AC_PREPROC_IFELSE([AC_LANG_PROGRAM([[
     #include <unistd.h>
     #include <time.h>
-    int main(void)
-    {
-      #if !(defined(_POSIX_TIMERS) && defined(_POSIX_MONOTONIC_CLOCK)   \
-         && _POSIX_MONOTONIC_CLOCK != (-1))
-        #error "no monotonic clock source"
-      #endif
-        return 0;
-     }
+    #if !(defined(_POSIX_TIMERS) && defined(_POSIX_MONOTONIC_CLOCK)   \
+       && _POSIX_MONOTONIC_CLOCK != (-1))
+      #error "no monotonic clock source"
+    #endif
     ]])],
     [
       has_monotonic_clock=true
-      AC_DEFINE([HAS_POSIX_MONOTONIC_CLOCK])
+      AC_DEFINE([HAS_POSIX_MONOTONIC_CLOCK], [1])
     ],
     [has_monotonic_clock=false])
   ]
@@ -1776,7 +1862,7 @@ AS_IF([$tsan],
   AS_CASE([$ocaml_cc_vendor],
     [gcc-[[0123456789]]-*|gcc-10-*|clang-*],
       [],
-    [oc_tsan_cflags="$oc_tsan_cflags -Wno-tsan"])
+    [tsan_cflags="$tsan_cflags -Wno-tsan"])
   AS_CASE([$ocaml_cc_vendor],
     [gcc*],
       [tsan_distinguish_volatile_cflags="--param=tsan-distinguish-volatile=1"],
@@ -1787,10 +1873,11 @@ AS_IF([$tsan],
     [AC_MSG_ERROR(m4_normalize([The C compiler does not support the
       `$tsan_distinguish_volatile_cflags' flag. Try upgrading to GCC >= 11, or
       to Clang >= 11.]))], [$warn_error_flag])
-  oc_tsan_cflags="$oc_tsan_cflags $tsan_distinguish_volatile_cflags"
-  common_cppflags="$common_cppflags $oc_tsan_cppflags"
-  native_cflags="$native_cflags $oc_tsan_cflags"
-  ocamlc_cflags="$ocamlc_cflags $oc_tsan_cflags"
+  tsan_cflags="$tsan_cflags $tsan_distinguish_volatile_cflags"
+  oc_native_cppflags="$oc_native_cppflags $tsan_cppflags"
+  oc_native_cflags="$oc_native_cflags $tsan_cflags"
+  native_cflags="$native_cflags $tsan_cflags"
+  native_ldflags="$native_ldflags $tsan_ldflags"
   tsan_native_runtime_c_sources="tsan"],
   [AC_MSG_NOTICE([not using thread sanitizer])
   tsan_native_runtime_c_sources=""]
@@ -1827,8 +1914,8 @@ AS_IF([$tsan],
   AS_IF([test x"$LIBUNWIND_LDFLAGS" != x],
     [libunwind_ldflags="$LIBUNWIND_LDFLAGS $libunwind_ldflags"])
 
-  native_cppflags="$native_cppflags $libunwind_cppflags"
-  native_ldflags="$native_ldflags -fsanitize=thread $libunwind_ldflags"
+  oc_native_cppflags="$oc_native_cppflags $libunwind_cppflags"
+  native_ldflags="$native_ldflags $libunwind_ldflags"
 
   OCAML_CHECK_LIBUNWIND
 
@@ -1856,11 +1943,11 @@ AS_CASE([$host],
   [*-*-mingw32*],
     [cclibs="$cclibs -lws2_32"
     AC_SEARCH_LIBS([socket], [ws2_32])
-    AC_CHECK_FUNC([socketpair], [AC_DEFINE([HAS_SOCKETPAIR])])],
+    AC_CHECK_FUNC([socketpair], [AC_DEFINE([HAS_SOCKETPAIR], [1])])],
   [*-pc-windows],
     [cclibs="$cclibs ws2_32.lib"
     AC_SEARCH_LIBS([socket], [ws2_32])
-    AC_CHECK_FUNC([socketpair], [AC_DEFINE([HAS_SOCKETPAIR])])],
+    AC_CHECK_FUNC([socketpair], [AC_DEFINE([HAS_SOCKETPAIR], [1])])],
   [*-*-haiku],
     [cclibs="$cclibs -lnetwork"
     AC_SEARCH_LIBS([socket], [network])],
@@ -1876,24 +1963,24 @@ AS_CASE([$host],
   ]
 )
 
-AS_IF([$sockets], [AC_DEFINE([HAS_SOCKETS])])
+AS_IF([$sockets], [AC_DEFINE([HAS_SOCKETS], [1])])
 
 ## socklen_t
 
 AS_CASE([$host],
   [*-*-mingw32*|*-pc-windows],
-    [AC_CHECK_TYPE([socklen_t], [AC_DEFINE([HAS_SOCKLEN_T])], [],
+    [AC_CHECK_TYPE([socklen_t], [AC_DEFINE([HAS_SOCKLEN_T], [1])], [],
       [#include <ws2tcpip.h>])],
-  [AC_CHECK_TYPE([socklen_t], [AC_DEFINE([HAS_SOCKLEN_T])], [],
+  [AC_CHECK_TYPE([socklen_t], [AC_DEFINE([HAS_SOCKLEN_T], [1])], [],
     [#include <sys/socket.h>])])
 
-AC_CHECK_FUNC([inet_aton], [AC_DEFINE([HAS_INET_ATON])])
+AC_CHECK_FUNC([inet_aton], [AC_DEFINE([HAS_INET_ATON], [1])])
 
 ## Unix domain sockets support on Windows
 
 AS_CASE([$host],
   [*-*-mingw32*|*-pc-windows],
-    [AC_CHECK_HEADERS([afunix.h], [AC_DEFINE([HAS_AFUNIX_H])], [],
+    [AC_CHECK_HEADERS([afunix.h], [AC_DEFINE([HAS_AFUNIX_H], [1])], [],
       [#include <winsock2.h>])])
 
 ## IPv6 support
@@ -1915,68 +2002,61 @@ AS_CASE([$host],
 )
 
 AS_IF([$ipv6],
-  [AC_CHECK_FUNC([getaddrinfo], [], [ipv6=false])])
-
+  [AC_CHECK_FUNCS([getaddrinfo getnameinfo inet_pton inet_ntop], [],
+    [ipv6=false])])
 AS_IF([$ipv6],
-  [AC_CHECK_FUNC([getnameinfo], [], [ipv6=false])])
+  [AC_DEFINE([HAS_IPV6], [1])])
 
-AS_IF([$ipv6],
-  [AC_CHECK_FUNC([inet_pton], [], [ipv6=false])])
+AC_CHECK_FUNC([rewinddir], [AC_DEFINE([HAS_REWINDDIR], [1])])
 
-AS_IF([$ipv6],
-  [AC_CHECK_FUNC([inet_ntop], [AC_DEFINE([HAS_IPV6])])])
+AC_CHECK_FUNC([lockf], [AC_DEFINE([HAS_LOCKF], [1])])
 
-AC_CHECK_FUNC([rewinddir], [AC_DEFINE([HAS_REWINDDIR])])
+AC_CHECK_FUNC([mkfifo], [AC_DEFINE([HAS_MKFIFO], [1])])
 
-AC_CHECK_FUNC([lockf], [AC_DEFINE([HAS_LOCKF])])
+AC_CHECK_FUNC([getcwd], [AC_DEFINE([HAS_GETCWD], [1])])
 
-AC_CHECK_FUNC([mkfifo], [AC_DEFINE([HAS_MKFIFO])])
-
-AC_CHECK_FUNC([getcwd], [AC_DEFINE([HAS_GETCWD])])
-
-AC_CHECK_DECL([system], [AC_DEFINE([HAS_SYSTEM])], [], [[#include <stdlib.h>]])
+AC_CHECK_FUNC([system], [AC_DEFINE([HAS_SYSTEM], [1])])
 
 ## utime
 ## Note: this was defined in config/s-nt.h but the autoconf macros do not
 # seem to detect it properly on Windows so we hardcode the definition
 # of HAS_UTIME on Windows but this will probably need to be clarified
 AS_CASE([$host],
-  [*-*-mingw32*|*-pc-windows], [AC_DEFINE([HAS_UTIME])],
+  [*-*-mingw32*|*-pc-windows], [AC_DEFINE([HAS_UTIME], [1])],
   [AC_CHECK_HEADER([sys/types.h],
     [AC_CHECK_HEADER([utime.h],
-      [AC_CHECK_FUNC([utime], [AC_DEFINE([HAS_UTIME])])])])])
+      [AC_CHECK_FUNC([utime], [AC_DEFINE([HAS_UTIME], [1])])])])])
 
-AC_CHECK_FUNC([utimes], [AC_DEFINE([HAS_UTIMES])])
+AC_CHECK_FUNC([utimes], [AC_DEFINE([HAS_UTIMES], [1])])
 
 AC_CHECK_FUNC([fchmod],
-  [AC_CHECK_FUNC([fchown], [AC_DEFINE([HAS_FCHMOD])])])
+  [AC_CHECK_FUNC([fchown], [AC_DEFINE([HAS_FCHMOD], [1])])])
 
 AC_CHECK_FUNC([truncate],
-  [AC_CHECK_FUNC([ftruncate], [AC_DEFINE([HAS_TRUNCATE])])])
+  [AC_CHECK_FUNC([ftruncate], [AC_DEFINE([HAS_TRUNCATE], [1])])])
 
 ## select
 AC_CHECK_FUNC([select],
   [AC_CHECK_TYPE([fd_set],
-    [AC_DEFINE([HAS_SELECT])
-    select=true], [select=false], [
+    [AC_DEFINE([HAS_SELECT], [1])], [], [
 #include <sys/types.h>
 #include <sys/select.h>
   ])])
 
-AC_CHECK_FUNC([nanosleep], [AC_DEFINE([HAS_NANOSLEEP])])
+AC_CHECK_FUNC([nanosleep], [AC_DEFINE([HAS_NANOSLEEP], [1])])
 
 AC_CHECK_FUNC([symlink],
   [AC_CHECK_FUNC([readlink],
-    [AC_CHECK_FUNC([lstat], [AC_DEFINE([HAS_SYMLINK])])])])
+    [AC_CHECK_FUNC([lstat], [AC_DEFINE([HAS_SYMLINK], [1])])])])
 
-AC_CHECK_FUNC([realpath], [AC_DEFINE([HAS_REALPATH])])
+AC_CHECK_FUNC([realpath], [AC_DEFINE([HAS_REALPATH], [1])])
 
 # wait
 AC_CHECK_FUNC(
   [waitpid],
   [
     wait=true
-    AC_DEFINE([HAS_WAITPID])
+    AC_DEFINE([HAS_WAITPID], [1])
   ],
   [wait=false])
 
@@ -1984,17 +2064,17 @@ AC_CHECK_FUNC(
   [wait4],
   [
     has_wait=true
-    AC_DEFINE([HAS_WAIT4])
+    AC_DEFINE([HAS_WAIT4], [1])
   ])
 
 ## getgroups
-AC_CHECK_FUNC([getgroups], [AC_DEFINE([HAS_GETGROUPS])])
+AC_CHECK_FUNC([getgroups], [AC_DEFINE([HAS_GETGROUPS], [1])])
 
 ## setgroups
-AC_CHECK_FUNC([setgroups], [AC_DEFINE([HAS_SETGROUPS])])
+AC_CHECK_FUNC([setgroups], [AC_DEFINE([HAS_SETGROUPS], [1])])
 
 ## initgroups
-AC_CHECK_FUNC([initgroups], [AC_DEFINE([HAS_INITGROUPS])])
+AC_CHECK_FUNC([initgroups], [AC_DEFINE([HAS_INITGROUPS], [1])])
 
 ## termios
 
@@ -2003,14 +2083,14 @@ AC_CHECK_HEADER([termios.h],
     [AC_CHECK_FUNC([tcsetattr],
       [AC_CHECK_FUNC([tcsendbreak],
         [AC_CHECK_FUNC([tcflush],
-          [AC_CHECK_FUNC([tcflow], [AC_DEFINE([HAS_TERMIOS])])])])])])])
+          [AC_CHECK_FUNC([tcflow], [AC_DEFINE([HAS_TERMIOS], [1])])])])])])])
 
 ## setitimer
 
 AC_CHECK_FUNC([setitimer],
   [
     setitimer=true
-    AC_DEFINE([HAS_SETITIMER])
+    AC_DEFINE([HAS_SETITIMER], [1])
   ],
   [setitimer=false])
 
@@ -2018,63 +2098,63 @@ AC_CHECK_FUNC([setitimer],
 # Note: detection fails on Windows so hardcoding the result
 # (should be debugged later)
 AS_CASE([$host],
-  [*-*-mingw32*|*-pc-windows], [AC_DEFINE([HAS_GETHOSTNAME])],
-  [AC_CHECK_FUNC([gethostname], [AC_DEFINE([HAS_GETHOSTNAME])])])
+  [*-*-mingw32*|*-pc-windows], [AC_DEFINE([HAS_GETHOSTNAME], [1])],
+  [AC_CHECK_FUNC([gethostname], [AC_DEFINE([HAS_GETHOSTNAME], [1])])])
 
 ## uname
 
 AC_CHECK_HEADER([sys/utsname.h],
-  [AC_CHECK_FUNC([uname], [AC_DEFINE([HAS_UNAME])])])
+  [AC_CHECK_FUNC([uname], [AC_DEFINE([HAS_UNAME], [1])])])
 
 ## gettimeofday
 
 AC_CHECK_FUNC([gettimeofday],
   [
     gettimeofday=true
-    AC_DEFINE([HAS_GETTIMEOFDAY])
+    AC_DEFINE([HAS_GETTIMEOFDAY], [1])
   ],
   [gettimeofday=false])
 
 ## mktime
 
-AC_CHECK_FUNC([mktime], [AC_DEFINE([HAS_MKTIME])])
+AC_CHECK_FUNC([mktime], [AC_DEFINE([HAS_MKTIME], [1])])
 
 ## setsid
 
 AS_CASE([$host],
   [*-cygwin|*-*-mingw32*|*-pc-windows], [],
-  [AC_CHECK_FUNC([setsid], [AC_DEFINE([HAS_SETSID])])])
+  [AC_CHECK_FUNC([setsid], [AC_DEFINE([HAS_SETSID], [1])])])
 
 ## putenv
 
-AC_CHECK_FUNC([putenv], [AC_DEFINE([HAS_PUTENV])])
+AC_CHECK_FUNC([putenv], [AC_DEFINE([HAS_PUTENV], [1])])
 
 ## setenv and unsetenv
 
 AC_CHECK_FUNC([setenv],
-  [AC_CHECK_FUNC([unsetenv], [AC_DEFINE([HAS_SETENV_UNSETENV])])])
+  [AC_CHECK_FUNC([unsetenv], [AC_DEFINE([HAS_SETENV_UNSETENV], [1])])])
 
 ## newlocale() and <locale.h>
 # Note: the detection fails on msvc so we hardcode the result
 # (should be debugged later)
 AS_CASE([$host],
-  [*-pc-windows], [AC_DEFINE([HAS_LOCALE_H])],
+  [*-pc-windows], [AC_DEFINE([HAS_LOCALE_H], [1])],
   [AC_CHECK_HEADER([locale.h],
     [AC_CHECK_FUNC([newlocale],
       [AC_CHECK_FUNC([freelocale],
-        [AC_CHECK_FUNC([uselocale], [AC_DEFINE([HAS_LOCALE_H])])])])])])
+        [AC_CHECK_FUNC([uselocale], [AC_DEFINE([HAS_LOCALE_H], [1])])])])])])
 
 AC_CHECK_HEADER([xlocale.h],
   [AC_CHECK_FUNC([newlocale],
     [AC_CHECK_FUNC([freelocale],
-      [AC_CHECK_FUNC([uselocale], [AC_DEFINE([HAS_XLOCALE_H])])])])])
+      [AC_CHECK_FUNC([uselocale], [AC_DEFINE([HAS_XLOCALE_H], [1])])])])])
 
 ## strtod_l
 # Note: not detected on MSVC so hardcoding the result
 # (should be debugged later)
 AS_CASE([$host],
-  [*-pc-windows], [AC_DEFINE([HAS_STRTOD_L])],
-  [AC_CHECK_FUNC([strtod_l], [AC_DEFINE([HAS_STRTOD_L])])])
+  [*-pc-windows], [AC_DEFINE([HAS_STRTOD_L], [1])],
+  [AC_CHECK_FUNC([strtod_l], [AC_DEFINE([HAS_STRTOD_L], [1])])])
 
 ## shared library support
 AS_IF([$supports_shared_libraries],
@@ -2090,18 +2170,18 @@ AS_IF([$supports_shared_libraries],
 
 AS_IF([$supports_shared_libraries],
   [AC_MSG_NOTICE([Dynamic loading of shared libraries is supported.])
-  AC_DEFINE([SUPPORT_DYNAMIC_LINKING])],
+  AC_DEFINE([SUPPORT_DYNAMIC_LINKING], [1])],
   [AC_MSG_NOTICE([Dynamic loading of shared libraries is not supported.])])
 
 ## mmap
 
 AC_CHECK_HEADER([sys/mman.h],
   [AC_CHECK_FUNC([mmap],
-    [AC_CHECK_FUNC([munmap], [AC_DEFINE([HAS_MMAP])])])])
+    [AC_CHECK_FUNC([munmap], [AC_DEFINE([HAS_MMAP], [1])])])])
 
 ## pwrite
 
-AC_CHECK_FUNC([pwrite], [AC_DEFINE([HAS_PWRITE])])
+AC_CHECK_FUNC([pwrite], [AC_DEFINE([HAS_PWRITE], [1])])
 
 ## -fdebug-prefix-map support by the C compiler
 AS_CASE([$ocaml_cc_vendor,$host],
@@ -2109,42 +2189,18 @@ AS_CASE([$ocaml_cc_vendor,$host],
   [*,*-pc-windows], [cc_has_debug_prefix_map=false],
   [xlc*,powerpc-ibm-aix*], [cc_has_debug_prefix_map=false],
   [sunc*,sparc-sun-*], [cc_has_debug_prefix_map=false],
-  [OCAML_CC_HAS_DEBUG_PREFIX_MAP])
+  [AX_CHECK_COMPILE_FLAG([-fdebug-prefix-map=old=new],
+    [cc_has_debug_prefix_map=true], [cc_has_debug_prefix_map=false],
+    [$warn_error_flag])])
 
 ## Does stat support nanosecond precision
 
 stat_has_ns_precision=false
-
-AC_CHECK_MEMBER([struct stat.st_atim.tv_nsec],
-  [stat_has_ns_precision=true
-  AC_DEFINE([HAS_NANOSECOND_STAT], [1])],
-  [],
-  [
+AC_CHECK_MEMBERS([struct stat.st_atim.tv_nsec, struct stat.st_atimespec.tv_nsec,
+  struct stat.st_atimensec],
+  [stat_has_ns_precision=true], [], [
     AC_INCLUDES_DEFAULT
-    #include <sys/stat.h>
-  ])
-
-
-AS_IF([! $stat_has_ns_precision],
-  [AC_CHECK_MEMBER([struct stat.st_atimespec.tv_nsec],
-    [stat_has_ns_precision=true
-    AC_DEFINE([HAS_NANOSECOND_STAT], [2])],
-    [],
-    [
-      AC_INCLUDES_DEFAULT
-      #include <sys/stat.h>
-    ])])
-
-AS_IF([! $stat_has_ns_precision],
-  [AC_CHECK_MEMBER([struct stat.st_atimensec],
-    [stat_has_ns_precision=true
-    AC_DEFINE([HAS_NANOSECOND_STAT], [3])],
-    [],
-    [
-      AC_INCLUDES_DEFAULT
-      #include <sys/stat.h>
-    ])])
-
+    #include <sys/stat.h>])
 AS_IF([$stat_has_ns_precision],
   [AC_MSG_NOTICE([stat supports nanosecond precision])],
   [AC_MSG_NOTICE([stat does not support nanosecond precision])])
@@ -2168,44 +2224,44 @@ AS_CASE([$ac_cv_func_which_gethostbyaddr_r],
 
 ## mkstemp
 
-AC_CHECK_FUNC([mkstemp], [AC_DEFINE([HAS_MKSTEMP])])
+AC_CHECK_FUNC([mkstemp], [AC_DEFINE([HAS_MKSTEMP], [1])])
 
 ## nice
 
-AC_CHECK_FUNC([nice], [AC_DEFINE([HAS_NICE])])
+AC_CHECK_FUNC([nice], [AC_DEFINE([HAS_NICE], [1])])
 
 ## dup3
 
-AC_CHECK_FUNC([dup3], [AC_DEFINE([HAS_DUP3])])
+AC_CHECK_FUNC([dup3], [AC_DEFINE([HAS_DUP3], [1])])
 
 ## pipe2
 
-AC_CHECK_FUNC([pipe2], [AC_DEFINE([HAS_PIPE2])])
+AC_CHECK_FUNC([pipe2], [AC_DEFINE([HAS_PIPE2], [1])])
 
 ## accept4
 
-AC_CHECK_FUNC([accept4], [AC_DEFINE([HAS_ACCEPT4])])
+AC_CHECK_FUNC([accept4], [AC_DEFINE([HAS_ACCEPT4], [1])])
 
 ## getauxval
 
-AC_CHECK_FUNC([getauxval], [AC_DEFINE([HAS_GETAUXVAL])])
+AC_CHECK_FUNC([getauxval], [AC_DEFINE([HAS_GETAUXVAL], [1])])
 
 ## shmat
 AC_CHECK_HEADER([sys/shm.h],
   [
-    AC_DEFINE([HAS_SYS_SHM_H])
-    AC_CHECK_FUNC([shmat], [AC_DEFINE([HAS_SHMAT])])
+    AC_DEFINE([HAS_SYS_SHM_H], [1])
+    AC_CHECK_FUNC([shmat], [AC_DEFINE([HAS_SHMAT], [1])])
   ])
 
 ## execvpe
 
-AC_CHECK_FUNC([execvpe], [AC_DEFINE([HAS_EXECVPE])])
+AC_CHECK_FUNC([execvpe], [AC_DEFINE([HAS_EXECVPE], [1])])
 
 ## posix_spawn
 
 AC_CHECK_HEADER([spawn.h],
   [AC_CHECK_FUNC([posix_spawn],
-    [AC_CHECK_FUNC([posix_spawnp], [AC_DEFINE([HAS_POSIX_SPAWN])])])])
+    [AC_CHECK_FUNC([posix_spawnp], [AC_DEFINE([HAS_POSIX_SPAWN], [1])])])])
 
 AC_PATH_TOOL([PKG_CONFIG], [pkg-config], [false])
 
@@ -2216,7 +2272,7 @@ zstd_libs=""
 
 AS_IF([test x"$with_zstd" != "xno"],
   # Try pkg-config first, as it gives the most reliable results
-  AS_IF([${PKG_CONFIG} libzstd 2>/dev/null],
+  [AS_IF([${PKG_CONFIG} libzstd 2>/dev/null],
     # Now check the version
     [AS_IF([${PKG_CONFIG} --atleast-version 1.4 libzstd],
       [zstd_libs=`${PKG_CONFIG} --libs libzstd`
@@ -2232,7 +2288,7 @@ AS_IF([test x"$with_zstd" != "xno"],
          zstd_status="ok"],
         [zstd_status="zstd library too old: version 1.4 or later is needed"],
         [[#include <zstd.h>]])],
-      [zstd_status="zstd library not found"])]))
+      [zstd_status="zstd library not found"])])])
 
 # When building the mingw-w64 port in Cygwin, it is very easy to have the
 # library available, but not have the DLL in PATH. This then causes the build to
@@ -2275,7 +2331,7 @@ int main(void) {
 AS_IF([test x"$zstd_status" = "xok"],
   [AC_MSG_NOTICE([compressed compilation artefacts supported])
    internal_cppflags="$internal_cppflags $zstd_flags"
-   AC_DEFINE([HAS_ZSTD])],
+   AC_DEFINE([HAS_ZSTD], [1])],
   [AS_CASE(["$with_zstd"],
      [no],
        [],
@@ -2310,17 +2366,19 @@ AS_CASE([$enable_debug_runtime],
 
 AS_CASE([$host],
   [*-*-mingw32*],
-    [PTHREAD_LIBS="-l:libpthread.a -lgcc_eh"],
+    [link_gcc_eh=''
+     AC_CHECK_LIB([gcc_eh], [printf], [link_gcc_eh="-lgcc_eh"])
+     PTHREAD_LIBS="-l:libpthread.a $link_gcc_eh"],
   [*-pc-windows],
-    [PTHREAD_LIBS="-l:libpthread.lib"],
+    [PTHREAD_LIBS=''],
   [AX_PTHREAD(
-    [common_cflags="$common_cflags $PTHREAD_CFLAGS"
+    [
     # The two following lines add flags and libraries for pthread to the
     # global CFLAGS and LIBS variables. This means that all the subsequent
     # tests can rely on the assumption that pthread is enabled.
     CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
     LIBS="$LIBS $PTHREAD_LIBS"
-    AC_CHECK_FUNC([sigwait], [AC_DEFINE([HAS_SIGWAIT])])],
+    AC_CHECK_FUNC([sigwait], [AC_DEFINE([HAS_SIGWAIT], [1])])],
     [AC_MSG_ERROR(m4_normalize([POSIX threads are required but not supported on
       this platform]))])])
 
@@ -2339,7 +2397,7 @@ AC_LINK_IFELSE(
       CPU_COUNT(&cs);
       pthread_getaffinity_np(pthread_self(), sizeof(cs), &cs);]])],
   [AC_MSG_RESULT([GNU])
-  AC_DEFINE([HAS_GNU_GETAFFINITY_NP])],
+  AC_DEFINE([HAS_GNU_GETAFFINITY_NP], [1])],
   [AC_LINK_IFELSE(
     [AC_LANG_PROGRAM(
       [[#include <pthread.h>
@@ -2351,7 +2409,7 @@ AC_LINK_IFELSE(
         CPU_COUNT(&cs);
         pthread_getaffinity_np(pthread_self(), sizeof(cs), &cs);]])],
     [AC_MSG_RESULT([BSD])
-    AC_DEFINE([HAS_BSD_GETAFFINITY_NP])],
+    AC_DEFINE([HAS_BSD_GETAFFINITY_NP], [1])],
     [AC_MSG_RESULT([pthread_getaffinity_np not found])])])
 
 ## Activate the systhread library
@@ -2366,6 +2424,7 @@ AS_CASE([$enable_systhreads,$enable_unix_lib],
   [systhread_support=true
   AC_CONFIG_FILES([otherlibs/systhreads/META])
   otherlibraries="$otherlibraries systhreads"
+  otherlibs="$otherlibs systhreads"
   lib_systhreads=true
   AC_MSG_NOTICE([the threads library is supported])])
 
@@ -2381,12 +2440,16 @@ AS_IF([$native_compiler],
 ## Frame pointers
 
 AS_IF([test x"$enable_frame_pointers" = "xyes"],
-  [AS_CASE(["$host,$ocaml_cc_vendor"],
-    [x86_64-*-linux*,gcc-*|x86_64-*-linux*,clang-*],
-      [common_cflags="$common_cflags -g  -fno-omit-frame-pointer"
-      frame_pointers=true
-      AC_DEFINE([WITH_FRAME_POINTERS])
-      AC_MSG_NOTICE([using frame pointers])],
+  [AS_CASE([$host],
+    [x86_64-*-linux*|x86_64-*-darwin*],
+     [AS_CASE([$ocaml_cc_vendor],
+        [clang-*|gcc-*],
+         [common_cflags="$common_cflags -g  -fno-omit-frame-pointer"
+         frame_pointers=true
+         AC_DEFINE([WITH_FRAME_POINTERS], [1])
+         AC_MSG_NOTICE([using frame pointers])],
+         [AC_MSG_ERROR([frame pointers not supported on this platform])]
+      )],
     [AC_MSG_ERROR([frame pointers not supported on this platform])]
   )],
   [AC_MSG_NOTICE([not using frame pointers])
@@ -2420,7 +2483,9 @@ AC_ARG_WITH([odoc],
 AS_IF([test "x$documentation_tool_cmd" = 'x']
  [documentation_tool_cmd="$documentation_tool"])
 
-
+AS_IF([test x"$enable_ocamlobjinfo" != 'xno'],
+  [build_ocamlobjinfo=true],
+  [build_ocamlobjinfo=false])
 
 AS_CASE([$enable_ocamltest,OCAML__DEVELOPMENT_VERSION],
   [yes,*|,true],
@@ -2474,7 +2539,7 @@ AS_IF([test x"$enable_cmm_invariants" = "xyes"],
 
 AS_IF([test x"$enable_flat_float_array" = "xno"],
   [flat_float_array=false],
-  [AC_DEFINE([FLAT_FLOAT_ARRAY])
+  [AC_DEFINE([FLAT_FLOAT_ARRAY], [1])
   flat_float_array=true])
 
 OCAML_MMAP_SUPPORTS_MAP_STACK
@@ -2484,13 +2549,13 @@ AS_IF([test x"$enable_mmap_map_stack" = "xyes"],
        [*-freebsd*],
          [AC_MSG_ERROR([mmap MAP_STACK not supported on FreeBSD])],
        [with_mmap_map_stack=true;
-        AC_DEFINE([USE_MMAP_MAP_STACK])])],
+        AC_DEFINE([USE_MMAP_MAP_STACK], [1])])],
     [AC_MSG_ERROR([mmap MAP_STACK requested but not found on $target])])
   ],
   [AS_CASE([$target],
     [*-openbsd*],
      [with_mmap_map_stack=true;
-      AC_DEFINE([USE_MMAP_MAP_STACK])
+      AC_DEFINE([USE_MMAP_MAP_STACK], [1])
       AC_MSG_NOTICE([using MAP_STACK on OpenBSD due to stack checking])],
     [with_mmap_map_stack=false])
   ])
@@ -2500,7 +2565,7 @@ oc_native_compflags=''
 AS_IF([test x"$enable_function_sections" = "xno"],
   [function_sections=false],
   [AS_CASE([$arch],
-    [amd64|arm64], # not supported on arm32, see issue #9124.
+    [amd64|arm64|power|riscv|s390x], # not supported on arm32, see issue #9124.
      [AS_CASE([$target],
         [*-cygwin*|*-mingw*|*-windows|*-apple-darwin*],
           [function_sections=false;
@@ -2518,7 +2583,7 @@ AS_IF([test x"$enable_function_sections" = "xno"],
             [function_sections=true;
             oc_native_compflags='-function-sections'
             internal_cflags="$internal_cflags -ffunction-sections";
-            AC_DEFINE([FUNCTION_SECTIONS])],
+            AC_DEFINE([FUNCTION_SECTIONS], [1])],
           [function_sections=false;
           AC_MSG_NOTICE([Function sections are not supported by
           $ocaml_cc_vendor.])])])],
@@ -2541,37 +2606,37 @@ AS_IF([test "$ccomptype" != "msvc"],
 
 oc_cflags="$common_cflags $internal_cflags"
 oc_cppflags="$common_cppflags $internal_cppflags"
-ocamlc_cflags="$ocamlc_cflags $common_cflags $sharedlib_cflags $CFLAGS"
-ocamlc_cppflags="$common_cppflags $CPPFLAGS"
+
+oc_bytecode_cflags="$oc_cflags"
+oc_bytecode_cppflags="$oc_cppflags"
+
+oc_native_cflags="$oc_cflags $oc_native_cflags"
+native_cflags="$common_cflags $native_cflags"
+oc_native_cppflags="$oc_cppflags $oc_native_cppflags"
+
+bytecode_cflags="$common_cflags $sharedlib_cflags\
+ $PTHREAD_CFLAGS $COMPILER_BYTECODE_CFLAGS"
+native_cflags="$native_cflags $PTHREAD_CFLAGS $COMPILER_NATIVE_CFLAGS"
+
+bytecode_cppflags="$common_cppflags $COMPILER_BYTECODE_CPPFLAGS"
+native_cppflags="$common_cppflags $COMPILER_NATIVE_CPPFLAGS"
 
 AS_CASE([$host],
   [*-*-mingw32*],
-    [cclibs="$cclibs -lole32 -luuid -lversion"],
+    [cclibs="$cclibs -lole32 -luuid -lversion -lshlwapi -lsynchronization"],
   [*-pc-windows],
-    [# For whatever reason, flexlink includes -ladvapi32 for mingw-w64, but
-    # doesn't include advapi32.lib for MSVC
-    cclibs="$cclibs ole32.lib uuid.lib advapi32.lib version.lib"])
+    [# For whatever reason, flexlink includes -ladvapi32 and -lshell32 for
+    # mingw-w64, but doesn't include advapi32.lib and shell32.lib for MSVC
+    cclibs="$cclibs ole32.lib uuid.lib advapi32.lib shell32.lib version.lib \
+shlwapi.lib synchronization.lib"])
 
 AC_CONFIG_COMMANDS_PRE([cclibs="$cclibs $mathlib $DLLIBS $PTHREAD_LIBS"])
-
-AS_IF([$tsan],
-  [cclibs="$cclibs -fsanitize=thread"])
 
 AS_IF([test x"$libdir" = x'${exec_prefix}/lib'],
   [libdir="$libdir"/ocaml])
 
 AS_IF([test x"$mandir" = x'${datarootdir}/man'],
   [mandir='${prefix}/man'])
-
-AS_CASE([$host],
-  [*-*-mingw32*|*-pc-windows],
-    [AS_CASE([$WINDOWS_UNICODE_MODE],
-      [ansi],
-        [windows_unicode=0],
-      [compatible|""],
-        [windows_unicode=1],
-      [AC_MSG_ERROR([unexpected windows unicode mode])])],
-  [windows_unicode=0])
 
 # Define default prefix correctly for the different Windows ports
 AS_IF([test x"$prefix" = "xNONE"],
@@ -2590,19 +2655,17 @@ AS_IF([test x"$prefix" = "xNONE"],
 # (all this should be understood and fixed)
 AS_CASE([$host],
   [*-*-mingw32*],
-    [AC_DEFINE([HAS_BROKEN_PRINTF])
-    AC_DEFINE([HAS_STRERROR])
-    AC_DEFINE([HAS_IPV6])
-    AC_DEFINE([HAS_NICE])],
+    [AC_DEFINE([HAS_BROKEN_PRINTF], [1])
+    AC_DEFINE([HAS_IPV6], [1])
+    AC_DEFINE([HAS_NICE], [1])],
   [*-pc-windows],
-    [AC_DEFINE([HAS_BROKEN_PRINTF])
-    AC_DEFINE([HAS_STRERROR])
-    AC_DEFINE([HAS_IPV6])
-    AC_DEFINE([HAS_NICE])],
+    [AC_DEFINE([HAS_BROKEN_PRINTF], [1])
+    AC_DEFINE([HAS_IPV6], [1])
+    AC_DEFINE([HAS_NICE], [1])],
   [*-*-solaris*],
     # This is required as otherwise floats are printed
     # as "Infinity" and "Inf" instead of the expected "inf"
-    [AC_DEFINE([HAS_BROKEN_PRINTF])])
+    [AC_DEFINE([HAS_BROKEN_PRINTF], [1])])
 
 # Do not permanently cache the result of flexdll.h
 unset ac_cv_header_flexdll_h
@@ -2636,9 +2699,6 @@ AC_CONFIG_COMMANDS_PRE([
   # Construct $mkexe
   mkexe="$mkexe_cmd"
   mkexe_exp="$mkexe_cmd_exp"
-  AS_IF([test -n "$mkexe_cflags"],
-    [mkexe="$mkexe $mkexe_cflags"
-    mkexe_exp="$mkexe_exp $common_cflags $CFLAGS"])
   AS_IF([test -n "$mkexe_extra_flags"],
     [mkexe="$mkexe $mkexe_extra_flags"
     mkexe_exp="$mkexe_exp $mkexe_extra_flags"])
@@ -2676,7 +2736,7 @@ ${mkdll_ldflags}"
   ],[
     mkdll_ldflags='$(OC_DLL_LDFLAGS) $(LDFLAGS)'
     mkdll_ldflags_exp="${oc_dll_ldflags}"
-    AS_IF([test -n ${LDFLAGS}],
+    AS_IF([test -n "${LDFLAGS}"],
       [mkdll_ldflags_exp="$mkdll_ldflags_exp $LDFLAGS"])
     mkexe_ldflags="\$(OC_LDFLAGS) \$(LDFLAGS)"
     mkexe_ldflags_exp="${oc_ldflags} ${LDFLAGS}"
@@ -2687,22 +2747,16 @@ ${mkdll_ldflags}"
   mkdll_exp="$mkdll_exp $mkdll_ldflags_exp"
   mkmaindll="$mkmaindll $mkdll_ldflags_exp"
   mkmaindll_exp="$mkmaindll_exp $mkdll_ldflags_exp"
-  # Do similarly with $mkexe_via_cc_ldflags_prefix, but this is only needed for
-  # the msvc ports.
-  AS_IF([test -n "$mkexe_via_cc_ldflags_prefix"],[
-    mkexe_via_cc_ldflags=\
-"\$(addprefix ${mkexe_via_cc_ldflags_prefix},\$(OC_LDFLAGS) \$(LDFLAGS))"
-  ],[
-    mkexe_via_cc_ldflags='$(OC_LDFLAGS) $(LDFLAGS)'
-  ])
+  mkexe_via_cc_ldflags="${mkexe_via_cc_ldflags_prefix}"
+  AS_IF([test -n "${oc_exe_ldflags}"],
+    [mkexe_via_cc_ldflags="${mkexe_via_cc_ldflags}${oc_exe_ldflags} "])
+  mkexe_via_cc_ldflags="${mkexe_via_cc_ldflags}\$(OC_LDFLAGS) \$(LDFLAGS)"
   # cl requires linker flags after the objects.
   AS_IF([test "$ccomptype" = 'msvc'],
     [mkexe_via_cc_ldflags=\
-"\$(OUTPUTEXE)\$(1) \$(2) $mkexe_via_cc_ldflags"],
+"/nologo \$(OUTPUTEXE)\$(1) \$(2) $mkexe_via_cc_ldflags"],
     [mkexe_via_cc_ldflags=\
 "$mkexe_via_cc_ldflags \$(OUTPUTEXE)\$(1) \$(2)"])
-  AS_IF([test -n "$mkexe_via_cc_extra_cmd"],
-    [mkexe_via_cc_ldflags="$mkexe_via_cc_ldflags $mkexe_via_cc_extra_cmd"])
 ])
 
 AC_OUTPUT

@@ -457,9 +457,18 @@ let reset () =
 let binary_backend_available = ref false
 let create_asm_file = ref true
 
-let report_error ppf = function
+let report_error_doc ppf = function
   | Stack_frame_too_large n ->
-      Format.fprintf ppf "stack frame too large (%d bytes)" n
+      Format_doc.fprintf ppf "stack frame too large (%d bytes)" n
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error err -> Some (Location.error_of_printer_file report_error_doc err)
+      | _ -> None
+    )
+
+let report_error = Format_doc.compat report_error_doc
 
 let mk_env f : Emitenv.per_function_env =
   {
@@ -474,3 +483,16 @@ let mk_env f : Emitenv.per_function_env =
     float_literals = [];
     int_literals = [];
   }
+
+let emit_named_text_section func_name prefix_char =
+  if !Clflags.function_sections then begin
+    emit_string "\t.section .text.caml.";
+    emit_symbol func_name;
+    emit_char ',';
+    emit_string_literal "ax";
+    emit_char ',';
+    emit_char prefix_char;
+    emit_string "progbits\n";
+  end
+  else
+    emit_string "\t.text\n"

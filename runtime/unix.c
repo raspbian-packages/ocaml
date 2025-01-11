@@ -27,13 +27,12 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include "caml/config.h"
 #ifdef HAS_GETTIMEOFDAY
 #include <sys/time.h>
 #endif
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <errno.h>
-#include "caml/config.h"
 #if defined(SUPPORT_DYNAMIC_LINKING) && !defined(BUILDING_LIBCAMLRUNS)
 #define WITH_DYNAMIC_LINKING
 #ifdef __CYGWIN__
@@ -47,7 +46,7 @@
 #endif
 #ifdef HAS_POSIX_MONOTONIC_CLOCK
 #include <time.h>
-#elif HAS_CLOCK_GETTIME_NSEC_NP
+#elif defined(HAS_CLOCK_GETTIME_NSEC_NP)
 #include <time.h>
 #endif
 #ifdef HAS_DIRENT
@@ -136,15 +135,13 @@ caml_stat_string caml_decompose_path(struct ext_table * tbl, char * path)
 
 caml_stat_string caml_search_in_path(struct ext_table * path, const char * name)
 {
-  const char * p;
   char * dir, * fullname;
-  int i;
   struct stat st;
 
-  for (p = name; *p != 0; p++) {
+  for (const char *p = name; *p != 0; p++) {
     if (*p == '/') goto not_found;
   }
-  for (i = 0; i < path->size; i++) {
+  for (int i = 0; i < path->size; i++) {
     dir = path->contents[i];
     if (dir[0] == 0) dir = ".";  /* empty path component = current dir */
     fullname = caml_stat_strconcat(3, dir, "/", name);
@@ -176,14 +173,11 @@ static int cygwin_file_exists(const char * name)
 static caml_stat_string cygwin_search_exe_in_path(struct ext_table * path,
                                                   const char * name)
 {
-  const char * p;
   char * dir, * fullname;
-  int i;
-
-  for (p = name; *p != 0; p++) {
+  for (const char *p = name; *p != 0; p++) {
     if (*p == '/' || *p == '\\') goto not_found;
   }
-  for (i = 0; i < path->size; i++) {
+  for (int i = 0; i < path->size; i++) {
     dir = path->contents[i];
     if (dir[0] == 0) dir = ".";  /* empty path component = current dir */
     fullname = caml_stat_strconcat(3, dir, "/", name);

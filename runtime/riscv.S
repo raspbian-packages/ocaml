@@ -32,27 +32,18 @@
 #define C_ARG_3 a2
 #define C_ARG_4 a3
 
-/* Support for CFI directives */
 
-#if defined(ASM_CFI_SUPPORTED)
-#define CFI_STARTPROC .cfi_startproc
-#define CFI_ENDPROC .cfi_endproc
-#define CFI_ADJUST(n) .cfi_adjust_cfa_offset n
-#define CFI_REGISTER(r1,r2) .cfi_register r1,r2
-#define CFI_OFFSET(r,n) .cfi_offset r,n
-#define CFI_DEF_CFA_REGISTER(r) .cfi_def_cfa_register r
-#define CFI_REMEMBER_STATE .cfi_remember_state
-#define CFI_RESTORE_STATE .cfi_restore_state
-#else
-#define CFI_STARTPROC
-#define CFI_ENDPROC
-#define CFI_ADJUST(n)
-#define CFI_REGISTER(r1,r2)
-#define CFI_OFFSET(r,n)
-#define CFI_DEF_CFA_REGISTER(r)
-#define CFI_REMEMBER_STATE
-#define CFI_RESTORE_STATE
-#endif
+/* DWARF
+
+   These RISC-V specific register numbers come from
+   Table 19. "DWARF register number encodings" of:
+
+   RISC-V ABIs Specification, Document Version 1.0
+   https://github.com/riscv-non-isa/riscv-elf-psabi-doc/releases/tag/v1.0
+
+*/
+#define DW_REG_s4                 20
+#define DW_REG_sp                 2
 
         .set    domain_curr_field, 0
 #define DOMAIN_STATE(c_type, name) \
@@ -63,10 +54,29 @@
 
 #define Caml_state(var) (8*domain_field_caml_##var)(DOMAIN_STATE_PTR)
 
+#if defined(FUNCTION_SECTIONS)
+#define TEXT_SECTION(name) \
+        .section .text.caml.##name,"ax",@progbits
+#else
+#define TEXT_SECTION(name) \
+        .section .text
+#endif
+
+#if defined(FUNCTION_SECTIONS)
+        TEXT_SECTION(caml_hot.code_begin)
+        .globl caml_hot.code_begin
+caml_hot.code_begin:
+
+        TEXT_SECTION(caml_hot.code_end)
+        .globl caml_hot.code_end
+caml_hot.code_end:
+#endif
+
 /* Globals and labels */
 #define L(lbl) .L##lbl
 
 #define FUNCTION(name) \
+        TEXT_SECTION(name); \
         .align 2; \
         .globl name; \
         .type  name, @function; \
@@ -94,10 +104,28 @@ name:
 #define END_OBJECT(name) \
         .size   name, .-name
 
+#include "../runtime/caml/asm.h"
+
+/* Function prologue and epilogue */
+
+.macro ENTER_FUNCTION
+        CFI_OFFSET(ra, -8)
+        addi    sp, sp, -16
+        sd      ra, 8(sp)
+        CFI_ADJUST(16)
+.endm
+
+.macro LEAVE_FUNCTION
+        ld      ra, 8(sp)
+        addi    sp, sp, 16
+        CFI_ADJUST(-16)
+.endm
+
 /* Stack switching operations */
 
 /* struct stack_info */
 #define Stack_sp(reg)           0(reg)
+#define Stack_sp_offset         0
 #define Stack_exception(reg)    8(reg)
 #define Stack_handler(reg)      16(reg)
 #define Stack_handler_from_cont(reg) 15(reg)
@@ -105,6 +133,7 @@ name:
 /* struct c_stack_link */
 #define Cstack_stack(reg)       0(reg)
 #define Cstack_sp(reg)          8(reg)
+#define Cstack_sp_offset        8
 #define Cstack_prev(reg)        16(reg)
 
 /* struct stack_handler */
@@ -112,6 +141,7 @@ name:
 #define Handler_exception(reg)  8(reg)
 #define Handler_effect(reg)     16(reg)
 #define Handler_parent(reg)     24(reg)
+#define Handler_parent_offset   24
 
 /* Switch from OCaml to C stack. */
 .macro SWITCH_OCAML_TO_C
@@ -124,7 +154,13 @@ name:
         sd      sp, Cstack_sp(TMP2)
     /* Switch to C stack */
         mv      sp, TMP2
+#ifdef ASM_CFI_SUPPORTED
         CFI_REMEMBER_STATE
+    /* sp points to the c_stack_link. */
+        .cfi_escape DW_CFA_def_cfa_expression, 5,                 \
+           DW_OP_breg + DW_REG_sp, Cstack_sp_offset, DW_OP_deref, \
+           DW_OP_plus_uconst, 16 /* fp + retaddr */
+#endif
 .endm
 
 /* Switch from C to OCaml stack. */
@@ -254,27 +290,12 @@ name:
 
 #if defined(WITH_THREAD_SANITIZER) /* { */
 
-/* Push the current value of the return address to the stack. */
-.macro TSAN_SETUP_C_CALL
-        addi    sp, sp, -16
-        CFI_ADJUST(16)
-        CFI_OFFSET(ra, 8)
-        sd      ra, 8(sp)
-.endm
-
-/* Restore the value of the return address from the stack. */
-.macro TSAN_CLEANUP_AFTER_C_CALL
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
-        CFI_ADJUST(-16)
-.endm
-
 /* Invoke a C function, switching back and forth the OCaml and C stacks. */
 .macro TSAN_C_CALL fun
         SWITCH_OCAML_TO_C
-        TSAN_SETUP_C_CALL
+        ENTER_FUNCTION
         call    PLT(\fun)
-        TSAN_CLEANUP_AFTER_C_CALL
+        LEAVE_FUNCTION
         SWITCH_C_TO_OCAML
 .endm
 
@@ -405,18 +426,16 @@ name:
 
 #endif /* } WITH_THREAD_SANITIZER */
 
-        .section        .text
 /* Invoke the garbage collector. */
 
+        TEXT_SECTION(caml_system__code_begin)
         .globl  caml_system__code_begin
 caml_system__code_begin:
 
 FUNCTION(caml_call_realloc_stack)
+        CFI_SIGNAL_FRAME
     /* Save return address */
-        CFI_OFFSET(ra, -8)
-        addi    sp, sp, -16
-        sd      ra, 8(sp)
-        CFI_ADJUST(16)
+        ENTER_FUNCTION
     /* Save all registers (including ALLOC_PTR & TRAP_PTR) */
         SAVE_ALL_REGS
         ld      C_ARG_1, 16(sp) /* argument */
@@ -426,13 +445,11 @@ FUNCTION(caml_call_realloc_stack)
         beqz    a0, 1f
         RESTORE_ALL_REGS
     /* Free stack space and return to caller */
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
+        LEAVE_FUNCTION
         ret
 1:      RESTORE_ALL_REGS
     /* Raise the Stack_overflow exception */
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
+        LEAVE_FUNCTION
         addi    sp, sp, 16 /* pop argument */
         la      a0, caml_exn_Stack_overflow
         j       L(caml_raise_exn)
@@ -440,11 +457,9 @@ END_FUNCTION(caml_call_realloc_stack)
 
 FUNCTION(caml_call_gc)
 L(caml_call_gc):
+        CFI_SIGNAL_FRAME
     /* Save return address */
-        CFI_OFFSET(ra, -8)
-        addi    sp, sp, -16
-        sd      ra, 8(sp)
-        CFI_ADJUST(16)
+        ENTER_FUNCTION
     /* Store all registers (including ALLOC_PTR & TRAP_PTR) */
         SAVE_ALL_REGS
         TSAN_ENTER_FUNCTION
@@ -455,8 +470,7 @@ L(caml_call_gc):
         TSAN_EXIT_FUNCTION
         RESTORE_ALL_REGS
     /* Free stack space and return to caller */
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
+        LEAVE_FUNCTION
         ret
 END_FUNCTION(caml_call_gc)
 
@@ -502,10 +516,8 @@ END_FUNCTION(caml_allocN)
 
 FUNCTION(caml_c_call)
 L(caml_c_call):
-        CFI_OFFSET(ra, -8)
-        addi    sp, sp, -16
-        sd      ra, 8(sp)
-        CFI_ADJUST(16)
+        CFI_SIGNAL_FRAME
+        ENTER_FUNCTION
         TSAN_SAVE_CALLER_REGS
         TSAN_ENTER_FUNCTION
         TSAN_RESTORE_CALLER_REGS
@@ -516,8 +528,9 @@ L(caml_c_call):
         sd      TRAP_PTR, Caml_state(exn_handler)
     /* Call the function */
         jalr    ADDITIONAL_ARG
-    /* Reload alloc ptr */
+    /* Reload new allocation pointer & exn handler */
         ld      ALLOC_PTR, Caml_state(young_ptr)
+        ld      TRAP_PTR, Caml_state(exn_handler)
     /* Load ocaml stack */
         SWITCH_C_TO_OCAML
 #if defined(WITH_THREAD_SANITIZER)
@@ -538,21 +551,18 @@ L(caml_c_call):
         CFI_ADJUST(-32)
 #endif
     /* Return */
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
+        LEAVE_FUNCTION
         RET_FROM_C_CALL
 END_FUNCTION(caml_c_call)
 
 FUNCTION(caml_c_call_stack_args)
+        CFI_SIGNAL_FRAME
     /* Arguments:
         C arguments  : a0 to a7, fa0 to fa7
         C function   : ADDITIONAL_ARG
         C stack args : begin=STACK_ARG_BEGIN
                        end=STACK_ARG_END */
-        CFI_OFFSET(ra, -8)
-        addi    sp, sp, -16
-        sd      ra, 8(sp)
-        CFI_ADJUST(16)
+        ENTER_FUNCTION
     /* Switch from OCaml to C */
         SWITCH_OCAML_TO_C
     /* Make the exception handler alloc ptr available to the C code */
@@ -575,19 +585,20 @@ FUNCTION(caml_c_call_stack_args)
         jalr    ADDITIONAL_ARG
     /* Restore stack */
         mv      sp, s2
-    /* Reload alloc ptr */
+    /* Reload new allocation pointer & exn handler */
         ld      ALLOC_PTR, Caml_state(young_ptr)
+        ld      TRAP_PTR, Caml_state(exn_handler)
     /* Switch from C to OCaml */
         SWITCH_C_TO_OCAML
     /* Return */
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
+        LEAVE_FUNCTION
         RET_FROM_C_CALL
 END_FUNCTION(caml_c_call_stack_args)
 
 /* Start the OCaml program */
 
 FUNCTION(caml_start_program)
+        CFI_SIGNAL_FRAME
 #if defined(WITH_THREAD_SANITIZER)
         addi    sp, sp, -16
         CFI_ADJUST(16)
@@ -595,9 +606,9 @@ FUNCTION(caml_start_program)
     /* We can't use the TSAN_ENTER_FUNCTION macro here, as it assumes to run
        on an OCaml stack, yet we are still on a C stack at this point. */
         mv      a0, ra
-        TSAN_SETUP_C_CALL
+        ENTER_FUNCTION
         call    PLT(__tsan_func_entry)
-        TSAN_CLEANUP_AFTER_C_CALL
+        LEAVE_FUNCTION
         ld      a0, 0(sp)
         addi    sp, sp, 16
         CFI_ADJUST(-16)
@@ -613,8 +624,10 @@ FUNCTION(caml_start_program)
 
 L(jump_to_caml):
     /* Set up stack frame and save callee-save registers */
+        CFI_OFFSET(s0, -208)
         CFI_OFFSET(ra, -200)
         addi    sp, sp, -208
+        sd      s0, 0(sp)
         sd      ra, 8(sp)
         CFI_ADJUST(208)
         sd      s0, (2*8)(sp)
@@ -648,10 +661,10 @@ L(jump_to_caml):
     /* Build (16-byte aligned) struct c_stack_link on the C stack */
         ld      t2, Caml_state(c_stack)
         addi    sp, sp, -32
+        CFI_ADJUST(32)
         sd      t2, Cstack_prev(sp)
         sd      x0, Cstack_stack(sp)
         sd      x0, Cstack_sp(sp)
-        CFI_ADJUST(32)
         sd      sp, Caml_state(c_stack)
     /* Load the OCaml stack */
         ld      t2, Caml_state(current_stack)
@@ -672,7 +685,18 @@ L(jump_to_caml):
         mv      TRAP_PTR, t2
     /* Switch stacks and call the OCaml code */
         mv      sp, t2
+#ifdef ASM_CFI_SUPPORTED
         CFI_REMEMBER_STATE
+        .cfi_escape DW_CFA_def_cfa_expression, 3 + 2 + 2,             \
+            /* sp points to the exn handler on the OCaml stack */     \
+            /* sp + 16 contains the C_STACK_SP */                     \
+          DW_OP_breg + DW_REG_sp, 16 /* exn handler */, DW_OP_deref,  \
+            /* 32   struct c_stack_link + pad */                      \
+            /* 24*8 callee save regs */                               \
+            /* 16   fp + ret addr */                                  \
+            /* need to split to get under 127 limit */                \
+          DW_OP_plus_uconst, 120, DW_OP_plus_uconst, 120
+#endif
     /* Call the OCaml code */
         jalr    TMP2
 L(caml_retaddr):
@@ -708,9 +732,9 @@ L(return_result):
         CFI_ADJUST(16)
         sd      a0, 0(sp)
         mv      a0, x0
-        TSAN_SETUP_C_CALL
+        ENTER_FUNCTION
         call    PLT(__tsan_func_exit)
-        TSAN_CLEANUP_AFTER_C_CALL
+        LEAVE_FUNCTION
         ld      a0, 0(sp)
         addi    sp, sp, 16
         CFI_ADJUST(-16)
@@ -853,8 +877,7 @@ FUNCTION(caml_raise_exception)
         CFI_ADJUST(-16)
 #endif
     /* Restore frame and link on return to OCaml */
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
+        LEAVE_FUNCTION
         j       L(caml_raise_exn)
 END_FUNCTION(caml_raise_exception)
 
@@ -952,9 +975,7 @@ END_FUNCTION(caml_callback3_asm)
    Preserves old_stack and new_stack registers */
 .macro SWITCH_OCAML_STACKS old_stack, new_stack
     /* Save frame pointer and return address for old_stack */
-        addi    sp, sp, -16
-        sd      ra, 8(sp)
-        CFI_ADJUST(16)
+        ENTER_FUNCTION
     /* Save OCaml SP and exn_handler in the stack info */
         sd      sp, Stack_sp(\old_stack)
         sd      TRAP_PTR, Stack_exception(\old_stack)
@@ -965,8 +986,7 @@ END_FUNCTION(caml_callback3_asm)
     /* restore exn_handler for new stack */
         ld      TRAP_PTR, Stack_exception(\new_stack)
     /* Restore frame pointer and return address for new_stack */
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
+        LEAVE_FUNCTION
 .endm
 
 /*
@@ -995,6 +1015,7 @@ L(do_perform):
         TSAN_C_CALL caml_tsan_exit_on_perform
         TSAN_RESTORE_CALLER_REGS
 #endif
+        sd      a3, 8(a1) /* Set the last fiber field in the continuation */
         ld      t3, Stack_handler(a2)  /* t3 := old stack -> handler */
         ld      t4, Handler_parent(t3) /* t4 := parent stack */
         beqz    t4, 1f
@@ -1133,13 +1154,11 @@ FUNCTION(caml_runstack)
         addi    sp, sp, 32
         CFI_ADJUST(-32)
 #endif
+        CFI_SIGNAL_FRAME
     /*  a0: fiber
         a1: fun
         a2: arg */
-        CFI_OFFSET(ra, -8)
-        addi    sp, sp, -16
-        sd      ra, 8(sp)
-        CFI_ADJUST(16)
+        ENTER_FUNCTION
         addi    a0, a0, -1  /* a0 := Ptr_val(a0) */
         ld      a3, 0(a1)   /* code pointer */
     /*  save old stack pointer and exception handler */
@@ -1162,7 +1181,17 @@ FUNCTION(caml_runstack)
         mv      TRAP_PTR, t3
     /* Switch to the new stack */
         mv      sp, t3
+#ifdef ASM_CFI_SUPPORTED
         CFI_REMEMBER_STATE
+        .cfi_escape DW_CFA_def_cfa_expression, 3+3+2,       \
+          DW_OP_breg + DW_REG_sp,                           \
+            16 /* exn */ +                                  \
+            8 /* gc_regs slot (unused) */ +                 \
+            8 /* C_STACK_SP for DWARF (unused) */           \
+            + Handler_parent_offset, DW_OP_deref,           \
+          DW_OP_plus_uconst, Stack_sp_offset, DW_OP_deref,  \
+          DW_OP_plus_uconst, 16 /* fp + ret addr */
+#endif
     /* Call the function on the new stack */
         mv      a0, a2
         jalr    a3
@@ -1182,6 +1211,7 @@ L(frame_runstack):
         ld      s4, Stack_sp(TMP) /* saved across C call */
         CFI_RESTORE_STATE
         CFI_REMEMBER_STATE
+        CFI_DEF_CFA_REGISTER(DW_REG_s4)
         ld      TMP, Caml_state(c_stack)
         mv      sp, TMP
         call    PLT(caml_free_stack)
@@ -1195,9 +1225,7 @@ L(frame_runstack):
         mv      a1, s2
         ld      TMP, 0(s2)  /* code pointer */
     /* Invoke handle_value (or handle_exn) */
-        ld      ra, 8(sp)
-        addi    sp, sp, 16
-        CFI_ADJUST(-16)
+        LEAVE_FUNCTION
         jr      TMP
 L(fiber_exn_handler):
         addi    t2, sp, 16  /* t2 := stack_handler */
@@ -1212,6 +1240,7 @@ FUNCTION(caml_ml_array_bound_error)
         j       L(caml_c_call)
 END_FUNCTION(caml_ml_array_bound_error)
 
+        TEXT_SECTION(caml_system__code_end)
         .globl  caml_system__code_end
 caml_system__code_end:
 
@@ -1228,3 +1257,6 @@ OBJECT(caml_system.frametable)
         .short  0                 /* no roots */
         .align  3
 END_OBJECT(caml_system.frametable)
+
+/* Mark stack as non-executable */
+        .section .note.GNU-stack,"",%progbits
