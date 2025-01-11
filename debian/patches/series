@@ -4,8 +4,3 @@
 0005-Trigger-output-complete-exe-on-custom-with-an-enviro.patch
 0006-Do-not-error-on-warnings-in-autoconf.patch
 0007-Put-manpages-in-section-3o-instead-of-3.patch
-0008-Filter-out-f-debug-file-prefix-map-from-ocamlc_cflag.patch
-0008-Fix-call-to-test-in-configure.ac.patch
-0009-Rework-fixed-register-assignments-on-m68k.patch
-0010-Avoid-atomic-64-bit-load-on-Debian-armel.patch
-0011-Don-t-use-r12-to-pass-size-to-caml_call_realloc_stac.patch

@@ -16,10 +16,10 @@ Last-Update: <2021-12-21>
  1 file changed, 4 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index 0c9d638..c62f23d 100644
+index 64e6d7e..4d94dc6 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -1249,6 +1249,10 @@ AS_CASE([$host],
+@@ -1353,6 +1353,10 @@ AS_CASE([$host],
      [oc_ldflags="$oc_ldflags -Wl,-z,nobtcfi"
       natdynlinkopts="$natdynlinkopts -Wl,-z,nobtcfi"])
  
