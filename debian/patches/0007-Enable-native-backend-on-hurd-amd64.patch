@@ -1,0 +1,23 @@
+From: Samuel Thibault <sthibault@debian.org>
+Date: Wed, 15 Jan 2025 08:23:51 +0100
+Subject: Enable native backend on hurd-amd64
+
+Bug-Debian: https://bugs.debian.org/1086600
+Forwarded: https://github.com/ocaml/ocaml/pull/13587
+---
+ configure.ac | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index af1ea7b..2f5d2a1 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1490,7 +1490,7 @@ AS_CASE([$host],
+   [x86_64-*-linux*],
+     [has_native_backend=yes; arch=amd64; system=linux],
+   [x86_64-*-gnu*],
+-    [arch=amd64; system=gnu],
++    [has_native_backend=yes; arch=amd64; system=gnu],
+   [x86_64-*-dragonfly*],
+     [arch=amd64; system=dragonfly],
+   [x86_64-*-solaris*],
