@@ -1,3 +1,9 @@
+ocaml (5.3.0-1) unstable; urgency=medium
+
+  * Upload to unstable (Closes: #1092985)
+
+ -- Stéphane Glondu <glondu@debian.org>  Sun, 26 Jan 2025 17:00:54 +0100
+
 ocaml (5.3.0-1~exp2) experimental; urgency=medium
 
   * Run tests with OCAML_TEST_SIZE=1
