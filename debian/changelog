@@ -1,3 +1,9 @@
+ocaml (5.3.0-2) unstable; urgency=medium
+
+  * Enable natdynlink on hurd-amd64 (Closes: #1094334)
+
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 27 Jan 2025 13:17:46 +0100
+
 ocaml (5.3.0-1) unstable; urgency=medium
 
   * Upload to unstable (Closes: #1092985)
