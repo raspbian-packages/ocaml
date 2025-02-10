@@ -1,1 +1,1 @@
-amd64 arm64 kfreebsd-amd64 ppc64el s390x riscv64
+amd64 arm64 hurd-amd64 kfreebsd-amd64 ppc64el s390x riscv64

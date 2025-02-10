@@ -120,6 +120,13 @@ let not_windows = make
     "not running on Windows"
     "running on Windows")
 
+let not_msvc = make
+  ~name:"not-msvc"
+  ~description:"Pass if not using MSVC / clang-cl"
+  (Actions_helpers.pass_or_skip (Ocamltest_config.ccomptype <> "msvc")
+    "not using MSVC / clang-cl"
+    "using MSVC / clang-cl")
+
 let is_bsd_system s =
   match s with
   | "bsd_elf" | "netbsd" | "freebsd" | "openbsd" -> true
@@ -147,6 +154,16 @@ let macos = make
   (Actions_helpers.pass_or_skip (Ocamltest_config.system = macos_system)
     "on a MacOS system"
     "not on a MacOS system")
+
+let not_macos_amd64_tsan = make
+  ~name:"not_macos_amd64_tsan"
+  ~description:"Pass if not running on a MacOS amd64 system with TSan enabled"
+  (Actions_helpers.pass_or_skip
+     (not ((Ocamltest_config.system = macos_system)
+           && (String.equal Ocamltest_config.arch "amd64")
+           && (Ocamltest_config.tsan)))
+     "not on a MacOS amd64 system with TSan enabled"
+     "on a MacOS amd64 system with TSan enabled")
 
 let arch32 = make
   ~name:"arch32"
@@ -196,6 +213,20 @@ let arch_power = make
   (Actions_helpers.pass_or_skip (String.equal Ocamltest_config.arch "power")
     "Target is POWER architecture"
     "Target is not POWER architecture")
+
+let arch_riscv64 = make
+  ~name:"arch_riscv64"
+  ~description:"Pass if target is a RiscV64 architecture"
+  (Actions_helpers.pass_or_skip (String.equal Ocamltest_config.arch "riscv64")
+     "Target is RiscV64 architecture"
+     "Target is not RiscV64 architecture")
+
+let arch_s390x = make
+  ~name:"arch_s390x"
+  ~description:"Pass if target is a S390x architecture"
+  (Actions_helpers.pass_or_skip (String.equal Ocamltest_config.arch "s390x")
+     "Target is S390x architecture"
+     "Target is not S390x architecture")
 
 let function_sections = make
   ~name:"function_sections"
@@ -340,9 +371,11 @@ let _ =
     libwin32unix;
     windows;
     not_windows;
+    not_msvc;
     bsd;
     not_bsd;
     macos;
+    not_macos_amd64_tsan;
     arch32;
     arch64;
     has_symlink;
@@ -356,6 +389,8 @@ let _ =
     arch_amd64;
     arch_i386;
     arch_power;
+    arch_riscv64;
+    arch_s390x;
     function_sections;
     frame_pointers;
     file_exists;

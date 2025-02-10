@@ -1,0 +1,32 @@
+From: Samuel Thibault <sthibault@debian.org>
+Date: Wed, 15 Jan 2025 08:23:51 +0100
+Subject: Enable native backend and dynlink on hurd-amd64
+
+Bug-Debian: https://bugs.debian.org/1086600
+Bug-Debian: https://bugs.debian.org/1094334
+Forwarded: https://github.com/ocaml/ocaml/pull/13587
+---
+ configure.ac | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index af1ea7b..705ab8a 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -1369,6 +1369,7 @@ AS_IF([test x"$supports_shared_libraries" = 'xtrue'],
+     [*-pc-windows], [natdynlink=true],
+     [[i[3456]86-*-linux*]], [natdynlink=true],
+     [[i[3456]86-*-gnu*]], [natdynlink=true],
++    [[x86_64-*-gnu*]], [natdynlink=true],
+     [[x86_64-*-linux*]], [natdynlink=true],
+     [arm64-*-darwin*], [natdynlink=true],
+     [aarch64-*-darwin*], [natdynlink=true],
+@@ -1490,7 +1491,7 @@ AS_CASE([$host],
+   [x86_64-*-linux*],
+     [has_native_backend=yes; arch=amd64; system=linux],
+   [x86_64-*-gnu*],
+-    [arch=amd64; system=gnu],
++    [has_native_backend=yes; arch=amd64; system=gnu],
+   [x86_64-*-dragonfly*],
+     [arch=amd64; system=dragonfly],
+   [x86_64-*-solaris*],

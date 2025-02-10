@@ -33,6 +33,15 @@ type runtime_counter =
 | EV_C_MAJOR_HEAP_POOL_FRAG_WORDS
 | EV_C_MAJOR_HEAP_POOL_LIVE_BLOCKS
 | EV_C_MAJOR_HEAP_LARGE_BLOCKS
+| EV_C_MAJOR_HEAP_WORDS
+| EV_C_MAJOR_ALLOCATED_WORDS
+| EV_C_MAJOR_ALLOCATED_WORK
+| EV_C_MAJOR_DEPENDENT_WORK
+| EV_C_MAJOR_EXTRA_WORK
+| EV_C_MAJOR_WORK_COUNTER
+| EV_C_MAJOR_ALLOC_COUNTER
+| EV_C_MAJOR_SLICE_TARGET
+| EV_C_MAJOR_SLICE_BUDGET
 
 type runtime_phase =
 | EV_EXPLICIT_GC_SET
@@ -44,9 +53,12 @@ type runtime_phase =
 | EV_MAJOR
 | EV_MAJOR_SWEEP
 | EV_MAJOR_MARK_ROOTS
+| EV_MAJOR_MEMPROF_ROOTS
 | EV_MAJOR_MARK
 | EV_MINOR
 | EV_MINOR_LOCAL_ROOTS
+| EV_MINOR_MEMPROF_ROOTS
+| EV_MINOR_MEMPROF_CLEAN
 | EV_MINOR_FINALIZED
 | EV_EXPLICIT_GC_MAJOR_SLICE
 | EV_FINALISE_UPDATE_FIRST
@@ -69,6 +81,7 @@ type runtime_phase =
 | EV_STW_HANDLER
 | EV_STW_LEADER
 | EV_MAJOR_FINISH_SWEEPING
+| EV_MAJOR_MEMPROF_CLEAN
 | EV_MINOR_FINALIZERS_ADMIN
 | EV_MINOR_REMEMBERED_SET
 | EV_MINOR_REMEMBERED_SET_PROMOTE
@@ -117,6 +130,25 @@ let runtime_counter_name counter =
       "major_heap_pool_live_blocks"
   | EV_C_MAJOR_HEAP_LARGE_BLOCKS ->
       "major_heap_large_blocks"
+  | EV_C_MAJOR_HEAP_WORDS ->
+      "major_heap_words"
+  | EV_C_MAJOR_ALLOCATED_WORDS ->
+      "major_allocated_words"
+  | EV_C_MAJOR_ALLOCATED_WORK ->
+      "major_allocated_work"
+  | EV_C_MAJOR_DEPENDENT_WORK ->
+      "major_dependent_work"
+  | EV_C_MAJOR_EXTRA_WORK ->
+      "major_extra_work"
+  | EV_C_MAJOR_WORK_COUNTER ->
+      "major_work_counter"
+  | EV_C_MAJOR_ALLOC_COUNTER ->
+      "major_alloc_counter"
+  | EV_C_MAJOR_SLICE_TARGET ->
+      "major_slice_target"
+  | EV_C_MAJOR_SLICE_BUDGET ->
+      "major_slice_budget"
+
 
 let runtime_phase_name phase =
   match phase with
@@ -129,9 +161,12 @@ let runtime_phase_name phase =
   | EV_MAJOR -> "major"
     | EV_MAJOR_SWEEP -> "major_sweep"
   | EV_MAJOR_MARK_ROOTS -> "major_mark_roots"
+  | EV_MAJOR_MEMPROF_ROOTS -> "major_memprof_roots"
   | EV_MAJOR_MARK -> "major_mark"
   | EV_MINOR -> "minor"
   | EV_MINOR_LOCAL_ROOTS -> "minor_local_roots"
+  | EV_MINOR_MEMPROF_ROOTS -> "minor_memprof_roots"
+  | EV_MINOR_MEMPROF_CLEAN -> "minor_memprof_clean"
   | EV_MINOR_FINALIZED -> "minor_finalized"
   | EV_EXPLICIT_GC_MAJOR_SLICE -> "explicit_gc_major_slice"
   | EV_FINALISE_UPDATE_FIRST -> "finalise_update_first"
@@ -153,6 +188,7 @@ let runtime_phase_name phase =
   | EV_STW_HANDLER -> "stw_handler"
   | EV_STW_LEADER -> "stw_leader"
   | EV_MAJOR_FINISH_SWEEPING -> "major_finish_sweeping"
+  | EV_MAJOR_MEMPROF_CLEAN -> "major_memprof_clean"
   | EV_MINOR_FINALIZERS_ADMIN -> "minor_finalizers_admin"
   | EV_MINOR_REMEMBERED_SET -> "minor_remembered_set"
   | EV_MINOR_REMEMBERED_SET_PROMOTE -> "minor_remembered_set_promote"
@@ -209,11 +245,11 @@ module Type = struct
 
   let int = Int
 
-  let next_id = ref 3
+  let next_id = Atomic.make 3
 
   let register ~encode ~decode =
-    incr next_id;
-    Custom { serialize = encode; deserialize = decode; id = !next_id - 1}
+    let id = Atomic.fetch_and_add next_id 1 in
+    Custom { serialize = encode; deserialize = decode; id; }
 
   let id: type a. a t -> int = function
     | Unit -> 0
@@ -252,7 +288,7 @@ module User = struct
        the write buffer across calls.
 
        To be safe for multi-domain programs, we use domain-local
-       storage for the write buffer. To accomodate for multi-threaded
+       storage for the write buffer. To accommodate for multi-threaded
        programs (without depending on the Thread module), we store
        a list of caches for each domain. This might leak a bit of
        memory: the number of buffers for a domain is equal to the
@@ -365,6 +401,7 @@ end
 external start : unit -> unit = "caml_ml_runtime_events_start"
 external pause : unit -> unit = "caml_ml_runtime_events_pause"
 external resume : unit -> unit = "caml_ml_runtime_events_resume"
+external path : unit -> string option = "caml_ml_runtime_events_path"
 
 external create_cursor : (string * int) option -> cursor
                                         = "caml_ml_runtime_events_create_cursor"

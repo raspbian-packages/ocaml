@@ -238,6 +238,21 @@ type unboxed_number_kind =
   | Boxed of boxed_number * bool (* true: boxed form available at no cost *)
   | No_result (* expression never returns a result *)
 
+(* A value kind [vk] is compatible with a boxed-number kind [bk]
+   if the boxing operation [bk] returns a value that may live in the
+   value kind [vk]. *)
+let compatible_kind vk bk =
+  match bk with
+  | No_unboxing | No_result -> true
+  | Boxed (bn, _) ->
+      match bn, vk with
+      | _, Pgenval -> true
+      | (Boxed_float _ | Boxed_integer _), Pintval -> false
+      | Boxed_float _, Pfloatval -> true
+      | Boxed_integer _, Pfloatval -> false
+      | Boxed_float _, Pboxedintval _ -> false
+      | Boxed_integer (bi1, _), Pboxedintval bi2 -> bi1 = bi2
+
 (* Given unboxed_number_kind from two branches of the code, returns the
    resulting unboxed_number_kind.
 
@@ -259,10 +274,24 @@ let join_unboxed_number_kind ~strict k1 k2 =
       k
   | _, _ -> No_unboxing
 
-let is_unboxed_number_cmm ~strict cmm =
+(* [is_unboxed_number_cmm ~strict ~kind cmm] computes an unboxed
+   number kind for the value returned by the expression [cmm].
+
+   See [join_unboxed_number_kind] above for the meaning of the
+   [~strict] parameter.
+
+   [~kind] is the value kind expected for the return value. If the
+   expression contains branches returning different boxed number
+   kinds, only those that are compatible with the expected return kind
+   are considered -- the other must be unreachable if the program is
+   well-typed. In particular, the unboxed number kind we return shall
+   be compatible with it in the sense of [compatible_kind] above.
+*)
+let is_unboxed_number_cmm ~strict ~kind cmm =
   let r = ref No_result in
   let notify k =
-    r := join_unboxed_number_kind ~strict !r k
+    if compatible_kind kind k then
+      r := join_unboxed_number_kind ~strict !r k
   in
   let rec aux = function
     | Cop(Calloc, [Cconst_natint (hdr, _); _], dbg)
@@ -529,7 +558,7 @@ let rec transl env e =
          | Pandbint _ | Porbint _ | Pxorbint _ | Plslbint _ | Plsrbint _
          | Pasrbint _ | Pbintcomp (_, _) | Pstring_load _ | Pbytes_load _
          | Pbytes_set _ | Pbigstring_load _ | Pbigstring_set _
-         | Pbbswap _), _)
+         | Pbbswap _ | Ppoll ), _)
         ->
           fatal_error "Cmmgen.transl:prim"
       end
@@ -667,7 +696,7 @@ and transl_catch env nfail ids body handler dbg =
            | Pintval | Pgenval -> true
          in
          u := join_unboxed_number_kind ~strict !u
-             (is_unboxed_number_cmm ~strict c)
+             (is_unboxed_number_cmm ~strict ~kind c)
       )
       ids args
   in
@@ -710,7 +739,7 @@ and transl_catch env nfail ids body handler dbg =
 and transl_make_array dbg env kind args =
   match kind with
   | Pgenarray ->
-      Cop(Cextcall("caml_make_array", typ_val, [], true),
+      Cop(Cextcall("caml_array_of_uniform_array", typ_val, [], true),
           [make_alloc dbg 0 (List.map (transl env) args)], dbg)
   | Paddrarray | Pintarray ->
       make_alloc dbg 0 (List.map (transl env) args)
@@ -836,6 +865,9 @@ and transl_prim_1 env p arg dbg =
       Cop(mk_load_atomic Word_int, [transl env arg], dbg)
   | Patomic_load {immediate_or_pointer = Pointer} ->
       Cop(mk_load_atomic Word_val, [transl env arg], dbg)
+  | Ppoll ->
+    (Csequence (remove_unit (transl env arg),
+                return_unit dbg (Cop(Cpoll, [], dbg))))
   | (Pfield_computed | Psequand | Psequor
     | Prunstack | Presume | Preperform
     | Patomic_exchange | Patomic_cas | Patomic_fetch_add
@@ -1038,7 +1070,7 @@ and transl_prim_2 env p arg1 arg2 dbg =
   | Pmakearray (_, _) | Pduparray (_, _) | Parraylength _ | Parraysetu _
   | Parraysets _ | Pbintofint _ | Pintofbint _ | Pcvtbint (_, _)
   | Pnegbint _ | Pbigarrayref (_, _, _, _) | Pbigarrayset (_, _, _, _)
-  | Pbigarraydim _ | Pbytes_set _ | Pbigstring_set _ | Pbbswap _
+  | Pbigarraydim _ | Pbytes_set _ | Pbigstring_set _ | Pbbswap _ | Ppoll
     ->
       fatal_errorf "Cmmgen.transl_prim_2: %a"
         Printclambda_primitives.primitive p
@@ -1116,7 +1148,7 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
   | Psubbint _ | Pmulbint _ | Pdivbint _ | Pmodbint _ | Pandbint _ | Porbint _
   | Pxorbint _ | Plslbint _ | Plsrbint _ | Pasrbint _ | Pbintcomp (_, _)
   | Pbigarrayref (_, _, _, _) | Pbigarrayset (_, _, _, _) | Pbigarraydim _
-  | Pstring_load _ | Pbytes_load _ | Pbigstring_load _ | Pbbswap _
+  | Pstring_load _ | Pbytes_load _ | Pbigstring_load _ | Pbbswap _ | Ppoll
     ->
       fatal_errorf "Cmmgen.transl_prim_3: %a"
         Printclambda_primitives.primitive p
@@ -1149,7 +1181,7 @@ and transl_prim_4 env p arg1 arg2 arg3 arg4 dbg =
   | Psubbint _ | Pmulbint _ | Pdivbint _ | Pmodbint _ | Pandbint _ | Porbint _
   | Pxorbint _ | Plslbint _ | Plsrbint _ | Pasrbint _ | Pbintcomp (_, _)
   | Pbigarrayref (_, _, _, _) | Pbigarrayset (_, _, _, _) | Pbigarraydim _
-  | Pstring_load _ | Pbytes_load _ | Pbigstring_load _ | Pbbswap _
+  | Pstring_load _ | Pbytes_load _ | Pbigstring_load _ | Pbbswap _ | Ppoll
     ->
       fatal_errorf "Cmmgen.transl_prim_3: %a"
         Printclambda_primitives.primitive p
@@ -1190,14 +1222,14 @@ and transl_let env str kind id exp transl_body =
         (* It would be safe to always unbox in this case, but
            we do it only if this indeed allows us to get rid of
            some allocations in the bound expression. *)
-        is_unboxed_number_cmm ~strict:false cexp
+        is_unboxed_number_cmm ~strict:false ~kind cexp
     | _, Pgenval ->
         (* Here we don't know statically that the bound expression
            evaluates to an unboxable number type.  We need to be stricter
            and ensure that all possible branches in the expression
            return a boxed value (of the same kind).  Indeed, with GADTs,
            different branches could return different types. *)
-        is_unboxed_number_cmm ~strict:true cexp
+        is_unboxed_number_cmm ~strict:true ~kind cexp
     | _, Pintval ->
         No_unboxing
   in

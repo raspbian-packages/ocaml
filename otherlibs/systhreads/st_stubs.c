@@ -15,13 +15,16 @@
 
 #define CAML_INTERNALS
 
-#if defined(_WIN32) && !defined(NATIVE_CODE)
+#if defined(_WIN32) && !defined(NATIVE_CODE) && !defined(_MSC_VER)
 /* Ensure that pthread.h marks symbols __declspec(dllimport) so that they can be
    picked up from the runtime (which will have linked winpthreads statically).
    mingw-w64 11.0.0 introduced WINPTHREADS_USE_DLLIMPORT to do this explicitly;
    prior versions co-opted this on the internal DLL_EXPORT, but this is ignored
    in 11.0 and later unless IN_WINPTHREAD is also defined, so we can safely
-   define both to support both versions. */
+   define both to support both versions.
+   When compiling with MSVC, we currently link directly the winpthreads objects
+   into our runtime, so we do not want to mark its symbols with
+   __declspec(dllimport). */
 #define WINPTHREADS_USE_DLLIMPORT
 #define DLL_EXPORT
 #endif
@@ -44,6 +47,7 @@
 #include "caml/printexc.h"
 #include "caml/roots.h"
 #include "caml/signals.h"
+#include "caml/startup_aux.h"
 #include "caml/sync.h"
 #include "caml/sys.h"
 #include "caml/memprof.h"
@@ -115,10 +119,11 @@ struct caml_thread_table {
   st_masterlock thread_lock;
   int tick_thread_running;
   st_thread_id tick_thread_id;
+  atomic_uintnat tick_thread_stop;
 };
 
-/* thread_table instance, up to Max_domains */
-static struct caml_thread_table thread_table[Max_domains];
+/* thread_table instance, up to caml_params->max_domains */
+static struct caml_thread_table* thread_table;
 
 #define Thread_lock(dom_id) &thread_table[dom_id].thread_lock
 
@@ -131,6 +136,9 @@ static void thread_lock_release(int dom_id)
 {
   st_masterlock_release(Thread_lock(dom_id));
 }
+
+/* Used to signal that the "tick" thread for this domain should be stopped. */
+#define Tick_thread_stop thread_table[Caml_state->id].tick_thread_stop
 
 /* The remaining fields are accessed while holding the domain lock */
 
@@ -414,7 +422,6 @@ static void caml_thread_reinitialize(void)
      are hopeless.)
   */
 
-  struct channel * chan;
   caml_thread_t th, next;
 
   th = Active_thread->next;
@@ -443,7 +450,7 @@ static void caml_thread_reinitialize(void)
   /* Reinitialize IO mutexes, in case the fork happened while another thread
      had locked the channel. If so, we're likely in an inconsistent state,
      but we may be able to proceed anyway. */
-  for (chan = caml_all_opened_channels;
+  for (struct channel *chan = caml_all_opened_channels;
        chan != NULL;
        chan = chan->next) {
     caml_plat_mutex_init(&chan->mutex);
@@ -484,9 +491,9 @@ static void caml_thread_domain_stop_hook(void) {
    yet. */
 static void caml_thread_domain_initialize_hook(void)
 {
-
   caml_thread_t new_thread;
 
+  atomic_store_release(&Tick_thread_stop, 0);
   /* OS-specific initialization */
   st_initialize();
 
@@ -502,6 +509,7 @@ static void caml_thread_domain_initialize_hook(void)
   new_thread->prev = new_thread;
   new_thread->backtrace_last_exn = Val_unit;
   new_thread->memprof = caml_memprof_main_thread(Caml_state);
+  new_thread->signal_stack = NULL;
 
   st_tls_set(caml_thread_key, new_thread);
 
@@ -541,6 +549,12 @@ CAMLprim value caml_thread_initialize(value unit)
   if (!caml_domain_alone())
     caml_failwith("caml_thread_initialize: cannot initialize Thread "
                   "while several domains are running.");
+
+  thread_table = caml_stat_calloc_noexc(caml_params->max_domains,
+                                        sizeof(struct caml_thread_table));
+  if (thread_table == NULL)
+    caml_fatal_error("caml_thread_initialize: failed to allocate thread"
+                     " table");
 
   /* Initialize the key to the [caml_thread_t] structure */
   st_tls_newkey(&caml_thread_key);
@@ -649,8 +663,16 @@ static st_retcode create_tick_thread(void)
   pthread_sigmask(SIG_BLOCK, &mask, &old_mask);
 #endif
 
+  struct caml_thread_tick_args* tick_thread_args =
+    caml_stat_alloc_noexc(sizeof(struct caml_thread_tick_args));
+  if (tick_thread_args == NULL)
+    caml_fatal_error("create_tick_thread: failed to allocate thread args");
+
+  tick_thread_args->domain_id = Caml_state->id;
+  tick_thread_args->stop = &Tick_thread_stop;
+
   st_retcode err = st_thread_create(&Tick_thread_id, caml_thread_tick,
-                         (void *) &Caml_state->id);
+                                    (void *)tick_thread_args);
 
 #ifdef POSIX_SIGNALS
   pthread_sigmask(SIG_SETMASK, &old_mask, NULL);

@@ -288,7 +288,7 @@ ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
-	make tests $(IGNORE_TESTS_FAILURE)
+	OCAML_TEST_SIZE=1 make tests $(IGNORE_TESTS_FAILURE)
 endif
 endif
 

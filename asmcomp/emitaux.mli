@@ -87,6 +87,10 @@ type error =
   | Stack_frame_too_large of int
 
 exception Error of error
-val report_error: Format.formatter -> error -> unit
+val report_error: error Format_doc.format_printer
+val report_error_doc: error Format_doc.printer
 
 val mk_env : Linear.fundecl -> Emitenv.per_function_env
+
+(* Output .text section directive, or named .text.caml.<name> if enabled. *)
+val emit_named_text_section : string -> char -> unit
