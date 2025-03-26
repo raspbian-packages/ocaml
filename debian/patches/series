@@ -5,3 +5,4 @@
 0005-Check-for-definition-of-AT_SECURE-before-using-it.patch
 0006-Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
 0007-Enable-native-backend-and-dynlink-on-hurd-amd64.patch
+0008-Mark-tests-that-actually-require-multicore.patch
