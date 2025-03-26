@@ -2,6 +2,8 @@ From: =?utf-8?q?St=C3=A9phane_Glondu?= <glondu@debian.org>
 Date: Wed, 26 Mar 2025 08:39:51 +0100
 Subject: Mark tests that actually require multicore
 
+Bug-Debian: https://bugs.debian.org/1101353
+Forwarded: https://github.com/ocaml/ocaml/pull/13906
 ---
  ocamltest/builtin_actions.ml              | 8 ++++++++
  testsuite/tests/memory-model/forbidden.ml | 1 +

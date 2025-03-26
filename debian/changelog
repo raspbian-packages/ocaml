@@ -1,6 +1,6 @@
 ocaml (5.3.0-3) UNRELEASED; urgency=medium
 
-  * Mark tests that actually require multicore
+  * Mark tests that actually require multicore (Closes: #1101353)
 
  -- Stéphane Glondu <glondu@debian.org>  Wed, 26 Mar 2025 10:22:21 +0100
 
