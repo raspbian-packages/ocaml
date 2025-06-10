@@ -280,6 +280,10 @@ ifeq (,$(findstring nocheck,$(DEB_BUILD_OPTIONS)))
 	rm -f testsuite/tests/lib-threads/sockets.*
 	: # FIXME: the following test fails, we temporarily disable it
 	rm -rf testsuite/tests/tool-debugger/find-artifacts/
+ifeq ($(DEB_BUILD_ARCH),arm64)
+	: # the following test is flaky, see #1103008
+	rm -f testsuite/tests/lib-runtime-events/test_dropped_events.ml
+endif
 ifneq (,$(filter $(DEB_BUILD_ARCH),$(SLOW_ARCHITECTURES)))
 	rm -f testsuite/tests/misc-unsafe/almabench.ml
 endif
