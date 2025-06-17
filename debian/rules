@@ -54,6 +54,7 @@ export DEB_BUILD_MAINT_OPTIONS=hardening=+bindnow
 export CCLINKFLAGS=$(shell dpkg-buildflags --get LDFLAGS)
 
 CONFIGURE_OPTS := \
+  --without-zstd \
   --enable-ocamltest \
   --host $(DEB_BUILD_GNU_TYPE)\
   -prefix $(DEB_TEST_BUILD_PREFIX)/usr \
