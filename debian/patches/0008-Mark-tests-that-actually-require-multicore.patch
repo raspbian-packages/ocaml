@@ -1,0 +1,83 @@
+From: =?utf-8?q?St=C3=A9phane_Glondu?= <glondu@debian.org>
+Date: Wed, 26 Mar 2025 08:39:51 +0100
+Subject: Mark tests that actually require multicore
+
+Bug-Debian: https://bugs.debian.org/1101353
+Forwarded: https://github.com/ocaml/ocaml/pull/13906
+---
+ ocamltest/builtin_actions.ml              | 8 ++++++++
+ testsuite/tests/memory-model/forbidden.ml | 1 +
+ testsuite/tests/memory-model/publish.ml   | 1 +
+ testsuite/tests/parallel/mctest.ml        | 1 +
+ testsuite/tests/parallel/pingpong.ml      | 1 +
+ 5 files changed, 12 insertions(+)
+
+diff --git a/ocamltest/builtin_actions.ml b/ocamltest/builtin_actions.ml
+index 0f06062..c1b783b 100644
+--- a/ocamltest/builtin_actions.ml
++++ b/ocamltest/builtin_actions.ml
+@@ -102,6 +102,13 @@ let hasstr = make
+     "str library available"
+     "str library not available")
+ 
++let multicore = make
++  ~name:"multicore"
++  ~description:"Pass if running on multicore"
++  (Actions_helpers.pass_or_skip (Domain.recommended_domain_count () >= 2)
++    "running on multicore"
++    "not running on multicore")
++
+ let windows_OS = "Windows_NT"
+ 
+ let get_OS () = Sys.safe_getenv "OS"
+@@ -367,6 +374,7 @@ let _ =
+     hasunix;
+     hassysthreads;
+     hasstr;
++    multicore;
+     libunix;
+     libwin32unix;
+     windows;
+diff --git a/testsuite/tests/memory-model/forbidden.ml b/testsuite/tests/memory-model/forbidden.ml
+index 676904c..daf65e5 100644
+--- a/testsuite/tests/memory-model/forbidden.ml
++++ b/testsuite/tests/memory-model/forbidden.ml
+@@ -1,5 +1,6 @@
+ (* TEST
+  modules = "opt.ml barrier.ml hist.ml shared.ml run.ml outcome.ml";
++ multicore;
+  not-bsd;
+  no-tsan; (* tsan detects the intentional data races and fails *)
+  {
+diff --git a/testsuite/tests/memory-model/publish.ml b/testsuite/tests/memory-model/publish.ml
+index a857c6c..cd000ef 100644
+--- a/testsuite/tests/memory-model/publish.ml
++++ b/testsuite/tests/memory-model/publish.ml
+@@ -1,5 +1,6 @@
+ (* TEST
+  modules = "opt.ml barrier.ml hist.ml shared.ml run.ml outcome.ml";
++ multicore;
+  no-tsan; (* tsan detects data races and fails *)
+  not-bsd;
+  {
+diff --git a/testsuite/tests/parallel/mctest.ml b/testsuite/tests/parallel/mctest.ml
+index ea339e3..8e2c51f 100644
+--- a/testsuite/tests/parallel/mctest.ml
++++ b/testsuite/tests/parallel/mctest.ml
+@@ -1,5 +1,6 @@
+ (* TEST
+  include unix;
++ multicore;
+  hasunix;
+  {
+    bytecode;
+diff --git a/testsuite/tests/parallel/pingpong.ml b/testsuite/tests/parallel/pingpong.ml
+index eb43734..2508df5 100644
+--- a/testsuite/tests/parallel/pingpong.ml
++++ b/testsuite/tests/parallel/pingpong.ml
+@@ -1,4 +1,5 @@
+ (* TEST
++ multicore;
+  no-tsan; (* TSan detects the intentional data race *)
+  {
+    bytecode;
