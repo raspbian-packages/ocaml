@@ -10,7 +10,7 @@ Forwarded: https://github.com/ocaml/ocaml/pull/8842
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/otherlibs/unix/envir_unix.c b/otherlibs/unix/envir_unix.c
-index cef6cb0..977db1c 100644
+index 0eaac46..407884b 100644
 --- a/otherlibs/unix/envir_unix.c
 +++ b/otherlibs/unix/envir_unix.c
 @@ -39,7 +39,7 @@ CAMLprim value caml_unix_environment_unsafe(value unit)

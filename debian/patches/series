@@ -4,5 +4,3 @@ Do-not-error-on-warnings-in-autoconf.patch
 Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
 Check-for-definition-of-AT_SECURE-before-using-it.patch
 Disable-DT_TEXTREL-warnings-on-Linux-i386.patch
-Enable-native-backend-and-dynlink-on-hurd-amd64.patch
-Mark-tests-that-actually-require-multicore.patch

@@ -7,7 +7,7 @@ Subject: Put manpages in section 3o instead of 3
  1 file changed, 1 insertion(+)
 
 diff --git a/api_docgen/ocamldoc/Makefile b/api_docgen/ocamldoc/Makefile
-index 5b1f894..71f5a70 100644
+index 058f88c..832cae7 100644
 --- a/api_docgen/ocamldoc/Makefile
 +++ b/api_docgen/ocamldoc/Makefile
 @@ -61,6 +61,7 @@ build/libref/%.odoc: build/%.mld | build/libref
