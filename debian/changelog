@@ -1,3 +1,9 @@
+ocaml (5.3.0-4) UNRELEASED; urgency=medium
+
+  * Build --without-zstd
+
+ -- Stéphane Glondu <glondu@debian.org>  Sun, 12 Oct 2025 11:43:06 +0200
+
 ocaml (5.3.0-3) unstable; urgency=medium
 
   * Mark tests that actually require multicore (Closes: #1101353)
