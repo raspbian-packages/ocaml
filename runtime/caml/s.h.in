@@ -108,9 +108,15 @@
 
 #undef HAS_PTHREAD_NP_H
 
-#undef HAS_UNISTD
+#undef HAS_PRCTL
 
-/* Define HAS_UNISTD if you have /usr/include/unistd.h. */
+#undef HAS_PTHREAD_SETNAME_NP
+
+#undef HAS_PTHREAD_SET_NAME_NP
+
+#undef HAS_SETTHREADDESCRIPTION
+
+#undef HAS_DECL_SETTHREADDESCRIPTION
 
 #undef HAS_DIRENT
 
@@ -294,8 +300,6 @@
 #undef HAS_EXECVPE
 
 #undef HAS_POSIX_SPAWN
-
-#undef HAS_SIGWAIT
 
 #undef HAS_HUGE_PAGES
 

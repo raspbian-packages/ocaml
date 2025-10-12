@@ -450,6 +450,12 @@ evacuation during a compaction.
 Event spanning releasing the evacuated pools at the end of a compaction.
 @since 5.2
 *)
+| EV_EMPTY_MINOR
+(**
+Event spanning a domain needing to empty its minor heap for a new allocation.
+This includes time spent trying to become stop-the-world leader.
+@since 5.4
+*)
 
 (** Lifecycle events for Runtime_events and domains. *)
 type lifecycle =
@@ -515,6 +521,11 @@ module Timestamp : sig
     (** Type for the int64 timestamp to allow for future changes. *)
 
     val to_int64 : t -> int64
+
+    val get_current : unit -> t
+    (** Access the current timestamp. The timestamp is incremented by one
+        every nanosecond, but the starting point is unspecified.
+        @since 5.4 *)
 end
 
 module Type : sig

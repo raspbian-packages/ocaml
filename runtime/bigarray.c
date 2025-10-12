@@ -28,7 +28,7 @@
 #include "caml/memory.h"
 #include "caml/mlvalues.h"
 #include "caml/signals.h"
-#include "caml/atomic_refcount.h"
+#include "caml/camlatomic.h"
 
 #define int8 caml_ba_int8
 #define uint8 caml_ba_uint8
@@ -182,7 +182,7 @@ CAMLexport uintnat caml_ba_num_elts(struct caml_ba_array * b)
 
 /* Size in bytes of a bigarray element, indexed by bigarray kind */
 
-CAMLexport int caml_ba_element_size[] =
+CAMLexport const int caml_ba_element_size[] =
 { 4 /*FLOAT32*/, 8 /*FLOAT64*/,
   1 /*SINT8*/, 1 /*UINT8*/,
   2 /*SINT16*/, 2 /*UINT16*/,
@@ -292,7 +292,7 @@ CAMLexport void caml_ba_finalize(value v)
     if (b->proxy == NULL) {
       free(b->data);
     } else {
-      if (caml_atomic_refcount_decr(&b->proxy->refcount) == 1) {
+      if (caml_atomic_counter_decr(&b->proxy->refcount) == 0) {
         free(b->proxy->data);
         free(b->proxy);
       }
@@ -329,7 +329,7 @@ CAMLexport int caml_ba_compare(value v1, value v2)
   num_elts = caml_ba_num_elts(b1);
 
 #define DO_INTEGER_COMPARISON(type) \
-  { type * p1 = b1->data; type * p2 = b2->data; \
+  { const type * p1 = b1->data; const type * p2 = b2->data; \
     for (uintnat n = 0; n < num_elts; n++) { \
       type e1 = *p1++; type e2 = *p2++; \
       if (e1 < e2) return -1; \
@@ -338,7 +338,7 @@ CAMLexport int caml_ba_compare(value v1, value v2)
     return 0; \
   }
 #define DO_GENERIC_UNORDERED_COMPARISON(ptype, etype, conv) \
-  { ptype * p1 = b1->data; ptype * p2 = b2->data; \
+  { const ptype * p1 = b1->data; const ptype * p2 = b2->data; \
     for (uintnat n = 0; n < num_elts; n++) { \
       etype e1 = conv(*p1++); etype e2 = conv(*p2++); \
       if (e1 < e2) return -1; \
@@ -747,10 +747,10 @@ value caml_ba_get_N(value vb, volatile value * vind, int nind)
   case CAML_BA_CAML_INT:
     return Val_long(((intnat *) b->data)[offset]);
   case CAML_BA_COMPLEX32:
-    { float * p = ((float *) b->data) + offset * 2;
+    { const float * p = ((float *) b->data) + offset * 2;
       return copy_two_doubles((double) p[0], (double) p[1]); }
   case CAML_BA_COMPLEX64:
-    { double * p = ((double *) b->data) + offset * 2;
+    { const double * p = ((double *) b->data) + offset * 2;
       return copy_two_doubles(p[0], p[1]); }
   case CAML_BA_CHAR:
     return Val_int(((unsigned char *) b->data)[offset]);
@@ -1077,12 +1077,12 @@ static void caml_ba_update_proxy(struct caml_ba_array * b1,
     /* If b1 is already a proxy for a larger array, increment refcount of
        proxy */
     b2->proxy = b1->proxy;
-    caml_atomic_refcount_incr(&b1->proxy->refcount);
+    (void)caml_atomic_counter_incr(&b1->proxy->refcount);
   } else {
     /* Otherwise, create proxy and attach it to both b1 and b2 */
     proxy = malloc(sizeof(struct caml_ba_proxy));
     if (proxy == NULL) caml_raise_out_of_memory();
-    caml_atomic_refcount_init(&proxy->refcount, 2);
+    caml_atomic_counter_init(&proxy->refcount, 2);
     /* initial refcount: 2 = original array + sub array */
     proxy->data = b1->data;
     proxy->size =

@@ -26,6 +26,8 @@ let length l = length_aux 0 l
 
 let cons a l = a::l
 
+let singleton a = [a]
+
 let hd = function
     [] -> failwith "hd"
   | a::_ -> a
@@ -295,16 +297,14 @@ let take n l =
     | 0, _ | _, [] -> []
     | n, x::l -> x::aux (n - 1) l
   in
-  if n < 0 then invalid_arg "List.take";
-  aux n l
+  if n <= 0 then [] else aux n l
 
 let drop n l =
   let rec aux i = function
     | _x::l when i < n -> aux (i + 1) l
     | rest -> rest
   in
-  if n < 0 then invalid_arg "List.drop";
-  aux 0 l
+  if n <= 0 then l else aux 0 l
 
 let take_while p l =
   let[@tail_mod_cons] rec aux = function
@@ -442,7 +442,7 @@ let fast_sort = stable_sort
    entries to the resulting list. Impossible now that Obj.truncate has
    been removed. *)
 
-(** sorting + removing duplicates *)
+(** sorting + removing non-first duplicates *)
 
 let sort_uniq cmp l =
   let rec rev_merge l1 l2 accu =
@@ -479,8 +479,8 @@ let sort_uniq cmp l =
         let s =
           let c = cmp x1 x2 in
           if c = 0 then
-            let c = cmp x2 x3 in
-            if c = 0 then [x2] else if c < 0 then [x2; x3] else [x3; x2]
+            let c = cmp x1 x3 in
+            if c = 0 then [x1] else if c < 0 then [x1; x3] else [x3; x1]
           else if c < 0 then
             let c = cmp x2 x3 in
             if c = 0 then [x1; x2]
@@ -519,8 +519,8 @@ let sort_uniq cmp l =
         let s =
           let c = cmp x1 x2 in
           if c = 0 then
-            let c = cmp x2 x3 in
-            if c = 0 then [x2] else if c > 0 then [x2; x3] else [x3; x2]
+            let c = cmp x1 x3 in
+            if c = 0 then [x1] else if c > 0 then [x1; x3] else [x3; x1]
           else if c > 0 then
             let c = cmp x2 x3 in
             if c = 0 then [x1; x2]

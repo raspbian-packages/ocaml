@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "caml/s.h"
-#ifdef HAS_UNISTD
+#ifndef _WIN32
 #include <unistd.h>
 #endif
 #include <fcntl.h>
@@ -160,7 +160,7 @@ static char * read_runtime_path(int fd)
   return runtime_path;
 }
 
-static void errwrite(char * msg)
+static void errwrite(const char * msg)
 {
   fputs(msg, stderr);
 }

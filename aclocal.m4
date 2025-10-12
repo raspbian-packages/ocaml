@@ -30,6 +30,7 @@ m4_include([build-aux/lt~obsolete.m4])
 # Macros from the autoconf macro archive
 m4_include([build-aux/ax_check_compile_flag.m4])
 m4_include([build-aux/ax_func_which_gethostbyname_r.m4])
+m4_include([build-aux/ax_prog_cc_for_build.m4])
 m4_include([build-aux/ax_pthread.m4])
 
 # OCaml version
@@ -94,11 +95,12 @@ AC_DEFUN([OCAML_SIGNAL_HANDLERS_SEMANTICS], [
   )
 ])
 
+dnl $1: extra CFLAGS
 AC_DEFUN([OCAML_CC_SUPPORTS_TREE_VECTORIZE], [
   AC_MSG_CHECKING(
  [whether the C compiler supports __attribute__((optimize("tree-vectorize")))])
   saved_CFLAGS="$CFLAGS"
-  CFLAGS="-Werror $CFLAGS"
+  CFLAGS="$1 $CFLAGS"
   AC_COMPILE_IFELSE(
     [AC_LANG_PROGRAM(
       [[__attribute__((optimize("tree-vectorize"))) void f(void) {}]],
@@ -306,7 +308,7 @@ AC_DEFUN([OCAML_TEST_FLEXLINK], [
     # flexlink can cope. The reverse test is unnecessary (a Cygwin-compiled
     # flexlink can read anything).
     mv conftest.$ac_objext conftest1.$ac_objext
-    AS_CASE([$4],[*-pc-cygwin],
+    AS_CASE([$4],[*-*-cygwin],
       [ln -s conftest1.$ac_objext conftest2.$ac_objext],
       [cp conftest1.$ac_objext conftest2.$ac_objext])
 
@@ -369,27 +371,27 @@ AC_DEFUN([OCAML_TEST_WINPTHREADS_PTHREAD_H], [
   OCAML_CC_RESTORE_VARIABLES
 ])
 
-AC_DEFUN([OCAML_HOST_IS_EXECUTABLE], [
-  AC_MSG_CHECKING([whether host executables can be run in the build])
+AC_DEFUN([OCAML_TARGET_IS_EXECUTABLE], [
+  AC_MSG_CHECKING([whether target executables can be run in the build])
   old_cross_compiling="$cross_compiling"
   cross_compiling='no'
   AC_RUN_IFELSE(
     [AC_LANG_PROGRAM],
     [AC_MSG_RESULT([yes])
-    host_runnable=true],
+    target_runnable=true],
     [AC_MSG_RESULT([no])
-    host_runnable=false],
+    target_runnable=false],
     # autoconf displays a warning if this parameter is missing, but
     # cross-compilation mode was disabled above.
     [assert=false])
   cross_compiling="$old_cross_compiling"
 ])
 
-# This is AC_RUN_IFELSE but taking $host_runnable into account (i.e. if the
+# This is AC_RUN_IFELSE but taking $target_runnable into account (i.e. if the
 # program can be run, then it is run)
 AC_DEFUN([OCAML_RUN_IFELSE], [
   old_cross_compiling="$cross_compiling"
-  AS_IF([test "x$host_runnable" = 'xtrue'], [cross_compiling='no'])
+  AS_IF([test "x$target_runnable" = 'xtrue'], [cross_compiling='no'])
   AC_RUN_IFELSE([$1],[$2],[$3],[$4])
   cross_compiling="$old_cross_compiling"
 ])
@@ -457,7 +459,7 @@ AC_DEFUN([OCAML_C99_CHECK_FMA], [
     AS_CASE([$enable_imprecise_c99_float_ops,$target],
       [no,*], [hard_error=true],
       [yes,*], [hard_error=false],
-      [*,x86_64-w64-mingw32*|*,x86_64-*-cygwin*], [hard_error=false],
+      [*,x86_64-w64-mingw32*|*,x86_64-*-cygwin], [hard_error=false],
       [hard_error=true])
     AS_IF([test x"$hard_error" = "xtrue"],
       [AC_MSG_ERROR(m4_normalize([
@@ -466,7 +468,7 @@ AC_DEFUN([OCAML_C99_CHECK_FMA], [
       [AC_MSG_WARN(m4_normalize([
         fma does not work; emulation enabled]))])],
     [AS_CASE([$target],
-      [x86_64-w64-mingw32*|x86_64-*-cygwin*],
+      [x86_64-w64-mingw32*|x86_64-*-cygwin],
         [AC_MSG_RESULT([cross-compiling; assume not])],
       [AC_MSG_RESULT([cross-compiling; assume yes])
       AC_DEFINE([HAS_WORKING_FMA], [1])])])
@@ -525,6 +527,78 @@ AC_DEFUN([OCAML_CC_SUPPORTS_ATOMIC], [
   OCAML_CC_RESTORE_VARIABLES
 ])
 
+# Detects whether the C compiler generates an explicit .note.GNU-stack section
+# to mark the stack as non-executable, so that we can follow suit
+AC_DEFUN([OCAML_WITH_NONEXECSTACK_NOTE],
+  [AC_REQUIRE([AC_PROG_FGREP])dnl
+  AC_CACHE_CHECK([if $CC generates a .note.GNU-stack section],
+    [ocaml_cv_prog_cc_nonexecstack_note],
+    [OCAML_CC_SAVE_VARIABLES
+
+    # We write the assembly into the .$ac_objext file as AC_COMPILE_IFELSE
+    # assumes an error if such a file doesn't exist after compiling
+    CFLAGS="$CFLAGS -S -o conftest.$ac_objext"
+
+    ocaml_cv_prog_cc_nonexecstack_note=no
+    AC_COMPILE_IFELSE([AC_LANG_SOURCE],
+      [AS_IF([$FGREP .note.GNU-stack conftest.$ac_objext >/dev/null],
+        [ocaml_cv_prog_cc_nonexecstack_note=yes])])
+    OCAML_CC_RESTORE_VARIABLES])
+
+  AS_IF([test "x$ocaml_cv_prog_cc_nonexecstack_note" = xyes],
+    [with_nonexecstack_note=true
+    AC_DEFINE([WITH_NONEXECSTACK_NOTE], [1])],
+    [with_nonexecstack_note=false])
+])
+
+AC_DEFUN([OCAML_ASM_SIZE_TYPE_DIRECTIVES],
+  [AC_REQUIRE([AC_PROG_GREP])dnl
+  AC_CACHE_CHECK([if $CC generates .size and .type asm directives],
+    [ocaml_cv_prog_cc_asm_size_type_directives],
+    [OCAML_CC_SAVE_VARIABLES
+
+    # We write the assembly into the .$ac_objext file as AC_COMPILE_IFELSE
+    # assumes an error if such a file doesn't exist after compiling
+    CFLAGS="$CFLAGS -S -o conftest.$ac_objext"
+
+    ocaml_cv_prog_cc_asm_size_type_directives=no
+    AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+int feat_detect_obj;
+int feat_detect_func(void) {
+  return 42;
+}
+    ]])],
+      [asm_type_obj_directive=no
+      asm_type_func_directive=no
+      asm_size_func_directive=no
+      # We do not look for a .size directive for the object as it is not
+      # generated in that simple case for instance by the compiler
+      # powerpc64le-linux-gnu-gcc 14.2 which emits instead an .lcomm directive
+      AS_IF([$GREP '\.type.*feat_detect_obj' conftest.$ac_objext >/dev/null],
+        [asm_type_obj_directive=yes])
+      AS_IF([$GREP '\.type.*feat_detect_func' conftest.$ac_objext >/dev/null],
+        [asm_type_func_directive=yes])
+      AS_IF([$GREP '\.size.*feat_detect_func' conftest.$ac_objext >/dev/null],
+        [asm_size_func_directive=yes])
+      AS_CASE([m4_join([,],[$asm_type_obj_directive],[$asm_type_func_directive],
+          [$asm_size_func_directive])],
+        [yes,yes,yes],
+          [ocaml_cv_prog_cc_asm_size_type_directives=yes],
+        [no,no,no],
+          [ocaml_cv_prog_cc_asm_size_type_directives=no],
+        [ocaml_cv_prog_cc_asm_size_type_directives=unconclusive])])
+    OCAML_CC_RESTORE_VARIABLES])
+
+  AS_CASE([$ocaml_cv_prog_cc_asm_size_type_directives],
+    [yes],
+      [asm_size_type_directives=true
+      AC_DEFINE([ASM_SIZE_TYPE_DIRECTIVES], [1])],
+    [no],
+      [asm_size_type_directives=false],
+    [AC_MSG_WARN([found inconsistent results for .size and .type directives])
+    asm_size_type_directives=false])
+])
+
 AC_DEFUN([OCAML_CC_SUPPORTS_LABELS_AS_VALUES], [
   AC_CACHE_CHECK([whether $CC supports the labels as values extension],
     [ocaml_cv_prog_cc_labels_as_values],
@@ -542,4 +616,28 @@ AC_DEFUN([OCAML_CC_SUPPORTS_LABELS_AS_VALUES], [
     AC_DEFINE([HAVE_LABELS_AS_VALUES], [1],
       [Define if the C compiler supports the labels as values extension.])
   fi
+])
+
+AC_DEFUN([OCAML_CHECK_LN_ON_WINDOWS], [
+  AC_MSG_CHECKING([for a workable solution for ln -sf])
+  AS_IF([m4_normalize(MSYS=winsymlinks:nativestrict
+                      CYGWIN=winsymlinks:nativestrict
+                      ln -sf configure conftestLink 2>/dev/null)],
+    [ln='ln -sf'],
+    [ln='cp -pf']
+  )
+  AC_MSG_RESULT([$ln])
+])
+
+AC_DEFUN([OCAML_CHECK_WINDOWS_TRIPLET], [
+  AS_CASE([$1],
+    [i686-*-cygwin|x86_64-*-cygwin],[],
+    [*-*-cygwin*],
+      [AC_MSG_ERROR([unknown Cygwin variant])],
+    [i686-w64-mingw32*|x86_64-w64-mingw32*],[],
+    [*-*-mingw*],
+      [AC_MSG_ERROR([unknown mingw-w64 variant])],
+    [i686-pc-windows|x86_64-pc-windows],[],
+    [*-pc-windows*],
+      [AC_MSG_ERROR([unknown MSVC variant])])
 ])

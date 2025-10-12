@@ -19,6 +19,8 @@
 
 #ifdef CAML_INTERNALS
 
+#include <stdbool.h>
+
 #include "camlatomic.h"
 #include "config.h"
 #include "mlvalues.h"
@@ -90,6 +92,20 @@ CAMLextern uintnat caml_minor_heap_max_wsz;
 
 CAMLextern atomic_uintnat caml_num_domains_running;
 
+/* When [caml_domain_alone()] is true, there is a single domain
+   running. In particular, if the test passes while holding the domain
+   lock, then we know that no other domain is running concurrently,
+   and we can use fast paths with fewer synchronization operations.
+
+      // if you hold the domain lock:
+      if (caml_domain_alone()) {
+        // sequential fast path
+        ...
+      } else {
+        // slower concurrent version
+        ...
+      }
+*/
 Caml_inline intnat caml_domain_alone(void)
 {
   return atomic_load_acquire(&caml_num_domains_running) == 1;
@@ -113,6 +129,7 @@ int caml_domain_is_in_stw(void);
 
 int caml_domain_terminating(caml_domain_state *);
 int caml_domain_is_terminating(void);
+void caml_domain_terminate(bool last);
 
 int caml_try_run_on_all_domains_with_spin_work(
   int sync,
@@ -229,6 +246,17 @@ void caml_global_barrier_release_as_final(barrier_status status);
          ((CAML_GENSYM(alone) ? (void)0 :                               \
            caml_global_barrier_release_as_final(CAML_GENSYM(b))),       \
           CAML_GENSYM(continue) = 0))
+
+/*
+ * Termination helpers.
+ */
+
+/* Force all other domains to stop their operation. */
+void caml_stop_all_domains(void);
+
+/* Try and release all synchronisation resources set up by
+   caml_init_domains(). Returns whether all resources could be released. */
+bool caml_free_domains(void);
 
 #endif /* CAML_INTERNALS */
 
