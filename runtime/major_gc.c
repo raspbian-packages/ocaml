@@ -40,40 +40,8 @@
 #include "caml/startup_aux.h"
 #include "caml/weak.h"
 
-/* NB the MARK_STACK_INIT_SIZE must be larger than the number of objects
-   that can be in a pool, see POOL_WSIZE */
-#define MARK_STACK_INIT_SIZE (1 << 12)
-
-/* The mark stack consists of two parts:
-   1. the stack - a dynamic array of spans of fields that need to be marked, and
-   2. the compressed stack - a bitset of fields that need to be marked.
-
-   The stack is bounded relative to the heap size. When the stack
-   overflows the bound, then entries from the stack are compressed and
-   transferred into the compressed stack, expect for "large" entries,
-   spans of more than BITS_PER_WORD entries, that are more compactly
-   represented as spans and remain on the uncompressed stack.
-
-   When the stack is empty, the compressed stack is processed.
-   The compressed stack iterator marks the point up to which
-   compressed stack entries have already been processed.
-*/
-
-typedef struct {
-  value_ptr start;
-  value_ptr end;
-} mark_entry; /* represents fields in the span [start, end) */
-
-struct mark_stack {
-  mark_entry* stack;
-  uintnat count;
-  uintnat size;
-  struct addrmap compressed_stack;
-  addrmap_iterator compressed_stack_iter;
-};
-
 /* Default speed setting for the major GC. */
-uintnat caml_percent_free = Percent_free_def;
+_Atomic uintnat caml_percent_free = Percent_free_def;
 
 /* This variable is only written with the world stopped, so it need not be
    atomic */
@@ -138,20 +106,6 @@ static atomic_uintnat num_domains_to_final_update_last;
    (finalise first) finalisers are processed. */
 static atomic_uintnat num_domains_orphaning_finalisers = 0;
 
-/* These two counters keep track of how much work the GC is supposed to
-   do in order to keep up with allocation. Both are in GC work units.
-   `alloc_counter` increases when we allocate: the number of words allocated
-   is converted to GC work units and added to this counter.
-   `work_counter` increases when the GC has done some work.
-   The difference between the two is how much the GC is lagging behind
-   (or in advance of) allocations.
-   These counters can wrap around (see function `diffmod`) as long as they
-   don't get too far apart, which is guaranteed by the limited size of
-   memory.
-*/
-static atomic_uintnat alloc_counter;
-static atomic_uintnat work_counter;
-
 enum global_roots_status{
   WORK_UNSTARTED,
   WORK_STARTED
@@ -167,7 +121,7 @@ gc_phase_t caml_gc_phase;
    We know of two situations in the runtime that could run in parallel
    with a phase update, and cannot safely access the gc phase:
 
-   - The domain_terminate logic runs after the thread has un-registered
+   - The caml_domain_terminate logic runs after the thread has un-registered
      itself as a STW participant, so it may race with a STW section.
 
    - Opportunistic collections may happen while a domain is waiting on
@@ -193,25 +147,9 @@ Caml_inline char caml_gc_phase_char(int may_access_gc_phase) {
   }
 }
 
-extern value caml_ephe_none; /* See weak.c */
-
-static struct ephe_cycle_info_t {
-  atomic_uintnat num_domains_todo;
-  /* Number of domains that need to scan their ephemerons in the current major
-   * GC cycle. This field is decremented when ephe_info->todo list at a domain
-   * becomes empty.  */
-  atomic_uintnat ephe_cycle;
-  /* Ephemeron cycle count */
-  atomic_uintnat num_domains_done;
-  /* Number of domains that have marked their ephemerons in the current
-   * ephemeron cycle. */
-} ephe_cycle_info;
-  /* In the first major cycle, there is no ephemeron marking to be done. */
-
-/* ephe_cycle_info is always updated with the critical section protected by
- * ephe_lock or in the global barrier. However, the fields may be read without
- * the lock. */
-static caml_plat_mutex ephe_lock = CAML_PLAT_MUTEX_INITIALIZER;
+/*******************************************************************************
+ * Prefetching
+ ******************************************************************************/
 
 #define PREFETCH_BUFFER_SIZE  (1 << 8)
 #define PREFETCH_BUFFER_MIN   64 /* keep pb at least this full */
@@ -292,14 +230,38 @@ Caml_inline void prefetch_block(value v)
   caml_prefetch((const void *)&Field(v, 3));
 }
 
+/*******************************************************************************
+ * Ephemerons
+ ******************************************************************************/
+
+extern value caml_ephe_none; /* See weak.c */
+
+static struct ephe_cycle_info_t {
+  atomic_uintnat num_domains_todo;
+  /* Number of domains that need to scan their ephemerons in the current major
+   * GC cycle. This field is decremented when ephe_info->todo list at a domain
+   * becomes empty.  */
+  atomic_uintnat ephe_cycle;
+  /* Ephemeron cycle count */
+  atomic_uintnat num_domains_done;
+  /* Number of domains that have marked their ephemerons in the current
+   * ephemeron cycle. */
+} ephe_cycle_info;
+  /* In the first major cycle, there is no ephemeron marking to be done. */
+
+/* ephe_cycle_info is always updated with the critical section protected by
+ * ephe_lock or in the global barrier. However, the fields may be read without
+ * the lock. */
+static caml_plat_mutex ephe_lock = CAML_PLAT_MUTEX_INITIALIZER;
+
 static void ephe_next_cycle (void)
 {
   caml_plat_lock_blocking(&ephe_lock);
 
-  atomic_fetch_add(&ephe_cycle_info.ephe_cycle, +1);
-  CAMLassert(atomic_load_acquire(&ephe_cycle_info.num_domains_done) <=
-             atomic_load_acquire(&ephe_cycle_info.num_domains_todo));
-  atomic_store(&ephe_cycle_info.num_domains_done, 0);
+  (void)caml_atomic_counter_incr(&ephe_cycle_info.ephe_cycle);
+  CAMLassert(caml_atomic_counter_value(&ephe_cycle_info.num_domains_done) <=
+             caml_atomic_counter_value(&ephe_cycle_info.num_domains_todo));
+  caml_atomic_counter_init(&ephe_cycle_info.num_domains_done, 0);
 
   caml_plat_unlock(&ephe_lock);
 }
@@ -311,14 +273,14 @@ static void ephe_todo_list_emptied (void)
   /* Force next ephemeron marking cycle in order to avoid reasoning about
    * whether the domain has already incremented
    * [ephe_cycle_info.num_domains_done] counter. */
-  atomic_store(&ephe_cycle_info.num_domains_done, 0);
-  atomic_fetch_add(&ephe_cycle_info.ephe_cycle, +1);
+  caml_atomic_counter_init(&ephe_cycle_info.num_domains_done, 0);
+  (void)caml_atomic_counter_incr(&ephe_cycle_info.ephe_cycle);
 
   /* Since the todo list is empty, this domain does not need to participate in
    * further ephemeron cycles. */
-  atomic_fetch_sub(&ephe_cycle_info.num_domains_todo, 1);
-  CAMLassert(atomic_load_acquire(&ephe_cycle_info.num_domains_done) <=
-             atomic_load_acquire(&ephe_cycle_info.num_domains_todo));
+  (void)caml_atomic_counter_decr(&ephe_cycle_info.num_domains_todo);
+  CAMLassert(caml_atomic_counter_value(&ephe_cycle_info.num_domains_done) <=
+             caml_atomic_counter_value(&ephe_cycle_info.num_domains_todo));
 
   caml_plat_unlock(&ephe_lock);
 }
@@ -326,20 +288,150 @@ static void ephe_todo_list_emptied (void)
 /* Record that ephemeron marking was done for the given ephemeron cycle. */
 static void record_ephe_marking_done (uintnat ephe_cycle)
 {
-  CAMLassert (ephe_cycle <= atomic_load_acquire(&ephe_cycle_info.ephe_cycle));
+  CAMLassert (ephe_cycle <=
+              caml_atomic_counter_value(&ephe_cycle_info.ephe_cycle));
   CAMLassert (Caml_state->marking_done);
 
-  if (ephe_cycle < atomic_load_acquire(&ephe_cycle_info.ephe_cycle))
+  if (ephe_cycle < caml_atomic_counter_value(&ephe_cycle_info.ephe_cycle))
     return;
 
   caml_plat_lock_blocking(&ephe_lock);
-  if (ephe_cycle == atomic_load(&ephe_cycle_info.ephe_cycle)) {
+  if (ephe_cycle == caml_atomic_counter_value(&ephe_cycle_info.ephe_cycle)) {
     Caml_state->ephe_info->cycle = ephe_cycle;
-    atomic_fetch_add(&ephe_cycle_info.num_domains_done, +1);
-    CAMLassert(atomic_load_acquire(&ephe_cycle_info.num_domains_done) <=
-               atomic_load_acquire(&ephe_cycle_info.num_domains_todo));
+    (void)caml_atomic_counter_incr(&ephe_cycle_info.num_domains_done);
+    CAMLassert(caml_atomic_counter_value(&ephe_cycle_info.num_domains_done) <=
+               caml_atomic_counter_value(&ephe_cycle_info.num_domains_todo));
   }
   caml_plat_unlock(&ephe_lock);
+}
+
+#define EPHE_MARK_DEFAULT 0
+#define EPHE_MARK_FORCE_ALIVE 1
+
+static intnat ephe_mark (intnat budget, uintnat for_cycle,
+                         /* Forces ephemerons and their data to be alive */
+                         int force_alive)
+{
+  value v, data, key, f, todo;
+  value* prev_linkp;
+  header_t hd;
+  mlsize_t size, i;
+  caml_domain_state* domain_state = Caml_state;
+  int alive_data;
+  intnat marked = 0, trivial_data = 0, made_live = 0;
+
+  if (domain_state->ephe_info->cursor.cycle == for_cycle &&
+      !force_alive) {
+    prev_linkp = domain_state->ephe_info->cursor.todop;
+    todo = *prev_linkp;
+  } else {
+    todo = domain_state->ephe_info->todo;
+    prev_linkp = &domain_state->ephe_info->todo;
+  }
+  while (todo != 0 && budget > 0) {
+    v = todo;
+    todo = Ephe_link(v);
+    CAMLassert (Tag_val(v) == Abstract_tag);
+    hd = Hd_val(v);
+    data = Ephe_data(v);
+    alive_data = 1;
+
+    if (force_alive)
+      caml_darken (domain_state, v, 0);
+
+    /* If ephemeron is unmarked, data is dead */
+    if (is_unmarked(v)) alive_data = 0;
+
+    size = Wosize_hd(hd);
+    for (i = CAML_EPHE_FIRST_KEY; alive_data && i < size; i++) {
+      key = Ephe_key(v, i);
+    ephemeron_again:
+      if (key != caml_ephe_none && Is_block(key)) {
+        if (Tag_val(key) == Forward_tag) {
+          f = Forward_val(key);
+          if (Is_block(f)) {
+            if (Tag_val(f) == Forward_tag || Tag_val(f) == Lazy_tag ||
+                Tag_val(f) == Forcing_tag || Tag_val(f) == Double_tag) {
+              /* Do not short-circuit the pointer */
+            } else {
+              Field(v, i) = key = f;
+              goto ephemeron_again;
+            }
+          }
+        }
+        else {
+          if (Tag_val (key) == Infix_tag) key -= Infix_offset_val (key);
+          if (is_unmarked (key))
+            alive_data = 0;
+        }
+      }
+    }
+    budget -= Whsize_wosize(i);
+
+    bool keep;
+    if (data == caml_ephe_none || Is_long(data)) {
+      /* Not yet known whether this ephemeron's keys/block will be marked,
+         but since the data is trivial nothing will happen if they are,
+         so remove it from the todo list */
+      trivial_data++;
+      keep = false;
+    } else if (force_alive || alive_data) {
+      /* This ephemeron's keys & block are marked, so mark the data,
+         and remove it from the todo list */
+      caml_darken (domain_state, data, 0);
+      made_live++;
+      keep = false;
+    } else {
+      /* Leave this ephemeron on the todo list */
+      keep = true;
+    }
+
+    if (keep) {
+      prev_linkp = &Ephe_link(v);
+    } else {
+      Ephe_link(v) = domain_state->ephe_info->live;
+      domain_state->ephe_info->live = v;
+      *prev_linkp = todo;
+    }
+    marked++;
+  }
+
+  caml_gc_log
+  ("Mark Ephemeron: %s. Ephemeron cycle=%"ARCH_INTNAT_PRINTF_FORMAT"d "
+   "examined=%"ARCH_INTNAT_PRINTF_FORMAT"d "
+   "trivial_data=%"ARCH_INTNAT_PRINTF_FORMAT"d "
+   "marked=%"ARCH_INTNAT_PRINTF_FORMAT"d",
+   domain_state->ephe_info->cursor.cycle == for_cycle ?
+     "Continued from cursor" : "Discarded cursor",
+   for_cycle, marked, trivial_data, made_live);
+
+  domain_state->ephe_info->cursor.cycle = for_cycle;
+  domain_state->ephe_info->cursor.todop = prev_linkp;
+
+  return budget;
+}
+
+static intnat ephe_sweep (caml_domain_state* domain_state, intnat budget)
+{
+  value v;
+  CAMLassert (caml_gc_phase == Phase_sweep_ephe);
+
+  while (domain_state->ephe_info->todo != 0 && budget > 0) {
+    v = domain_state->ephe_info->todo;
+    domain_state->ephe_info->todo = Ephe_link(v);
+    CAMLassert (Tag_val(v) == Abstract_tag);
+
+    if (is_unmarked(v)) {
+      /* The whole array is dead, drop this ephemeron */
+      budget -= 1;
+    } else {
+      caml_ephe_clean(v);
+      Ephe_link(v) = domain_state->ephe_info->live;
+      domain_state->ephe_info->live = v;
+      budget -= Whsize_val(v);
+    }
+  }
+  return budget;
 }
 
 /*******************************************************************************
@@ -377,22 +469,18 @@ Caml_inline value ephe_list_tail(value e)
 #ifdef DEBUG
 static void orph_ephe_list_verify_status (int status)
 {
-  value v;
+  caml_plat_lock_blocking(&orphaned_lock);
 
-  v = orph_structs.ephe_list_live;
+  value v = orph_structs.ephe_list_live;
 
   while (v) {
     CAMLassert (Tag_val(v) == Abstract_tag);
     CAMLassert (Has_status_val(v, status));
     v = Ephe_link(v);
   }
+  caml_plat_unlock(&orphaned_lock);
 }
 #endif
-
-#define EPHE_MARK_DEFAULT 0
-#define EPHE_MARK_FORCE_ALIVE 1
-
-static intnat ephe_mark (intnat budget, uintnat for_cycle, int force_alive);
 
 void caml_orphan_ephemerons (caml_domain_state* domain_state)
 {
@@ -424,7 +512,7 @@ void caml_orphan_ephemerons (caml_domain_state* domain_state)
 
   if (ephe_info->must_sweep_ephe) {
     ephe_info->must_sweep_ephe = 0;
-    atomic_fetch_add_verify_ge0(&num_domains_to_ephe_sweep, -1);
+    (void)caml_atomic_counter_decr(&num_domains_to_ephe_sweep);
   }
   CAMLassert (ephe_info->must_sweep_ephe == 0);
   CAMLassert (ephe_info->live == 0);
@@ -437,7 +525,7 @@ void caml_orphan_finalisers (caml_domain_state* domain_state)
 
   if (f->todo_head != NULL || f->first.size != 0 || f->last.size != 0) {
     /* have some final structures */
-    atomic_fetch_add(&num_domains_orphaning_finalisers, +1);
+    (void)caml_atomic_counter_incr(&num_domains_orphaning_finalisers);
     if (caml_gc_phase != Phase_sweep_and_mark_main) {
       /* Force a major GC cycle to simplify constraints for orphaning
          finalisers. See note attached to the declaration of
@@ -456,18 +544,19 @@ void caml_orphan_finalisers (caml_domain_state* domain_state)
 
     /* Create a dummy final info */
     f = domain_state->final_info = caml_alloc_final_info();
-    atomic_fetch_add_verify_ge0(&num_domains_orphaning_finalisers, -1);
+    (void)caml_atomic_counter_decr(&num_domains_orphaning_finalisers);
   }
 
-  /* [caml_orphan_finalisers] is called in a while loop in [domain_terminate].
+  /* [caml_orphan_finalisers] is called in a while loop in
+     [caml_domain_terminate].
      We take care to decrement the [num_domains_to_final_update*] counters only
      if we have not already decremented it for the current cycle. */
   if(!f->updated_first) {
-    atomic_fetch_add_verify_ge0(&num_domains_to_final_update_first, -1);
+    (void)caml_atomic_counter_decr(&num_domains_to_final_update_first);
     f->updated_first = 1;
   }
   if(!f->updated_last) {
-    atomic_fetch_add_verify_ge0(&num_domains_to_final_update_last, -1);
+    (void)caml_atomic_counter_decr(&num_domains_to_final_update_last);
     f->updated_last = 1;
   }
 }
@@ -539,6 +628,24 @@ static void adopt_orphaned_work (void)
   }
 }
 
+/*******************************************************************************
+ * Pacing
+ ******************************************************************************/
+
+/* These two counters keep track of how much work the GC is supposed to
+   do in order to keep up with allocation. Both are in GC work units.
+   `alloc_counter` increases when we allocate: the number of words allocated
+   is converted to GC work units and added to this counter.
+   `work_counter` increases when the GC has done some work.
+   The difference between the two is how much the GC is lagging behind
+   (or in advance of) allocations.
+   These counters can wrap around (see function `diffmod`) as long as they
+   don't get too far apart, which is guaranteed by the limited size of
+   memory.
+*/
+static atomic_uintnat alloc_counter;
+static atomic_uintnat work_counter;
+
 static inline intnat max2 (intnat a, intnat b)
 {
   if (a > b){
@@ -576,6 +683,30 @@ static inline intnat diffmod (uintnat x1, uintnat x2)
   return (intnat) (x1 - x2);
 }
 
+/* Reset the work and alloc counters to be equal to each other, by
+ * setting them both equal to the "larger" (in the wrapping-around
+ * sense we are using here for work_counter and alloc_counter).
+ *
+ * For use at times when we have disturbed the major GC from its usual
+ * pacing and tempo, for example, after any synchronous major
+ * collection.
+ */
+
+void caml_reset_major_pacing(void)
+{
+  bool res;
+  do {
+    uintnat alloc = atomic_load(&alloc_counter);
+    uintnat work = atomic_load(&work_counter);
+    uintnat target = alloc;
+    if (diffmod(work, alloc) > 0) {
+      target = work;
+    }
+    res = (atomic_compare_exchange_strong(&alloc_counter, &alloc, target) &&
+           atomic_compare_exchange_strong(&work_counter, &work, target));
+  } while (!res);
+}
+
 /* The [log_events] parameter is used to disable writing to the ring for two
    reasons:
    1. To prevent spamming the ring with numerous events generated during
@@ -591,19 +722,30 @@ update_major_slice_work(intnat howmuch,
 {
   intnat alloc_work, dependent_work, extra_work, new_work;
   intnat my_alloc_count, my_alloc_direct_count, my_dependent_count;
+  intnat my_alloc_suspended_count, my_alloc_resumed_count;
   double my_extra_count;
   caml_domain_state *dom_st = Caml_state;
   uintnat heap_words, heap_size, heap_sweep_words, total_cycle_work;
+  uintnat percent_free;
 
   my_alloc_count = dom_st->allocated_words;
   my_alloc_direct_count = dom_st->allocated_words_direct;
+  my_alloc_suspended_count = dom_st->allocated_words_suspended;
+  my_alloc_resumed_count = dom_st->allocated_words_resumed;
   my_dependent_count = dom_st->dependent_allocated;
   my_extra_count = dom_st->extra_heap_resources;
+
   dom_st->stat_major_words += dom_st->allocated_words;
+  dom_st->current_ramp_up_allocated_words_diff +=
+    dom_st->allocated_words_suspended;
+
   dom_st->allocated_words = 0;
   dom_st->allocated_words_direct = 0;
+  dom_st->allocated_words_suspended = 0;
+  dom_st->allocated_words_resumed = 0;
   dom_st->dependent_allocated = 0;
   dom_st->extra_heap_resources = 0.0;
+
   /*
      Free memory at the start of the GC cycle (garbage + free list) (assumed):
                  FM = heap_words * caml_percent_free
@@ -641,17 +783,21 @@ update_major_slice_work(intnat howmuch,
   heap_size = caml_heap_size(dom_st->shared_heap);
   heap_words = Wsize_bsize(heap_size);
   heap_sweep_words = heap_words;
+  percent_free = atomic_load(&caml_percent_free);
 
   total_cycle_work =
     heap_sweep_words
-    + (uintnat) ((double) heap_words * 100.0 / (100.0 + caml_percent_free));
+    + (uintnat) ((double) heap_words * 100.0 / (100.0 + percent_free));
 
   if (heap_words > 0) {
     double alloc_ratio =
       total_cycle_work
-      * 3.0 * (100 + caml_percent_free)
-      / heap_words / caml_percent_free / 2.0;
-    alloc_work = (intnat) (my_alloc_count * alloc_ratio);
+      * 3.0 * (100 + percent_free)
+      / heap_words / percent_free / 2.0;
+    intnat current_alloc_count =
+      my_alloc_count - my_alloc_suspended_count + my_alloc_resumed_count;
+    CAMLassert (current_alloc_count >= 0);
+    alloc_work = (intnat) (current_alloc_count * alloc_ratio);
   } else {
     alloc_work = 0;
   }
@@ -659,8 +805,8 @@ update_major_slice_work(intnat howmuch,
   if (dom_st->dependent_size > 0) {
     double dependent_ratio =
       total_cycle_work
-      * (100 + caml_percent_free)
-        / (double)dom_st->dependent_size / (double)caml_percent_free;
+      * (100 + percent_free)
+        / (double)dom_st->dependent_size / (double)percent_free;
     dependent_work = (intnat) (my_dependent_count * dependent_ratio);
   }else{
     dependent_work = 0;
@@ -668,30 +814,37 @@ update_major_slice_work(intnat howmuch,
 
   extra_work = (intnat) (my_extra_count * (double) total_cycle_work);
 
-  caml_gc_message (0x40, "heap_words = %"
-                         ARCH_INTNAT_PRINTF_FORMAT "u\n",
-                   (uintnat)heap_words);
-  caml_gc_message (0x40, "allocated_words = %"
-                         ARCH_INTNAT_PRINTF_FORMAT "u\n",
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "heap_words = %" ARCH_INTNAT_PRINTF_FORMAT "u\n",
+                  (uintnat)heap_words);
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "allocated_words = %" ARCH_INTNAT_PRINTF_FORMAT "u\n",
                    my_alloc_count);
-  caml_gc_message (0x40, "allocated_words_direct = %"
-                         ARCH_INTNAT_PRINTF_FORMAT "u\n",
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "allocated_words_direct = %" ARCH_INTNAT_PRINTF_FORMAT "u\n",
                    my_alloc_direct_count);
-  caml_gc_message (0x40, "alloc work-to-do = %"
-                         ARCH_INTNAT_PRINTF_FORMAT "d\n",
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "allocated_words_suspended = "
+                  "%" ARCH_INTNAT_PRINTF_FORMAT "u\n",
+                   my_alloc_suspended_count);
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "allocated_words_resumed = %" ARCH_INTNAT_PRINTF_FORMAT "u\n",
+                   my_alloc_resumed_count);
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "alloc work-to-do = %" ARCH_INTNAT_PRINTF_FORMAT "d\n",
                    alloc_work);
-  caml_gc_message (0x40, "dependent_words = %"
-                         ARCH_INTNAT_PRINTF_FORMAT "u\n",
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "dependent_words = %" ARCH_INTNAT_PRINTF_FORMAT "u\n",
                    my_dependent_count);
-  caml_gc_message (0x40, "dependent work-to-do = %"
-                         ARCH_INTNAT_PRINTF_FORMAT "d\n",
-                   dependent_work);
-  caml_gc_message (0x40, "extra_heap_resources = %"
-                         ARCH_INTNAT_PRINTF_FORMAT "uu\n",
-                   (uintnat) (my_extra_count * 1000000));
-  caml_gc_message (0x40, "extra work-to-do = %"
-                         ARCH_INTNAT_PRINTF_FORMAT "d\n",
-                   extra_work);
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "dependent work-to-do = %" ARCH_INTNAT_PRINTF_FORMAT "d\n",
+                  dependent_work);
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "extra_heap_resources = %" ARCH_INTNAT_PRINTF_FORMAT "uu\n",
+                  (uintnat) (my_extra_count * 1000000));
+  CAML_GC_MESSAGE(SLICESIZE,
+                  "extra work-to-do = %" ARCH_INTNAT_PRINTF_FORMAT "d\n",
+                  extra_work);
 
   new_work = max3 (alloc_work, dependent_work, extra_work);
   atomic_fetch_add (&work_counter, dom_st->major_work_done_between_slices);
@@ -710,6 +863,9 @@ update_major_slice_work(intnat howmuch,
   caml_gc_log("Updated major work: [%c] "
               " %"ARCH_INTNAT_PRINTF_FORMAT "u heap_words, "
               " %"ARCH_INTNAT_PRINTF_FORMAT "u allocated, "
+              " %"ARCH_INTNAT_PRINTF_FORMAT "u allocated (direct), "
+              " %"ARCH_INTNAT_PRINTF_FORMAT "u allocated (suspended), "
+              " %"ARCH_INTNAT_PRINTF_FORMAT "u allocated (resumed), "
               " %"ARCH_INTNAT_PRINTF_FORMAT "d alloc_work, "
               " %"ARCH_INTNAT_PRINTF_FORMAT "d dependent_work, "
               " %"ARCH_INTNAT_PRINTF_FORMAT "d extra_work,  "
@@ -719,7 +875,9 @@ update_major_slice_work(intnat howmuch,
               " %"ARCH_INTNAT_PRINTF_FORMAT "d slice budget"
               ,
               caml_gc_phase_char(may_access_gc_phase),
-              (uintnat)heap_words, my_alloc_count,
+              (uintnat)heap_words,
+              my_alloc_count, my_alloc_direct_count,
+              my_alloc_suspended_count, my_alloc_resumed_count,
               alloc_work, dependent_work, extra_work,
               atomic_load (&work_counter),
               atomic_load (&work_counter) > atomic_load (&alloc_counter)
@@ -731,6 +889,7 @@ update_major_slice_work(intnat howmuch,
   if (log_events) {
     CAML_EV_COUNTER(EV_C_MAJOR_HEAP_WORDS, (uintnat)heap_words);
     CAML_EV_COUNTER(EV_C_MAJOR_ALLOCATED_WORDS, my_alloc_count);
+    /* TODO: add counters for direct, suspended, resumed allocs. */
     CAML_EV_COUNTER(EV_C_MAJOR_ALLOCATED_WORK, alloc_work);
     CAML_EV_COUNTER(EV_C_MAJOR_DEPENDENT_WORK, dependent_work);
     CAML_EV_COUNTER(EV_C_MAJOR_EXTRA_WORK, extra_work);
@@ -781,7 +940,41 @@ static void commit_major_slice_work(intnat words_done) {
   }
 }
 
-static void mark_stack_prune(struct mark_stack* stk);
+/*******************************************************************************
+ * Marking
+ ******************************************************************************/
+
+/* NB the MARK_STACK_INIT_SIZE must be larger than the number of objects
+   that can be in a pool, see POOL_WSIZE */
+#define MARK_STACK_INIT_SIZE (1 << 12)
+
+/* The mark stack consists of two parts:
+   1. the stack - a dynamic array of spans of fields that need to be marked, and
+   2. the compressed stack - a bitset of fields that need to be marked.
+
+   The stack is bounded relative to the heap size. When the stack
+   overflows the bound, then entries from the stack are compressed and
+   transferred into the compressed stack, expect for "large" entries,
+   spans of more than BITS_PER_WORD entries, that are more compactly
+   represented as spans and remain on the uncompressed stack.
+
+   When the stack is empty, the compressed stack is processed.
+   The compressed stack iterator marks the point up to which
+   compressed stack entries have already been processed.
+*/
+
+typedef struct {
+  value_ptr start;
+  value_ptr end;
+} mark_entry; /* represents fields in the span [start, end) */
+
+struct mark_stack {
+  mark_entry* stack;
+  uintnat count;
+  uintnat size;
+  struct addrmap compressed_stack;
+  addrmap_iterator compressed_stack_iter;
+};
 
 #ifdef DEBUG
 #define Is_markable(v) \
@@ -790,6 +983,98 @@ static void mark_stack_prune(struct mark_stack* stk);
 #else
 #define Is_markable(v) (Is_block(v) && !Is_young(v))
 #endif
+
+/* Compressed mark stack
+
+   We use a bitset, implemented as a hashtable storing word-sized
+   integers (uintnat). Each integer represents a "chunk" of addresses
+   that may or may not be present in the stack.
+ */
+static const uintnat chunk_mask = ~(uintnat)(BITS_PER_WORD-1);
+static inline uintnat ptr_to_chunk(value_ptr ptr) {
+  return ((uintnat)(ptr) / sizeof(value)) & chunk_mask;
+}
+static inline uintnat ptr_to_chunk_offset(value_ptr ptr) {
+  return ((uintnat)(ptr) / sizeof(value)) & ~chunk_mask;
+}
+static inline value_ptr chunk_and_offset_to_ptr(uintnat chunk, uintnat offset) {
+  return (value_ptr)((chunk + offset) * sizeof(value));
+}
+
+Caml_inline int add_addr(struct addrmap* amap, value_ptr ptr) {
+  uintnat chunk = ptr_to_chunk(ptr);
+  uintnat offset = ptr_to_chunk_offset(ptr);
+  uintnat flag = (uintnat)1 << offset;
+  int new_entry = 0;
+
+  value* amap_pos = caml_addrmap_insert_pos(amap, chunk);
+
+  if (*amap_pos == ADDRMAP_NOT_PRESENT) {
+    new_entry = 1;
+    *amap_pos = 0;
+  }
+
+  CAMLassert(ptr == chunk_and_offset_to_ptr(chunk, offset));
+
+  if (!(*amap_pos & flag)) {
+    *amap_pos |= flag;
+  }
+
+  return new_entry;
+}
+
+static void mark_stack_prune(struct mark_stack* stk)
+{
+  /* Since addrmap is (currently) using open address hashing, we cannot insert
+     new compressed stack entries into an existing, partially-processed
+     compressed stack. Thus, we create a new compressed stack and insert the
+     unprocessed entries of the existing compressed stack into the new one. */
+  uintnat old_compressed_entries = 0;
+  struct addrmap new_compressed_stack = ADDRMAP_INIT;
+  for (addrmap_iterator it = stk->compressed_stack_iter;
+       caml_addrmap_iter_ok(&stk->compressed_stack, it);
+       it = caml_addrmap_next(&stk->compressed_stack, it)) {
+    value k = caml_addrmap_iter_key(&stk->compressed_stack, it);
+    value v = caml_addrmap_iter_value(&stk->compressed_stack, it);
+    caml_addrmap_insert(&new_compressed_stack, k, v);
+    ++old_compressed_entries;
+  }
+  if (old_compressed_entries > 0) {
+    caml_gc_log("Preserved %"ARCH_INTNAT_PRINTF_FORMAT "d compressed entries",
+                old_compressed_entries);
+  }
+  caml_addrmap_clear(&stk->compressed_stack);
+  stk->compressed_stack = new_compressed_stack;
+
+  /* scan mark stack and compress entries */
+  uintnat new_stk_count = 0, compressed_entries = 0, total_words = 0;
+  for (uintnat i = 0; i < stk->count; i++) {
+    mark_entry me = stk->stack[i];
+    total_words += me.end - me.start;
+    if (me.end - me.start > BITS_PER_WORD) {
+      /* keep entry in the stack as more efficient and move to front */
+      stk->stack[new_stk_count++] = me;
+    } else {
+      while(me.start < me.end) {
+        compressed_entries += add_addr(&stk->compressed_stack,
+                                       me.start);
+        me.start++;
+      }
+    }
+  }
+
+  caml_gc_log("Compressed %"ARCH_INTNAT_PRINTF_FORMAT "d mark stack words into "
+              "%"ARCH_INTNAT_PRINTF_FORMAT "d mark stack entries and "
+              "%"ARCH_INTNAT_PRINTF_FORMAT "d compressed entries",
+              total_words, new_stk_count,
+              compressed_entries+old_compressed_entries);
+
+  stk->count = new_stk_count;
+  CAMLassert(stk->count < stk->size);
+
+  /* setup the compressed stack iterator */
+  stk->compressed_stack_iter = caml_addrmap_iterator(&stk->compressed_stack);
+}
 
 static void realloc_mark_stack (struct mark_stack* stk)
 {
@@ -835,6 +1120,19 @@ static void realloc_mark_stack (struct mark_stack* stk)
   mark_stack_prune(stk);
 }
 
+/* This function is used for reads that may race with a concurrent `caml_modify`
+   from the mutator. Without this, TSan would flag it as a race (see section
+   3.2 of comment in tsan.c); however, we have decided that these races are
+   benign. We therefore use this function instead, ensuring that the read is
+   not seen by TSan. */
+static CAMLno_tsan
+#if defined(WITH_THREAD_SANITIZER)
+Caml_noinline
+#endif
+value volatile_load_uninstrumented(volatile value* p) {
+  return *p;
+}
+
 Caml_inline void mark_stack_push_range(struct mark_stack* stk,
                                        value_ptr start, value_ptr end)
 {
@@ -875,7 +1173,7 @@ static intnat mark_stack_push_block(struct mark_stack* stk, value block)
   end = (block_wsz < 8 ? block_wsz : 8);
 
   for (i = offset; i < end; i++) {
-    value v = Field(block, i);
+    value v = volatile_load_uninstrumented(&Field(block, i));
 
     if (Is_markable(v))
       break;
@@ -965,14 +1263,6 @@ static void mark_slice_darken(struct mark_stack* stk, value child,
       }
     }
   }
-}
-
-static CAMLno_tsan
-#if defined(WITH_THREAD_SANITIZER)
-Caml_noinline
-#endif
-value volatile_load_uninstrumented(volatile value* p) {
-  return *p;
 }
 
 Caml_noinline static intnat do_some_marking(struct mark_stack* stk,
@@ -1073,10 +1363,6 @@ again:
     for (; me.start < scan_end; me.start++) {
       CAMLassert(budget >= 0);
 
-      /* This load may race with a concurrent caml_modify. It does not
-         constitute a data race as this is a volatile load. However, TSan will
-         wrongly see a race here (see section 3.2 of comment in tsan.c). We
-         therefore make sure it is never TSan-instrumented. */
       value child = volatile_load_uninstrumented(me.start);
 
       budget--;
@@ -1107,23 +1393,6 @@ again:
   return budget;
 }
 
-/* Compressed mark stack
-
-   We use a bitset, implemented as a hashtable storing word-sized
-   integers (uintnat). Each integer represents a "chunk" of addresses
-   that may or may not be present in the stack.
- */
-static const uintnat chunk_mask = ~(uintnat)(BITS_PER_WORD-1);
-static inline uintnat ptr_to_chunk(value_ptr ptr) {
-  return ((uintnat)(ptr) / sizeof(value)) & chunk_mask;
-}
-static inline uintnat ptr_to_chunk_offset(value_ptr ptr) {
-  return ((uintnat)(ptr) / sizeof(value)) & ~chunk_mask;
-}
-static inline value_ptr chunk_and_offset_to_ptr(uintnat chunk, uintnat offset) {
-  return (value_ptr)((chunk + offset) * sizeof(value));
-}
-
 /* mark until the budget runs out or marking is done */
 static intnat mark(intnat budget) {
   caml_domain_state *domain_state = Caml_state;
@@ -1151,7 +1420,7 @@ static intnat mark(intnat budget) {
       } else {
         ephe_next_cycle ();
         domain_state->marking_done = 1;
-        atomic_fetch_add_verify_ge0(&num_domains_to_mark, -1);
+        (void)caml_atomic_counter_decr(&num_domains_to_mark);
       }
     }
   }
@@ -1202,7 +1471,7 @@ void caml_darken(void* state, value v, volatile value* ignored) {
   if (Has_status_hd(hd, caml_global_heap_state.UNMARKED)) {
     caml_domain_state* domain_state = (caml_domain_state*)state;
     if (domain_state->marking_done) {
-      atomic_fetch_add(&num_domains_to_mark, 1);
+      (void)caml_atomic_counter_incr(&num_domains_to_mark);
       domain_state->marking_done = 0;
     }
     if (Tag_hd(hd) == Cont_tag) {
@@ -1218,117 +1487,9 @@ void caml_darken(void* state, value v, volatile value* ignored) {
   }
 }
 
-static intnat ephe_mark (intnat budget, uintnat for_cycle,
-                         /* Forces ephemerons and their data to be alive */
-                         int force_alive)
-{
-  value v, data, key, f, todo;
-  value* prev_linkp;
-  header_t hd;
-  mlsize_t size, i;
-  caml_domain_state* domain_state = Caml_state;
-  int alive_data;
-  intnat marked = 0, made_live = 0;
-
-  if (domain_state->ephe_info->cursor.cycle == for_cycle &&
-      !force_alive) {
-    prev_linkp = domain_state->ephe_info->cursor.todop;
-    todo = *prev_linkp;
-  } else {
-    todo = domain_state->ephe_info->todo;
-    prev_linkp = &domain_state->ephe_info->todo;
-  }
-  while (todo != 0 && budget > 0) {
-    v = todo;
-    todo = Ephe_link(v);
-    CAMLassert (Tag_val(v) == Abstract_tag);
-    hd = Hd_val(v);
-    data = Ephe_data(v);
-    alive_data = 1;
-
-    if (force_alive)
-      caml_darken (domain_state, v, 0);
-
-    /* If ephemeron is unmarked, data is dead */
-    if (is_unmarked(v)) alive_data = 0;
-
-    size = Wosize_hd(hd);
-    for (i = CAML_EPHE_FIRST_KEY; alive_data && i < size; i++) {
-      key = Field(v, i);
-    ephemeron_again:
-      if (key != caml_ephe_none && Is_block(key)) {
-        if (Tag_val(key) == Forward_tag) {
-          f = Forward_val(key);
-          if (Is_block(f)) {
-            if (Tag_val(f) == Forward_tag || Tag_val(f) == Lazy_tag ||
-                Tag_val(f) == Forcing_tag || Tag_val(f) == Double_tag) {
-              /* Do not short-circuit the pointer */
-            } else {
-              Field(v, i) = key = f;
-              goto ephemeron_again;
-            }
-          }
-        }
-        else {
-          if (Tag_val (key) == Infix_tag) key -= Infix_offset_val (key);
-          if (is_unmarked (key))
-            alive_data = 0;
-        }
-      }
-    }
-    budget -= Whsize_wosize(i);
-
-    if (force_alive || alive_data) {
-      if (data != caml_ephe_none && Is_block(data)) {
-        caml_darken (domain_state, data, 0);
-      }
-      Ephe_link(v) = domain_state->ephe_info->live;
-      domain_state->ephe_info->live = v;
-      *prev_linkp = todo;
-      made_live++;
-    } else {
-      /* Leave this ephemeron on the todo list */
-      prev_linkp = &Ephe_link(v);
-    }
-    marked++;
-  }
-
-  caml_gc_log
-  ("Mark Ephemeron: %s. Ephemeron cycle=%"ARCH_INTNAT_PRINTF_FORMAT"d "
-   "examined=%"ARCH_INTNAT_PRINTF_FORMAT"d "
-   "marked=%"ARCH_INTNAT_PRINTF_FORMAT"d",
-   domain_state->ephe_info->cursor.cycle == for_cycle ?
-     "Continued from cursor" : "Discarded cursor",
-   for_cycle, marked, made_live);
-
-  domain_state->ephe_info->cursor.cycle = for_cycle;
-  domain_state->ephe_info->cursor.todop = prev_linkp;
-
-  return budget;
-}
-
-static intnat ephe_sweep (caml_domain_state* domain_state, intnat budget)
-{
-  value v;
-  CAMLassert (caml_gc_phase == Phase_sweep_ephe);
-
-  while (domain_state->ephe_info->todo != 0 && budget > 0) {
-    v = domain_state->ephe_info->todo;
-    domain_state->ephe_info->todo = Ephe_link(v);
-    CAMLassert (Tag_val(v) == Abstract_tag);
-
-    if (is_unmarked(v)) {
-      /* The whole array is dead, drop this ephemeron */
-      budget -= 1;
-    } else {
-      caml_ephe_clean(v);
-      Ephe_link(v) = domain_state->ephe_info->live;
-      domain_state->ephe_info->live = v;
-      budget -= Whsize_val(v);
-    }
-  }
-  return budget;
-}
+/*******************************************************************************
+ * Major GC cycle
+ ******************************************************************************/
 
 static void cycle_major_heap_from_stw_single(
   caml_domain_state* domain,
@@ -1342,9 +1503,9 @@ static void cycle_major_heap_from_stw_single(
               (long unsigned int)caml_major_cycles_completed);
 
   caml_major_cycles_completed++;
-  caml_gc_message(0x40, "Starting major GC cycle\n");
+  CAML_GC_MESSAGE(SLICESIZE, "Starting major GC cycle\n");
 
-  if (atomic_load_relaxed(&caml_verb_gc) & 0x400) {
+  if (atomic_load_relaxed(&caml_verb_gc) & CAML_GC_MSG_STATS) {
     struct gc_stats s;
     intnat heap_words, not_garbage_words, swept_words;
 
@@ -1388,22 +1549,23 @@ static void cycle_major_heap_from_stw_single(
 
   domain->swept_words = 0;
 
-  atomic_store_release(&num_domains_to_sweep, num_domains_in_stw);
-  atomic_store_release(&num_domains_to_mark, num_domains_in_stw);
+  caml_atomic_counter_init(&num_domains_to_sweep, num_domains_in_stw);
+  caml_atomic_counter_init(&num_domains_to_mark, num_domains_in_stw);
 
   caml_gc_phase = Phase_sweep_and_mark_main;
-  atomic_store(&ephe_cycle_info.num_domains_todo, num_domains_in_stw);
-  atomic_store(&ephe_cycle_info.ephe_cycle, 1);
-  atomic_store(&ephe_cycle_info.num_domains_done, 0);
+  caml_atomic_counter_init(&ephe_cycle_info.num_domains_todo,
+                           num_domains_in_stw);
+  caml_atomic_counter_init(&ephe_cycle_info.ephe_cycle, 1);
+  caml_atomic_counter_init(&ephe_cycle_info.num_domains_done, 0);
 
-  atomic_store_release(&num_domains_to_ephe_sweep, 0);
+  caml_atomic_counter_init(&num_domains_to_ephe_sweep, 0);
   /* Will be set to the correct number when switching to
      [Phase_sweep_ephe] */
 
-  atomic_store_release(&num_domains_to_final_update_first,
-                       num_domains_in_stw);
-  atomic_store_release(&num_domains_to_final_update_last,
-                       num_domains_in_stw);
+  caml_atomic_counter_init(&num_domains_to_final_update_first,
+                           num_domains_in_stw);
+  caml_atomic_counter_init(&num_domains_to_final_update_last,
+                           num_domains_in_stw);
 
   atomic_store(&domain_global_roots_started, WORK_UNSTARTED);
 
@@ -1436,11 +1598,11 @@ static void stw_cycle_all_domains(
   CAML_EV_BEGIN(EV_MAJOR_GC_CYCLE_DOMAINS);
 
   CAMLassert(domain == Caml_state);
-  CAMLassert(atomic_load_acquire(&ephe_cycle_info.num_domains_todo) ==
-             atomic_load_acquire(&ephe_cycle_info.num_domains_done));
-  CAMLassert(atomic_load(&num_domains_to_mark) == 0);
-  CAMLassert(atomic_load(&num_domains_to_sweep) == 0);
-  CAMLassert(atomic_load(&num_domains_to_ephe_sweep) == 0);
+  CAMLassert(caml_atomic_counter_value(&ephe_cycle_info.num_domains_todo) ==
+             caml_atomic_counter_value(&ephe_cycle_info.num_domains_done));
+  CAMLassert(caml_atomic_counter_value(&num_domains_to_mark) == 0);
+  CAMLassert(caml_atomic_counter_value(&num_domains_to_sweep) == 0);
+  CAMLassert(caml_atomic_counter_value(&num_domains_to_ephe_sweep) == 0);
 
   caml_empty_minor_heap_no_major_slice_from_stw
                         (domain, (void*)0, participating_count, participating);
@@ -1516,7 +1678,7 @@ static void stw_cycle_all_domains(
       !caml_addrmap_iter_ok(&domain->mark_stack->compressed_stack,
                             domain->mark_stack->compressed_stack_iter)
       ) {
-    atomic_fetch_add_verify_ge0(&num_domains_to_mark, -1);
+    (void)caml_atomic_counter_decr(&num_domains_to_mark);
     domain->marking_done = 1;
   }
 
@@ -1555,20 +1717,24 @@ static void stw_cycle_all_domains(
   CAML_EV_END(EV_MAJOR_GC_CYCLE_DOMAINS);
 }
 
+/*******************************************************************************
+ * Major GC phases
+ ******************************************************************************/
+
 static int is_complete_phase_sweep_and_mark_main (void)
 {
   return
     /* Marking is done */
     caml_gc_phase == Phase_sweep_and_mark_main &&
-    atomic_load_acquire (&num_domains_to_sweep) == 0 &&
-    atomic_load_acquire (&num_domains_to_mark) == 0 &&
+    caml_atomic_counter_value (&num_domains_to_sweep) == 0 &&
+    caml_atomic_counter_value (&num_domains_to_mark) == 0 &&
 
     /* No domains are orphaning finalisers. */
-    atomic_load_acquire (&num_domains_orphaning_finalisers) == 0 &&
+    caml_atomic_counter_value (&num_domains_orphaning_finalisers) == 0 &&
 
     /* Ephemeron marking is done */
-    atomic_load_acquire(&ephe_cycle_info.num_domains_todo) ==
-    atomic_load_acquire(&ephe_cycle_info.num_domains_done) &&
+    caml_atomic_counter_value(&ephe_cycle_info.num_domains_todo) ==
+    caml_atomic_counter_value(&ephe_cycle_info.num_domains_done) &&
 
     /* All orphaned ephemerons have been adopted */
     no_orphaned_work();
@@ -1579,14 +1745,14 @@ static int is_complete_phase_mark_final (void)
   return
     /* updated finalise first values */
     caml_gc_phase == Phase_mark_final &&
-    atomic_load_acquire (&num_domains_to_final_update_first) == 0 &&
+    caml_atomic_counter_value (&num_domains_to_final_update_first) == 0 &&
 
     /* Marking is done */
-    atomic_load_acquire (&num_domains_to_mark) == 0 &&
+    caml_atomic_counter_value (&num_domains_to_mark) == 0 &&
 
     /* Ephemeron marking is done */
-    atomic_load_acquire(&ephe_cycle_info.num_domains_todo) ==
-    atomic_load_acquire(&ephe_cycle_info.num_domains_done) &&
+    caml_atomic_counter_value(&ephe_cycle_info.num_domains_todo) ==
+    caml_atomic_counter_value(&ephe_cycle_info.num_domains_done) &&
 
     /* All orphaned ephemerons have been adopted */
     no_orphaned_work();
@@ -1597,10 +1763,10 @@ static int is_complete_phase_sweep_ephe (void)
   return
     /* All domains have swept their ephemerons */
     caml_gc_phase == Phase_sweep_ephe &&
-    atomic_load_acquire (&num_domains_to_ephe_sweep) == 0 &&
+    caml_atomic_counter_value (&num_domains_to_ephe_sweep) == 0 &&
 
     /* All domains have updated finalise last values */
-    atomic_load_acquire (&num_domains_to_final_update_last) == 0 &&
+    caml_atomic_counter_value (&num_domains_to_final_update_last) == 0 &&
 
     /* All orphaned structures have been adopted */
     no_orphaned_work();
@@ -1618,7 +1784,7 @@ static void stw_try_complete_gc_phase(
       caml_gc_phase = Phase_mark_final;
     } else if (is_complete_phase_mark_final()) {
       caml_gc_phase = Phase_sweep_ephe;
-      atomic_store_release(&num_domains_to_ephe_sweep, participant_count);
+      caml_atomic_counter_init(&num_domains_to_ephe_sweep, participant_count);
       for (int i = 0; i < participant_count; i++)
         participating[i]->ephe_info->must_sweep_ephe = 1;
     }
@@ -1626,6 +1792,10 @@ static void stw_try_complete_gc_phase(
 
   CAML_EV_END(EV_MAJOR_GC_PHASE_CHANGE);
 }
+
+/*******************************************************************************
+ * Major GC slices
+ ******************************************************************************/
 
 intnat caml_opportunistic_major_work_available (caml_domain_state* domain_state)
 {
@@ -1663,7 +1833,8 @@ static void major_collection_slice(intnat howmuch,
   int may_access_gc_phase = (mode != Slice_opportunistic);
 
   int log_events = mode != Slice_opportunistic ||
-                   (atomic_load_relaxed(&caml_verb_gc) & 0x40);
+                   (atomic_load_relaxed(&caml_verb_gc) &
+                    CAML_GC_MSG_SLICESIZE);
 
   update_major_slice_work(howmuch, may_access_gc_phase, log_events);
 
@@ -1694,7 +1865,7 @@ static void major_collection_slice(intnat howmuch,
       commit_major_slice_work (work_done);
       if (work_done == 0) {
         domain_state->sweeping_done = 1;
-        atomic_fetch_add_verify_ge0(&num_domains_to_sweep, -1);
+        (void)caml_atomic_counter_decr(&num_domains_to_sweep);
       }
     }
 
@@ -1723,7 +1894,7 @@ mark_again:
         get_major_slice_work(mode) > 0 &&
         caml_final_update_first(domain_state)) {
       /* This domain has updated finalise first values */
-      atomic_fetch_add_verify_ge0(&num_domains_to_final_update_first, -1);
+      (void)caml_atomic_counter_decr(&num_domains_to_final_update_first);
       if (!domain_state->marking_done &&
           get_major_slice_work(mode) > 0)
         goto mark_again;
@@ -1733,7 +1904,7 @@ mark_again:
         get_major_slice_work(mode) > 0 &&
         caml_final_update_last(domain_state)) {
       /* This domain has updated finalise last values */
-      atomic_fetch_add_verify_ge0(&num_domains_to_final_update_last, -1);
+      (void)caml_atomic_counter_decr(&num_domains_to_final_update_last);
       /* Nothing has been marked while updating last */
     }
 
@@ -1745,7 +1916,7 @@ mark_again:
     /* Ephemerons */
     if (caml_gc_phase != Phase_sweep_ephe) {
       /* Ephemeron Marking */
-      saved_ephe_cycle = atomic_load_acquire(&ephe_cycle_info.ephe_cycle);
+      saved_ephe_cycle = caml_atomic_counter_value(&ephe_cycle_info.ephe_cycle);
       if (domain_state->ephe_info->todo != (value) NULL &&
           saved_ephe_cycle > domain_state->ephe_info->cycle &&
           get_major_slice_work(mode) > 0) {
@@ -1803,7 +1974,7 @@ mark_again:
         /* If the todo list is empty, then the ephemeron has no sweeping work
          * to do. */
         if (domain_state->ephe_info->todo == 0) {
-          atomic_fetch_add_verify_ge0(&num_domains_to_ephe_sweep, -1);
+          (void)caml_atomic_counter_decr(&num_domains_to_ephe_sweep);
         }
       }
 
@@ -1821,7 +1992,7 @@ mark_again:
 
         CAML_EV_END(EV_MAJOR_EPHE_SWEEP);
         if (domain_state->ephe_info->todo == 0) {
-          atomic_fetch_add_verify_ge0(&num_domains_to_ephe_sweep, -1);
+          (void)caml_atomic_counter_decr(&num_domains_to_ephe_sweep);
         }
       }
     }
@@ -1909,6 +2080,10 @@ void caml_major_collection_slice(intnat howmuch)
   Caml_state->major_slice_epoch = major_slice_epoch;
 }
 
+/*******************************************************************************
+ * Major GC API
+ ******************************************************************************/
+
 struct finish_major_cycle_params {
   uintnat saved_major_cycles;
   int force_compaction;
@@ -1983,8 +2158,12 @@ void caml_finish_marking (void)
     caml_empty_mark_stack();
     caml_shrink_mark_stack();
     Caml_state->stat_major_words += Caml_state->allocated_words;
+    Caml_state->current_ramp_up_allocated_words_diff +=
+      Caml_state->allocated_words_suspended;
     Caml_state->allocated_words = 0;
     Caml_state->allocated_words_direct = 0;
+    Caml_state->allocated_words_suspended = 0;
+    Caml_state->allocated_words_resumed = 0;
     CAML_EV_END(EV_MAJOR_FINISH_MARKING);
   }
 }
@@ -1998,87 +2177,12 @@ void caml_finish_sweeping (void)
       /* just finished sweeping */
       CAMLassert(Caml_state->sweeping_done == 0);
       Caml_state->sweeping_done = 1;
-      atomic_fetch_add_verify_ge0(&num_domains_to_sweep, -1);
+      (void)caml_atomic_counter_decr(&num_domains_to_sweep);
       break;
     }
     caml_handle_incoming_interrupts();
   }
   CAML_EV_END(EV_MAJOR_FINISH_SWEEPING);
-}
-
-Caml_inline int add_addr(struct addrmap* amap, value_ptr ptr) {
-  uintnat chunk = ptr_to_chunk(ptr);
-  uintnat offset = ptr_to_chunk_offset(ptr);
-  uintnat flag = (uintnat)1 << offset;
-  int new_entry = 0;
-
-  value* amap_pos = caml_addrmap_insert_pos(amap, chunk);
-
-  if (*amap_pos == ADDRMAP_NOT_PRESENT) {
-    new_entry = 1;
-    *amap_pos = 0;
-  }
-
-  CAMLassert(ptr == chunk_and_offset_to_ptr(chunk, offset));
-
-  if (!(*amap_pos & flag)) {
-    *amap_pos |= flag;
-  }
-
-  return new_entry;
-}
-
-static void mark_stack_prune(struct mark_stack* stk)
-{
-  /* Since addrmap is (currently) using open address hashing, we cannot insert
-     new compressed stack entries into an existing, partially-processed
-     compressed stack. Thus, we create a new compressed stack and insert the
-     unprocessed entries of the existing compressed stack into the new one. */
-  uintnat old_compressed_entries = 0;
-  struct addrmap new_compressed_stack = ADDRMAP_INIT;
-  for (addrmap_iterator it = stk->compressed_stack_iter;
-       caml_addrmap_iter_ok(&stk->compressed_stack, it);
-       it = caml_addrmap_next(&stk->compressed_stack, it)) {
-    value k = caml_addrmap_iter_key(&stk->compressed_stack, it);
-    value v = caml_addrmap_iter_value(&stk->compressed_stack, it);
-    caml_addrmap_insert(&new_compressed_stack, k, v);
-    ++old_compressed_entries;
-  }
-  if (old_compressed_entries > 0) {
-    caml_gc_log("Preserved %"ARCH_INTNAT_PRINTF_FORMAT "d compressed entries",
-                old_compressed_entries);
-  }
-  caml_addrmap_clear(&stk->compressed_stack);
-  stk->compressed_stack = new_compressed_stack;
-
-  /* scan mark stack and compress entries */
-  uintnat new_stk_count = 0, compressed_entries = 0, total_words = 0;
-  for (uintnat i = 0; i < stk->count; i++) {
-    mark_entry me = stk->stack[i];
-    total_words += me.end - me.start;
-    if (me.end - me.start > BITS_PER_WORD) {
-      /* keep entry in the stack as more efficient and move to front */
-      stk->stack[new_stk_count++] = me;
-    } else {
-      while(me.start < me.end) {
-        compressed_entries += add_addr(&stk->compressed_stack,
-                                       me.start);
-        me.start++;
-      }
-    }
-  }
-
-  caml_gc_log("Compressed %"ARCH_INTNAT_PRINTF_FORMAT "d mark stack words into "
-              "%"ARCH_INTNAT_PRINTF_FORMAT "d mark stack entries and "
-              "%"ARCH_INTNAT_PRINTF_FORMAT "d compressed entries",
-              total_words, new_stk_count,
-              compressed_entries+old_compressed_entries);
-
-  stk->count = new_stk_count;
-  CAMLassert(stk->count < stk->size);
-
-  /* setup the compressed stack iterator */
-  stk->compressed_stack_iter = caml_addrmap_iterator(&stk->compressed_stack);
 }
 
 int caml_init_major_gc(caml_domain_state* d) {
@@ -2118,8 +2222,8 @@ int caml_init_major_gc(caml_domain_state* d) {
     d->mark_stack = NULL;
     return -1;
   }
-  atomic_fetch_add(&num_domains_to_final_update_first, 1);
-  atomic_fetch_add(&num_domains_to_final_update_last, 1);
+  (void)caml_atomic_counter_incr(&num_domains_to_final_update_first);
+  (void)caml_atomic_counter_incr(&num_domains_to_final_update_last);
 
   return 0;
 }
@@ -2142,9 +2246,4 @@ void caml_teardown_major_gc(void) {
   caml_stat_free(d->mark_stack->stack);
   caml_stat_free(d->mark_stack);
   d->mark_stack = NULL;
-}
-
-void caml_finalise_heap (void)
-{
-  return;
 }

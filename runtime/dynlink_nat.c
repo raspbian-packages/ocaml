@@ -39,11 +39,10 @@ CAMLexport void (*caml_natdynlink_hook)(void* handle, const char* unit) = NULL;
 #include <string.h>
 #include <limits.h>
 
-/* This should match the value of Compilenv.symbol_separator */
-#ifdef _MSC_VER
-#define CAML_SYM_SEPARATOR "$"
+#if defined (_WIN32) || defined (__CYGWIN__) || defined (__APPLE__)
+ #define CAML_SYM_SEPARATOR "$"
 #else
-#define CAML_SYM_SEPARATOR "."
+ #define CAML_SYM_SEPARATOR "."
 #endif
 
 #define Handle_val(v) (*((void **) Data_abstract_val(v)))
@@ -79,7 +78,7 @@ CAMLprim value caml_natdynlink_open(value filename, value global)
 {
   CAMLparam2 (filename, global);
   CAMLlocal3 (res, handle, header);
-  void *sym;
+  const void *sym;
   void *dlhandle;
   char_os *p;
   int global_dup;

@@ -66,14 +66,6 @@ Caml_inline void cpu_relax(void) {
 }
 
 
-/* Atomic read-modify-write instructions, with full fences */
-
-Caml_inline uintnat atomic_fetch_add_verify_ge0(atomic_uintnat* p, intnat v) {
-  uintnat result = atomic_fetch_add(p,v);
-  CAMLassert ((intnat)result > 0);
-  return result;
-}
-
 /* Warning: blocking functions.
 
    Blocking functions are for use in the runtime outside of the
@@ -98,6 +90,12 @@ Caml_inline uintnat atomic_fetch_add_verify_ge0(atomic_uintnat* p, intnat v) {
    The domain lock must be held in order to call
    [caml_plat_lock_non_blocking].
 
+   It is possible to combine calls to [caml_plat_lock_non_blocking] on
+   a mutex from the mutator holding the domain lock with calls to
+   [caml_plat_lock_blocking] on another mutator that has released
+   their domain lock, but not with calls to [caml_plat_lock_blocking]
+   from a STW section or a custom block finaliser.
+
    These functions never raise exceptions; errors are fatal. Thus, for
    usages where bugs are susceptible to be introduced by users, the
    functions from caml/sync.h should be used instead.
@@ -113,6 +111,7 @@ void caml_plat_assert_locked(caml_plat_mutex*);
 void caml_plat_assert_all_locks_unlocked(void);
 Caml_inline void caml_plat_unlock(caml_plat_mutex*);
 void caml_plat_mutex_free(caml_plat_mutex*);
+CAMLextern void caml_plat_mutex_reinit(caml_plat_mutex*);
 typedef pthread_cond_t caml_plat_cond;
 #define CAML_PLAT_COND_INITIALIZER PTHREAD_COND_INITIALIZER
 void caml_plat_cond_init(caml_plat_cond*);

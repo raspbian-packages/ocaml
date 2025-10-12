@@ -6,10 +6,28 @@ module rec Foo : sig class type c = object method x : int end end = Foo
 and Bar : sig class type c = object inherit Foo.c end end = Bar
 and Baz : sig class type c = object inherit Bar.c end end = Baz;;
 [%%expect {|
-Line 2, characters 44-49:
+Line 2, characters 44-47:
 2 | and Bar : sig class type c = object inherit Foo.c end end = Bar
-                                                ^^^^^
-Error: Illegal recursive module reference
+                                                ^^^
+Error: This class type is recursive. This use of the class type "Foo.c"
+       from the recursive module "Foo" within the definition of
+       the class type "c" in the recursive module "Bar"
+       makes the module type of "Bar" depend on the module type of "Foo".
+       Such recursive definitions of class types within recursive modules
+       are not allowed.
+|}]
+
+module rec Foo : sig class type c = object inherit Foo.c end end = Foo;;
+[%%expect {|
+Line 1, characters 51-54:
+1 | module rec Foo : sig class type c = object inherit Foo.c end end = Foo;;
+                                                       ^^^
+Error: This class type is recursive. This use of the class type "Foo.c"
+       from the recursive module "Foo" within the definition of
+       the class type "c" in the recursive module "Foo"
+       makes the module type of "Foo" depend on itself.
+       Such recursive definitions of class types within recursive modules
+       are not allowed.
 |}]
 
 module rec Foo : sig class type c = object method x : int end end = Foo
@@ -20,10 +38,15 @@ let foo (x : Foo.c) = x#x
 let bar (x : Bar.c) = x#x
 let baz (x : Baz.c) = x#x;;
 [%%expect{|
-Line 2, characters 29-34:
+Line 2, characters 29-32:
 2 | and Bar : sig class type c = Foo.c end = Bar
-                                 ^^^^^
-Error: Illegal recursive module reference
+                                 ^^^
+Error: This class type is recursive. This use of the class type "Foo.c"
+       from the recursive module "Foo" within the definition of
+       the class type "c" in the recursive module "Bar"
+       makes the module type of "Bar" depend on the module type of "Foo".
+       Such recursive definitions of class types within recursive modules
+       are not allowed.
 |}]
 
 (* #12480 *)

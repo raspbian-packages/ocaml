@@ -3,25 +3,26 @@
 Line 3, characters 3-4:
 3 | {p'|Some text|p'};;
        ^
-Error: Syntax error: "}" expected
+Error: Syntax error: } expected
 Line 3, characters 0-1:
 3 | {p'|Some text|p'};;
     ^
-  This "{" might be unmatched
+  This { might be unmatched
 Line 1, characters 0-3:
 1 | {A|Some other text |A};;
     ^^^
-Error: "A" cannot be used as a quoted string delimiter,
+Error: A cannot be used as a quoted string delimiter,
        it must contain only lowercase letters.
 Line 1, characters 0-4:
 1 | {À|Some other text |À};;
     ^^^^
-Error: "À" cannot be used as a quoted string delimiter,
+Error: À cannot be used as a quoted string delimiter,
        it must contain only lowercase letters.
 val one : int = 1
 val two : int = 2
 val three : int = 3
 val four : int = 4
 val set : int = 5
+val unit : unit = ()
 val meta : int = 6
 

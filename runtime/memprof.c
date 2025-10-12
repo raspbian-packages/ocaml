@@ -17,6 +17,7 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <assert.h>
 #include "caml/alloc.h"
 #include "caml/backtrace.h"
 #include "caml/backtrace_prim.h"
@@ -447,6 +448,10 @@ typedef struct memprof_orphan_table_s memprof_orphan_table_s,
 /* the mask for a given callback index */
 #define CB_MASK(cb) (1 << ((cb) - 1))
 
+/* How many bits required for an allocation source */
+#define SRC_TYPE_BITS    2
+static_assert((1 << SRC_TYPE_BITS) >= CAML_MEMPROF_NUM_SOURCE_KINDS, "");
+
 /* Structure for each tracked allocation. Six words (with many spare
  * bits in the final word). */
 
@@ -474,7 +479,7 @@ struct entry_s {
 
   /* The source of the allocation: normal allocations, interning,
    * or custom_mem (CAML_MEMPROF_SRC_*). */
-  unsigned int source : 2;
+  unsigned int source : SRC_TYPE_BITS;
 
   /* Is `block` actually an offset? */
   bool offset : 1;
@@ -1700,23 +1705,6 @@ static value capture_callstack_GC(memprof_domain_t domain, int alloc_idx)
   return res;
 }
 
-/* Given a stashed callstack, copy it to the Caml heap and free the
- * stash. Given a non-stashed callstack, simply return it. */
-
-static value unstash_callstack(value callstack)
-{
-  CAMLparam1(callstack);
-  if (Is_long(callstack)) { /* stashed on C heap */
-    callstack_stash_t stash = Ptr_val(callstack);
-    callstack = caml_alloc(stash->frames, 0);
-    for (size_t i = 0; i < stash->frames; ++i) {
-      Field(callstack, i) = Val_backtrace_slot(stash->stack[i]);
-    }
-    caml_stat_free(stash);
-  }
-  CAMLreturn(callstack);
-}
-
 /**** Running callbacks ****/
 
 /* Runs a single callback, in thread `thread`, for entry number `i` in
@@ -1805,12 +1793,26 @@ static caml_result run_alloc_callback_res(
   entry_t e = &es->t[i];
   CAMLassert(e->deallocated || e->offset || Is_block(e->block));
 
-  e->user_data = unstash_callstack(e->user_data);
   value sample_info = caml_alloc_small(4, 0);
   Field(sample_info, 0) = Val_long(e->samples);
   Field(sample_info, 1) = Val_long(e->wosize);
   Field(sample_info, 2) = Val_long(e->source);
   Field(sample_info, 3) = e->user_data;
+
+  if (Is_long(e->user_data)) {
+    /* Callstack stashed on C heap, so copy it to OCaml heap */
+    CAMLparam1(sample_info);
+    CAMLlocal1(callstack);
+    callstack_stash_t stash = Ptr_val(e->user_data);
+    callstack = caml_alloc(stash->frames, 0);
+    for (size_t i = 0; i < stash->frames; ++i) {
+      Field(callstack, i) = Val_backtrace_slot(stash->stack[i]);
+    }
+    caml_stat_free(stash);
+    Store_field(sample_info, 3, callstack);
+    CAMLdrop;
+  }
+
   value callback =
     e->alloc_young ? Alloc_minor(es->config) : Alloc_major(es->config);
   return run_callback_res(thread, es, i, callback, sample_info, CB_ALLOC);

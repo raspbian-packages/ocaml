@@ -18,11 +18,9 @@ stdlib__Arg.cmx : arg.ml \
     stdlib__Arg.cmi
 stdlib__Arg.cmi : arg.mli
 stdlib__Array.cmo : array.ml \
-    stdlib__String.cmi \
     stdlib__Seq.cmi \
     stdlib__Array.cmi
 stdlib__Array.cmx : array.ml \
-    stdlib__String.cmx \
     stdlib__Seq.cmx \
     stdlib__Array.cmi
 stdlib__Array.cmi : array.mli \
@@ -165,6 +163,7 @@ camlinternalOO.cmo : \
     stdlib__Map.cmi \
     stdlib__List.cmi \
     stdlib__Char.cmi \
+    stdlib__Atomic.cmi \
     stdlib__Array.cmi \
     camlinternalOO.cmi
 camlinternalOO.cmx : \
@@ -174,6 +173,7 @@ camlinternalOO.cmx : \
     stdlib__Map.cmx \
     stdlib__List.cmx \
     stdlib__Char.cmx \
+    stdlib__Atomic.cmx \
     stdlib__Array.cmx \
     camlinternalOO.cmi
 camlinternalOO.cmi : \
@@ -335,6 +335,7 @@ stdlib__Float.cmi : float.mli \
     stdlib.cmi \
     stdlib__Seq.cmi
 stdlib__Format.cmo : format.ml \
+    stdlib__Uchar.cmi \
     stdlib__String.cmi \
     stdlib.cmi \
     stdlib__Stack.cmi \
@@ -351,6 +352,7 @@ stdlib__Format.cmo : format.ml \
     stdlib__Array.cmi \
     stdlib__Format.cmi
 stdlib__Format.cmx : format.ml \
+    stdlib__Uchar.cmx \
     stdlib__String.cmx \
     stdlib.cmx \
     stdlib__Stack.cmx \
@@ -422,6 +424,19 @@ stdlib__Hashtbl.cmx : hashtbl.ml \
     stdlib__Array.cmx \
     stdlib__Hashtbl.cmi
 stdlib__Hashtbl.cmi : hashtbl.mli \
+    stdlib__Seq.cmi
+stdlib__Iarray.cmo : iarray.ml \
+    stdlib.cmi \
+    stdlib__Seq.cmi \
+    stdlib__Array.cmi \
+    stdlib__Iarray.cmi
+stdlib__Iarray.cmx : iarray.ml \
+    stdlib.cmx \
+    stdlib__Seq.cmx \
+    stdlib__Array.cmx \
+    stdlib__Iarray.cmi
+stdlib__Iarray.cmi : iarray.mli \
+    stdlib.cmi \
     stdlib__Seq.cmi
 stdlib__In_channel.cmo : in_channel.ml \
     stdlib__Sys.cmi \
@@ -591,6 +606,11 @@ stdlib__Out_channel.cmx : out_channel.ml \
 stdlib__Out_channel.cmi : out_channel.mli \
     stdlib.cmi \
     stdlib__Bigarray.cmi
+stdlib__Pair.cmo : pair.ml \
+    stdlib__Pair.cmi
+stdlib__Pair.cmx : pair.ml \
+    stdlib__Pair.cmi
+stdlib__Pair.cmi : pair.mli
 stdlib__Parsing.cmo : parsing.ml \
     stdlib__Obj.cmi \
     stdlib__Lexing.cmi \
@@ -604,6 +624,13 @@ stdlib__Parsing.cmx : parsing.ml \
 stdlib__Parsing.cmi : parsing.mli \
     stdlib__Obj.cmi \
     stdlib__Lexing.cmi
+stdlib__Pqueue.cmo : pqueue.ml \
+    stdlib__Dynarray.cmi \
+    stdlib__Pqueue.cmi
+stdlib__Pqueue.cmx : pqueue.ml \
+    stdlib__Dynarray.cmx \
+    stdlib__Pqueue.cmi
+stdlib__Pqueue.cmi : pqueue.mli
 stdlib__Printexc.cmo : printexc.ml \
     stdlib.cmi \
     stdlib__Printf.cmi \
@@ -670,6 +697,13 @@ stdlib__Random.cmi : random.mli \
     stdlib__Nativeint.cmi \
     stdlib__Int64.cmi \
     stdlib__Int32.cmi
+stdlib__Repr.cmo : repr.ml \
+    stdlib.cmi \
+    stdlib__Repr.cmi
+stdlib__Repr.cmx : repr.ml \
+    stdlib.cmx \
+    stdlib__Repr.cmi
+stdlib__Repr.cmi : repr.mli
 stdlib__Result.cmo : result.ml \
     stdlib__Seq.cmi \
     stdlib__Result.cmi
@@ -764,12 +798,20 @@ std_exit.cmx : \
     std_exit.cmi
 std_exit.cmi :
 stdlib__String.cmo : string.ml \
+    stdlib__Uchar.cmi \
     stdlib.cmi \
+    stdlib__List.cmi \
+    stdlib__Int.cmi \
     stdlib__Bytes.cmi \
+    stdlib__Array.cmi \
     stdlib__String.cmi
 stdlib__String.cmx : string.ml \
+    stdlib__Uchar.cmx \
     stdlib.cmx \
+    stdlib__List.cmx \
+    stdlib__Int.cmx \
     stdlib__Bytes.cmx \
+    stdlib__Array.cmx \
     stdlib__String.cmi
 stdlib__String.cmi : string.mli \
     stdlib__Uchar.cmi \
@@ -811,6 +853,7 @@ stdlib__Unit.cmx : unit.ml \
 stdlib__Unit.cmi : unit.mli
 stdlib__Weak.cmo : weak.ml \
     stdlib__Sys.cmi \
+    stdlib__Option.cmi \
     stdlib__Obj.cmi \
     stdlib__Int.cmi \
     stdlib__Hashtbl.cmi \
@@ -818,6 +861,7 @@ stdlib__Weak.cmo : weak.ml \
     stdlib__Weak.cmi
 stdlib__Weak.cmx : weak.ml \
     stdlib__Sys.cmx \
+    stdlib__Option.cmx \
     stdlib__Obj.cmx \
     stdlib__Int.cmx \
     stdlib__Hashtbl.cmx \

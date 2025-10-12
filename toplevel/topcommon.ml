@@ -209,6 +209,19 @@ let preprocess_phrase ppf phr =
   if !Clflags.dump_source then Pprintast.top_phrase ppf phr;
   phr
 
+let typecheck_phrase ppf oldenv sstr =
+  Typecore.reset_delayed_checks ();
+  let (str, sg, sn, shape, newenv) =
+    Typemod.type_toplevel_phrase oldenv sstr
+  in
+  if !Clflags.dump_typedtree then Printtyped.implementation ppf str;
+  let sg' = Typemod.Signature_names.simplify newenv sn sg in
+  Includemod.check_implementation oldenv sg sg';
+  Typecore.force_delayed_checks ();
+  let shape = Shape_reduce.local_reduce Env.empty shape in
+  if !Clflags.dump_shape then Shape.print ppf shape;
+  (str, sg', newenv)
+
 (* Phrase buffer that stores the last toplevel phrase (see
    [Location.input_phrase_buffer]). *)
 let phrase_buffer = Buffer.create 1024
@@ -345,11 +358,14 @@ let inline_code = Format_doc.compat Style.inline_code
 let try_run_directive ppf dir_name pdir_arg =
   begin match get_directive dir_name with
   | None ->
-      fprintf ppf "Unknown directive %a." inline_code dir_name;
-      let directives = all_directive_names () in
-      Format_doc.compat Misc.did_you_mean ppf
-        (fun () -> Misc.spellcheck directives dir_name);
-      fprintf ppf "@.";
+      let print ppf () =
+        let directives = all_directive_names () in
+        Misc.aligned_hint ~prefix:"" ppf
+          "@{<ralign>Unknown directive @}%a."
+          Style.inline_code dir_name
+          (Misc.did_you_mean (Misc.spellcheck directives dir_name))
+      in
+      fprintf ppf "%a@." (Format_doc.compat print) ();
       false
   | Some d ->
       match d, pdir_arg with
@@ -390,7 +406,7 @@ let try_run_directive ppf dir_name pdir_arg =
           | `String ->
               Format.fprintf ppf "a %a literal" inline_code "string"
           | `Int ->
-              Format.fprintf ppf "an %a literal" inline_code "string"
+              Format.fprintf ppf "an %a literal" inline_code "int"
           | `Ident ->
               Format.fprintf ppf "an identifier"
           | `Bool ->

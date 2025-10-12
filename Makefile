@@ -119,6 +119,7 @@ typing_SOURCES = \
   typing/outcometree.mli \
   typing/shape.mli typing/shape.ml \
   typing/types.mli typing/types.ml \
+  typing/data_types.mli typing/data_types.ml \
   typing/rawprinttyp.mli typing/rawprinttyp.ml \
   typing/gprinttyp.mli typing/gprinttyp.ml \
   typing/btype.mli typing/btype.ml \
@@ -644,9 +645,10 @@ flexlink.byte$(EXE): $(FLEXDLL_SOURCES)
 	  OCAMLOPT='$(value BOOT_OCAMLC) $(USE_RUNTIME_PRIMS) $(USE_STDLIB)' \
 	  flexlink.exe support
 	cp $(FLEXDLL_SOURCE_DIR)/flexlink.exe $@
+	cp $(addprefix $(FLEXDLL_SOURCE_DIR)/, $(FLEXDLL_OBJECTS)) $(ROOTDIR)
 
 partialclean::
-	rm -f flexlink.byte flexlink.byte.exe
+	rm -f flexlink.byte flexlink.byte.exe flexdll_*.o flexdll_*.obj
 
 $(BYTE_BINDIR)/flexlink$(EXE): \
     boot/ocamlrun$(EXE) flexlink.byte$(EXE) | $(BYTE_BINDIR)
@@ -654,7 +656,6 @@ $(BYTE_BINDIR)/flexlink$(EXE): \
 # Start with a copy to ensure that the result is always executable
 	cp boot/ocamlrun$(EXE) $@
 	cat flexlink.byte$(EXE) >> $@
-	cp $(addprefix $(FLEXDLL_SOURCE_DIR)/, $(FLEXDLL_OBJECTS)) $(BYTE_BINDIR)
 
 partialclean::
 	rm -f $(BYTE_BINDIR)/flexlink $(BYTE_BINDIR)/flexlink.exe
@@ -672,8 +673,9 @@ ifeq "$(BOOTSTRAPPING_FLEXDLL)" "true"
 # The recipe for runtime/ocamlruns$(EXE) also produces runtime/primitives
 boot/ocamlrun$(EXE): runtime/ocamlruns$(EXE)
 
-$(foreach runtime, ocamlrun ocamlrund ocamlruni, \
-  $(eval runtime/$(runtime)$(EXE): | $(BYTE_BINDIR)/flexlink$(EXE)))
+$(foreach runtime, ocamlrun$(EXE) ocamlrund$(EXE) ocamlruni$(EXE) \
+                   libcamlrun_shared$(EXT_DLL) libasmrun_shared$(EXT_DLL), \
+  $(eval runtime/$(runtime): | $(BYTE_BINDIR)/flexlink$(EXE)))
 
 tools/checkstack$(EXE): | $(BYTE_BINDIR)/flexlink$(EXE)
 else
@@ -715,9 +717,9 @@ compare:
 # The core system has to be rebuilt after bootstrap anyway, so strip ocamlc
 # and ocamllex, which means the artefacts should be identical.
 	mv ocamlc$(EXE) ocamlc.tmp
-	$(OCAMLRUN) tools/stripdebug -all ocamlc.tmp ocamlc$(EXE)
+	$(OCAMLRUN) tools/stripdebug$(EXE) -all ocamlc.tmp ocamlc$(EXE)
 	mv lex/ocamllex$(EXE) ocamllex.tmp
-	$(OCAMLRUN) tools/stripdebug -all ocamllex.tmp lex/ocamllex$(EXE)
+	$(OCAMLRUN) tools/stripdebug$(EXE) -all ocamllex.tmp lex/ocamllex$(EXE)
 	rm -f ocamllex.tmp ocamlc.tmp
 	@if $(CMPCMD) boot/ocamlc ocamlc$(EXE) \
          && $(CMPCMD) boot/ocamllex lex/ocamllex$(EXE); \
@@ -745,7 +747,7 @@ promote-cross: promote-common
 # Promote the newly compiled system to the rank of bootstrap compiler
 # (Runs on the new runtime, produces code for the new runtime)
 .PHONY: promote
-promote: PROMOTE = $(OCAMLRUN) tools/stripdebug -all
+promote: PROMOTE = $(OCAMLRUN) tools/stripdebug$(EXE) -all
 promote: promote-common
 	rm -f boot/ocamlrun$(EXE)
 	cp runtime/ocamlrun$(EXE) boot/ocamlrun$(EXE)
@@ -884,7 +886,6 @@ flexlink.opt$(EXE): \
 	cp $(FLEXDLL_SOURCE_DIR)/flexlink.exe $@
 	rm -f $(OPT_BINDIR)/flexlink$(EXE)
 	cd $(OPT_BINDIR); $(LN) $(call ROOT_FROM, $(OPT_BINDIR))/$@ flexlink$(EXE)
-	cp $(addprefix $(BYTE_BINDIR)/, $(FLEXDLL_OBJECTS)) $(OPT_BINDIR)
 
 else
 
@@ -1372,7 +1373,7 @@ runtime/caml/opnames.h : runtime/caml/instruct.h
 	$(V_GEN)tr -d '\r' < $< | \
 	sed -e '/\/\*/d' \
 	    -e '/^#/d' \
-	    -e 's/enum /static char * names_of_/' \
+	    -e 's/enum /static char const * const names_of_/' \
 	    -e 's/{$$/[] = {/' \
 	    -e 's/\([[:upper:]][[:upper:]_0-9]*\)/"\1"/g' > $@
 
@@ -1383,24 +1384,18 @@ runtime/caml/jumptbl.h : runtime/caml/instruct.h
 	sed -n -e '/^  /s/ \([A-Z]\)/ \&\&lbl_\1/gp' \
 	       -e '/^}/q' > $@
 
-# These are provided as a temporary shim to allow cross-compilation systems
-# to supply a host C compiler and different flags and a linking macro.
-SAK_CC ?= $(CC)
-SAK_CFLAGS ?= $(OC_CFLAGS) $(CFLAGS) $(OC_CPPFLAGS) $(CPPFLAGS)
-SAK_LINK ?= $(MKEXE_VIA_CC)
+$(SAK): runtime/sak.c runtime/caml/misc.h runtime/caml/config.h
+	$(V_MKEXE)$(call SAK_BUILD,$@,$<)
 
-$(SAK): runtime/sak.$(O)
-	$(V_MKEXE)$(call SAK_LINK,$@,$^)
-
-runtime/sak.$(O): runtime/sak.c runtime/caml/misc.h runtime/caml/config.h
-	$(V_CC)$(SAK_CC) $(SAK_CFLAGS) $(OUTPUTOBJ)$@ -c $<
-
-C_LITERAL = $(shell $(SAK) encode-C-literal '$(1)')
+C_LITERAL = $(shell $(SAK) $(ENCODE_C_LITERAL) '$(1)')
 
 runtime/build_config.h: $(ROOTDIR)/Makefile.config $(SAK)
-	$(V_GEN)echo '/* This file is generated from $(ROOTDIR)/Makefile.config */' > $@ && \
-	echo '#define OCAML_STDLIB_DIR $(call C_LITERAL,$(LIBDIR))' >> $@ && \
-	echo '#define HOST "$(HOST)"' >> $@
+	$(V_GEN){ \
+	  echo '/* This file is generated from $(ROOTDIR)/Makefile.config */'; \
+	  printf '#define OCAML_STDLIB_DIR %s\n' \
+	         '$(call C_LITERAL,$(TARGET_LIBDIR))'; \
+	  echo '#define HOST "$(HOST)"'; \
+	} > $@
 
 ## Runtime libraries and programs
 
@@ -1922,7 +1917,10 @@ ocamltest_ocaml_PLUGIN = \
   ocaml_compilers.mli ocaml_compilers.ml \
   ocaml_toplevels.mli ocaml_toplevels.ml \
   ocaml_actions.mli ocaml_actions.ml \
-  ocaml_tests.mli ocaml_tests.ml
+  ocaml_tests.mli ocaml_tests.ml \
+  debugger_flags.mli debugger_flags.ml \
+  debugger_variables.mli debugger_variables.ml \
+  debugger_actions.mli debugger_actions.ml \
 
 ocamltest_SOURCES = $(addprefix ocamltest/, \
   $(ocamltest_CORE) $(ocamltest_ocaml_PLUGIN) \
@@ -2049,6 +2047,8 @@ manpages:
 	$(MAKE) -C api_docgen man
 
 partialclean::
+	rm -f ocamldoc/ocamldoc ocamldoc/ocamldoc.exe
+	rm -f ocamldoc/ocamldoc.opt ocamldoc/ocamldoc.opt.exe
 	rm -f ocamldoc/\#*\#
 	rm -f ocamldoc/*.cm[aiotx] ocamldoc/*.cmxa ocamldoc/*.cmti \
 	  ocamldoc/*.a ocamldoc/*.lib ocamldoc/*.o ocamldoc/*.obj
@@ -2802,8 +2802,7 @@ ifeq "$(INSTALL_BYTECODE_PROGRAMS)" "true"
 	  flexlink.byte$(EXE) "$(INSTALL_BINDIR)"
 endif # ifeq "$(INSTALL_BYTECODE_PROGRAMS)" "true"
 	$(MKDIR) "$(INSTALL_FLEXDLLDIR)"
-	$(INSTALL_DATA) $(addprefix $(BYTE_BINDIR)/, $(FLEXDLL_OBJECTS)) \
-    "$(INSTALL_FLEXDLLDIR)"
+	$(INSTALL_DATA) $(FLEXDLL_OBJECTS) "$(INSTALL_FLEXDLLDIR)"
 endif # ifeq "$(BOOTSTRAPPING_FLEXDLL)" "true"
 	$(INSTALL_DATA) Makefile.config "$(INSTALL_LIBDIR)"
 	$(INSTALL_DATA) $(DOC_FILES) "$(INSTALL_DOCDIR)"
@@ -2967,6 +2966,11 @@ ifeq "$(INSTALL_SOURCE_ARTIFACTS)" "true"
 endif
 
 include .depend
+
+# Include the cross-compiler recipes only when relevant
+ifneq "$(HOST)" "$(TARGET)"
+include Makefile.cross
+endif
 
 Makefile.config Makefile.build_config: config.status
 config.status:
