@@ -72,6 +72,10 @@ endif
 ifeq (m68k,$(DEB_BUILD_ARCH))
 CONFIGURE_OPTS += --enable-imprecise-c99-float-ops
 IGNORE_TESTS_FAILURE := || true
+# fma test from test suite fails on hppa, enable emulation like on m68k
+else ifeq (hppa,$(DEB_BUILD_ARCH))
+CONFIGURE_OPTS += --enable-imprecise-c99-float-ops
+IGNORE_TESTS_FAILURE := || true
 else ifneq (,$(findstring hurd,$(DEB_BUILD_ARCH)))
 IGNORE_TESTS_FAILURE := || true
 else
