@@ -1,3 +1,11 @@
+ocaml (5.4.0-1~exp2) experimental; urgency=medium
+
+  * fma test from test suite fails on hppa, enable emulation like on
+    m68k
+  * Remove Rules-Requires-Root
+
+ -- Stéphane Glondu <glondu@debian.org>  Sun, 14 Dec 2025 11:12:32 +0100
+
 ocaml (5.4.0-1~exp1) experimental; urgency=medium
 
   * New upstream release
