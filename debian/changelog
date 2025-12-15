@@ -1,3 +1,9 @@
+ocaml (5.4.0-1~exp3) experimental; urgency=medium
+
+  * Mark test_compact_manydomains as multicore
+
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 15 Dec 2025 07:12:40 +0100
+
 ocaml (5.4.0-1~exp2) experimental; urgency=medium
 
   * fma test from test suite fails on hppa, enable emulation like on
