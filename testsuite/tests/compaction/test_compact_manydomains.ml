@@ -1,4 +1,5 @@
 (* TEST
+ multicore;
 *)
 
 let num_domains = 20
