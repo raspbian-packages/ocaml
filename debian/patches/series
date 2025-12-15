@@ -2,3 +2,4 @@ Put-manpages-in-section-3o-instead-of-3.patch
 Trigger-output-complete-exe-on-custom-with-an-enviro.patch
 Do-not-error-on-warnings-in-autoconf.patch
 Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
+Mark-test_compact_manydomains-as-multicore.patch
