@@ -1,3 +1,10 @@
+ocaml (5.4.0-2) unstable; urgency=medium
+
+  * Increase the amount of data written to a pipe in a test
+    (Closes: #1107773)
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 09 Jan 2026 08:54:31 +0100
+
 ocaml (5.4.0-1) unstable; urgency=medium
 
   * New upstream release
