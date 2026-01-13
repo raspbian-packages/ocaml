@@ -1,4 +1,4 @@
-ocaml (5.3.0-3+rpi1) trixie-staging; urgency=medium
+ocaml (5.4.0-1+rpi1) forky-staging; urgency=medium
 
   [changes brought forward from 4.08.1-4+rpi2 by Peter Michael Green <plugwash@raspbian.org> at Tue, 26 Nov 2019 19:38:59 +0000]
   * Revert previous raspbian changes, changing the triplet 
@@ -10,7 +10,20 @@ ocaml (5.3.0-3+rpi1) trixie-staging; urgency=medium
   [changes introduced in 4.08.1-5+rpi1 by Peter Michael Green]
   * Remove gitattributes that cause problems for dgit.
 
- -- Raspbian forward porter <root@raspbian.org>  Sat, 21 Jun 2025 00:00:16 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Tue, 13 Jan 2026 18:32:23 +0000
+
+ocaml (5.4.0-1) unstable; urgency=medium
+
+  * New upstream release
+    - fma test from test suite fails on hppa, enable emulation like on
+      m68k
+    - mark test_compact_manydomains as multicore
+  * Build --without-zstd
+  * Switch debian/watch to version 5
+  * Bump Standards-Version to 4.7.2
+  * Remove Rules-Requires-Root
+
+ -- Stéphane Glondu <glondu@debian.org>  Fri, 26 Dec 2025 12:48:51 +0100
 
 ocaml (5.3.0-3) unstable; urgency=medium
 

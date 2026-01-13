@@ -47,7 +47,7 @@
         Caml_state->trap_sp_off offset to the current trap frame
         extra_args number of extra arguments provided by the caller
 
-sp is a local copy of the global variable Caml_state->extern_sp. */
+sp is a local copy of the global variable Caml_state->current_stack->sp. */
 
 /* Instruction decoding */
 
@@ -156,7 +156,8 @@ Caml_inline void check_trap_barrier_for_effect
     if (parent_stack != NULL
         && parent_stack->id == domain_state->trap_barrier_block
         && parent_stack->sp + 2 - Stack_high (parent_stack)
-              /* Note: +2 is the same constant as in debugger.c:552 */
+              /* Note: +2 is the same constant as in the REQ_UP_FRAME
+                 case in caml_debugger() in debugger.c */
            == domain_state->trap_barrier_off){
       caml_debugger(TRAP_BARRIER, Val_unit);
     }
@@ -264,9 +265,9 @@ value caml_bytecode_interpreter(code_t prog, asize_t prog_size,
 #endif
 #if defined(THREADED_CODE) && defined(ARCH_SIXTYFOUR) && !defined(ARCH_CODE32)
 #ifdef JUMPTBL_BASE_REG
-  register char * jumptbl_base JUMPTBL_BASE_REG;
+  register const char * jumptbl_base JUMPTBL_BASE_REG;
 #else
-  register char * jumptbl_base;
+  register const char * jumptbl_base;
 #endif
 #endif
   value env;
@@ -311,7 +312,6 @@ value caml_bytecode_interpreter(code_t prog, asize_t prog_size,
     Closinfo_val(raise_unhandled_effect_closure) = Make_closinfo(0, 2);
     raise_unhandled_effect = raise_unhandled_effect_closure;
     caml_register_generational_global_root(&raise_unhandled_effect);
-    caml_global_data = Val_unit;
     caml_register_generational_global_root(&caml_global_data);
     caml_init_callbacks();
     return Val_unit;

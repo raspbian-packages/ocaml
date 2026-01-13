@@ -15,7 +15,7 @@
 
 #include <caml/config.h>
 
-#ifdef HAS_UNISTD
+#ifndef _WIN32
 #include <unistd.h>
 #endif
 #include <sys/types.h>
@@ -39,7 +39,7 @@ CAMLprim value caml_unix_environment_unsafe(value unit)
 
 static char **secure_environ(void)
 {
-#if defined(HAS_GETAUXVAL) && defined(AT_SECURE)
+#ifdef HAS_GETAUXVAL
   if (!getauxval(AT_SECURE))
     return environ;
   else

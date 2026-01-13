@@ -14,11 +14,9 @@ Build-Depends:
  libiberty-dev,
  libncurses-dev,
  zlib1g-dev,
- libzstd-dev,
  dh-ocaml
 Build-Conflicts: ocaml-base
-Standards-Version: 4.6.2
-Rules-Requires-Root: no
+Standards-Version: 4.7.2
 Vcs-Git: https://salsa.debian.org/ocaml-team/ocaml.git
 Vcs-Browser: https://salsa.debian.org/ocaml-team/ocaml
 Homepage: https://ocaml.org/

@@ -63,8 +63,7 @@ Line 1, characters 6-18:
 1 | let f (W: _ M.p t) = ()
           ^^^^^^^^^^^^
 Warning 8 [partial-match]: this pattern-matching is not exhaustive.
-Here is an example of a case that is not matched:
-W2
+  Here is an example of a case that is not matched: "W2"
 
 val f : int M.p t -> unit = <fun>
 |}]

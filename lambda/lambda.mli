@@ -29,7 +29,9 @@ type compile_time_constant =
 
 type immediate_or_pointer =
   | Immediate
+  (* The value must be immediate. *)
   | Pointer
+  (* The value may be a pointer or an immediate. *)
 
 type initialization_or_assignment =
   | Assignment
@@ -45,6 +47,10 @@ type is_safe =
   | Safe
   | Unsafe
 
+type lazy_block_tag =
+  | Lazy_tag
+  | Forward_tag
+
 type primitive =
   | Pbytes_to_string
   | Pbytes_of_string
@@ -54,6 +60,7 @@ type primitive =
   | Psetglobal of Ident.t
   (* Operations on heap blocks *)
   | Pmakeblock of int * mutable_flag * block_shape
+  | Pmakelazyblock of lazy_block_tag
   | Pfield of int * immediate_or_pointer * mutable_flag
   | Pfield_computed
   | Psetfield of int * immediate_or_pointer * initialization_or_assignment
@@ -153,10 +160,7 @@ type primitive =
   (* Integer to external pointer *)
   | Pint_as_pointer
   (* Atomic operations *)
-  | Patomic_load of {immediate_or_pointer : immediate_or_pointer}
-  | Patomic_exchange
-  | Patomic_cas
-  | Patomic_fetch_add
+  | Patomic_load
   (* Inhibition of optimisation *)
   | Popaque
   (* Fetching domain-local state *)
@@ -424,7 +428,7 @@ val transl_prim: string -> string -> lambda
 (** Translate a value from a persistent module. For instance:
 
     {[
-      transl_internal_value "CamlinternalLazy" "force"
+      transl_prim "CamlinternalLazy" "force"
     ]}
 *)
 
@@ -497,6 +501,8 @@ val max_arity : unit -> int
       maximal length of the [params] list of a [lfunction] record.
       This is unlimited ([max_int]) for bytecode, but limited
       (currently to 126) for native code. *)
+
+val tag_of_lazy_tag : lazy_block_tag -> int
 
 (***********************)
 (* For static failures *)

@@ -17,6 +17,7 @@
 /* Must be preprocessed by cpp */
 
 #include "caml/m.h"
+#include "caml/asm.h"
 
 #define DOMAIN_STATE_PTR s11
 #define TRAP_PTR s1
@@ -79,13 +80,13 @@ caml_hot.code_end:
         TEXT_SECTION(name); \
         .align 2; \
         .globl name; \
-        .type  name, @function; \
+        TYPE_DIRECTIVE(name,@function) \
 name:; \
         CFI_STARTPROC
 
 #define END_FUNCTION(name) \
         CFI_ENDPROC; \
-        .size name, .-name
+        SIZE_DIRECTIVE(name)
 
 #if defined(__PIC__)
         .option pic
@@ -99,12 +100,10 @@ name:; \
         .data; \
         .align  3; \
         .globl  name; \
-        .type   name, @object; \
+        TYPE_DIRECTIVE(name,@object) \
 name:
 #define END_OBJECT(name) \
-        .size   name, .-name
-
-#include "../runtime/caml/asm.h"
+        SIZE_DIRECTIVE(name)
 
 /* Function prologue and epilogue */
 
@@ -426,8 +425,9 @@ name:
 
 #endif /* } WITH_THREAD_SANITIZER */
 
-/* Invoke the garbage collector. */
-
+/* Allocation functions and GC interface.
+   Referenced from C code in runtime/startup_nat.c
+ */
         TEXT_SECTION(caml_system__code_begin)
         .globl  caml_system__code_begin
 caml_system__code_begin:
@@ -1244,8 +1244,8 @@ END_FUNCTION(caml_ml_array_bound_error)
         .globl  caml_system__code_end
 caml_system__code_end:
 
-/* GC roots for callback */
-
+/* Frametable - GC roots for callback */
+/* Uses the same naming convention as ocamlopt generated modules. */
 OBJECT(caml_system.frametable)
         .quad   2                 /* two descriptors */
         .quad   L(caml_retaddr)   /* return address into callback */
@@ -1258,5 +1258,4 @@ OBJECT(caml_system.frametable)
         .align  3
 END_OBJECT(caml_system.frametable)
 
-/* Mark stack as non-executable */
-        .section .note.GNU-stack,"",%progbits
+        NONEXECSTACK_NOTE

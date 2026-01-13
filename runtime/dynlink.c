@@ -23,7 +23,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include "caml/config.h"
-#ifdef HAS_UNISTD
+#ifndef _WIN32
 #include <unistd.h>
 #endif
 #ifdef _WIN32
@@ -63,7 +63,7 @@ struct ext_table caml_shared_libs_path;
 
 /* Look up the given primitive name in the built-in primitive table,
    then in the opened shared libraries (shared_libs) */
-static c_primitive lookup_primitive(char * name)
+static c_primitive lookup_primitive(const char * name)
 {
   void * res;
 
@@ -83,9 +83,9 @@ static c_primitive lookup_primitive(char * name)
 
 #define LD_CONF_NAME T("ld.conf")
 
-CAMLexport char_os * caml_get_stdlib_location(void)
+CAMLexport const char_os * caml_get_stdlib_location(void)
 {
-  char_os * stdlib;
+  const char_os * stdlib;
   stdlib = caml_secure_getenv(T("OCAMLLIB"));
   if (stdlib == NULL) stdlib = caml_secure_getenv(T("CAMLLIB"));
   if (stdlib == NULL) stdlib = OCAML_STDLIB_DIR;
@@ -94,7 +94,8 @@ CAMLexport char_os * caml_get_stdlib_location(void)
 
 CAMLexport char_os * caml_parse_ld_conf(void)
 {
-  char_os * stdlib, * ldconfname, * wconfig, * p, * q;
+  const char_os * stdlib;
+  char_os * ldconfname, * wconfig, * p, * q;
   char * config;
 #ifdef _WIN32
   struct _stati64 st;
@@ -146,7 +147,7 @@ static void open_shared_lib(char_os * name)
 
   realname = caml_search_dll_in_path(&caml_shared_libs_path, name);
   u8 = caml_stat_strdup_of_os(realname);
-  caml_gc_message(0x100, "Loading shared library %s\n", u8);
+  CAML_GC_MESSAGE(STARTUP, "Loading shared library %s\n", u8);
   caml_stat_free(u8);
   caml_enter_blocking_section();
   handle = caml_dlopen(realname, 1);
@@ -306,7 +307,7 @@ CAMLprim value caml_dynlink_open_lib(value filename)
   value result;
   char_os * p;
 
-  caml_gc_message(0x100, "Opening shared library %s\n",
+  CAML_GC_MESSAGE(STARTUP, "Opening shared library %s\n",
                   String_val(filename));
   p = caml_stat_strdup_to_os(String_val(filename));
   caml_enter_blocking_section();

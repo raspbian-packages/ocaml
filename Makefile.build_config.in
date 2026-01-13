@@ -99,6 +99,14 @@ OC_DLL_LDFLAGS=@oc_dll_ldflags@
 
 MKEXE_VIA_CC=$(CC) @mkexe_via_cc_ldflags@ @mkexe_via_cc_extra_cmd@
 
+# How to build sak
+SAK_BUILD=@SAK_BUILD@
+# How to invoke sak
+SAK=@SAK@
+
+# sak command to encode C literals
+ENCODE_C_LITERAL=@encode_C_literal@
+
 # Which tool to use to display differences between files
 DIFF=@DIFF@
 # Which flags to pass to the diff tool
@@ -127,6 +135,9 @@ WINPTHREADS_SOURCE_DIR=@winpthreads_source_dir@
 PACKAGE_TARNAME = @PACKAGE_TARNAME@
 datarootdir = @datarootdir@
 DOCDIR=@docdir@
+
+### Where to look for the standard library on target
+TARGET_LIBDIR=@TARGET_LIBDIR@
 
 unix_directory = @unix_directory@
 unix_library = @unix_library@
@@ -165,6 +176,8 @@ OC_BYTECODE_LINKFLAGS =
 OC_NATIVE_COMPFLAGS = @oc_native_compflags@
 
 OC_NATIVE_LINKFLAGS = -g
+
+BUILD_TRIPLET = @build@
 
 # Platform-dependent command to create symbolic links
 LN = @ln@

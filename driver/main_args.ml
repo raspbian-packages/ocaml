@@ -152,6 +152,9 @@ let mk_no_g f =
 let mk_i f =
   "-i", Arg.Unit f, " Print inferred interface"
 
+let mk_i_variance f =
+  "-i-variance", Arg.Unit f, " Print inferred variances"
+
 let mk_I f =
   "-I", Arg.String f, "<dir>  Add <dir> to the list of include directories"
 
@@ -628,6 +631,9 @@ let mk_dtypedtree f =
 let mk_dshape f =
   "-dshape", Arg.Unit f, " (undocumented)"
 
+let mk_dmatchcomp f =
+  "-dmatchcomp", Arg.Unit f, " (undocumented)"
+
 let mk_drawlambda f =
   "-drawlambda", Arg.Unit f, " (undocumented)"
 
@@ -636,6 +642,12 @@ let mk_dno_unique_ids f =
 
 let mk_dunique_ids f =
   "-dunique-ids", Arg.Unit f, " (undocumented)"
+
+let mk_dno_canonical_ids f =
+  "-dno-canonical-ids", Arg.Unit f, " (undocumented)"
+
+let mk_dcanonical_ids f =
+  "-dcanonical-ids", Arg.Unit f, " (undocumented)"
 
 let mk_dno_locations f =
   "-dno-locations", Arg.Unit f, " (undocumented)"
@@ -728,6 +740,9 @@ let mk_dlinear f =
 let mk_dinterval f =
   "-dinterval", Arg.Unit f, " (undocumented)"
 
+let mk_dparsetree_loc_ghost_invariants f =
+  "-dparsetree-loc-ghost-invariants", Arg.Unit f, " (undocumented)"
+
 let mk_dstartup f =
   "-dstartup", Arg.Unit f, " (undocumented)"
 
@@ -778,6 +793,7 @@ module type Common_options = sig
   val _absname : unit -> unit
   val _no_absname : unit -> unit
   val _alert : string -> unit
+  val _i_variance : unit -> unit
   val _I : string -> unit
   val _H : string -> unit
   val _labels : unit -> unit
@@ -821,13 +837,17 @@ module type Core_options = sig
 
   val _dno_unique_ids : unit -> unit
   val _dunique_ids : unit -> unit
+  val _dno_canonical_ids : unit -> unit
+  val _dcanonical_ids : unit -> unit
   val _dno_locations : unit -> unit
   val _dlocations : unit -> unit
 
   val _dsource : unit -> unit
   val _dparsetree : unit -> unit
+  val _dparsetree_loc_ghost_invariants : unit -> unit
   val _dtypedtree : unit -> unit
   val _dshape : unit -> unit
+  val _dmatchcomp : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
 
@@ -850,6 +870,7 @@ module type Compiler_options = sig
   val _no_g : unit -> unit
   val _stop_after : string -> unit
   val _i : unit -> unit
+  val _i_variance : unit -> unit
   val _impl : string -> unit
   val _intf : string -> unit
   val _intf_suffix : string -> unit
@@ -1053,6 +1074,7 @@ struct
     mk_no_g F._no_g;
     mk_stop_after ~native:false F._stop_after;
     mk_i F._i;
+    mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
     mk_impl F._impl;
@@ -1127,12 +1149,16 @@ struct
     mk_use_prims F._use_prims;
     mk_dno_unique_ids F._dno_unique_ids;
     mk_dunique_ids F._dunique_ids;
+    mk_dno_canonical_ids F._dno_canonical_ids;
+    mk_dcanonical_ids F._dcanonical_ids;
     mk_dno_locations F._dno_locations;
     mk_dlocations F._dlocations;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
+    mk_dparsetree_loc_ghost_invariants F._dparsetree_loc_ghost_invariants;
     mk_dtypedtree F._dtypedtree;
     mk_dshape F._dshape;
+    mk_dmatchcomp F._dmatchcomp;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
@@ -1153,6 +1179,7 @@ struct
     mk_absname F._absname;
     mk_no_absname F._no_absname;
     mk_alert F._alert;
+    mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
     mk_init F._init;
@@ -1202,12 +1229,16 @@ struct
 
     mk_dno_unique_ids F._dno_unique_ids;
     mk_dunique_ids F._dunique_ids;
+    mk_dno_canonical_ids F._dno_canonical_ids;
+    mk_dcanonical_ids F._dcanonical_ids;
     mk_dno_locations F._dno_locations;
     mk_dlocations F._dlocations;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
+    mk_dparsetree_loc_ghost_invariants F._dparsetree_loc_ghost_invariants;
     mk_dtypedtree F._dtypedtree;
     mk_dshape F._dshape;
+    mk_dmatchcomp F._dmatchcomp;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
@@ -1251,6 +1282,7 @@ struct
     mk_stop_after ~native:true F._stop_after;
     mk_save_ir_after ~native:true F._save_ir_after;
     mk_i F._i;
+    mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
     mk_impl F._impl;
@@ -1342,12 +1374,16 @@ struct
     mk_match_context_rows F._match_context_rows;
     mk_dno_unique_ids F._dno_unique_ids;
     mk_dunique_ids F._dunique_ids;
+    mk_dno_canonical_ids F._dno_canonical_ids;
+    mk_dcanonical_ids F._dcanonical_ids;
     mk_dno_locations F._dno_locations;
     mk_dlocations F._dlocations;
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
+    mk_dparsetree_loc_ghost_invariants F._dparsetree_loc_ghost_invariants;
     mk_dtypedtree F._dtypedtree;
     mk_dshape F._dshape;
+    mk_dmatchcomp F._dmatchcomp;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
@@ -1391,6 +1427,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_no_absname F._no_absname;
     mk_alert F._alert;
     mk_compact F._compact;
+    mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
     mk_init F._init;
@@ -1464,8 +1501,10 @@ module Make_opttop_options (F : Opttop_options) = struct
 
     mk_dsource F._dsource;
     mk_dparsetree F._dparsetree;
+    mk_dparsetree_loc_ghost_invariants F._dparsetree_loc_ghost_invariants;
     mk_dtypedtree F._dtypedtree;
     mk_dshape F._dshape;
+    mk_dmatchcomp F._dmatchcomp;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
@@ -1499,6 +1538,7 @@ struct
     mk_absname F._absname;
     mk_no_absname F._no_absname;
     mk_alert F._alert;
+    mk_i_variance F._i_variance;
     mk_I F._I;
     mk_H F._H;
     mk_impl F._impl;
@@ -1597,11 +1637,12 @@ module Default = struct
   module Common = struct
     let _absname = set Clflags.absname
     let _alert = Warnings.parse_alert_option
-    let _alias_deps = clear transparent_modules
+    let _alias_deps = clear no_alias_deps
     let _app_funct = set applicative_functors
+    let _i_variance = set print_variance
     let _labels = clear classic
     let _no_absname = clear Clflags.absname
-    let _no_alias_deps = set transparent_modules
+    let _no_alias_deps = set no_alias_deps
     let _no_app_funct = clear applicative_functors
     let _no_principal = clear principal
     let _no_rectypes = clear recursive_types
@@ -1634,12 +1675,16 @@ module Default = struct
     let _color = Misc.set_or_ignore color_reader.parse color
     let _dlambda = set dump_lambda
     let _dparsetree = set dump_parsetree
+    let _dparsetree_loc_ghost_invariants = set parsetree_ghost_loc_invariant
     let _drawlambda = set dump_rawlambda
     let _dsource = set dump_source
     let _dtypedtree = set dump_typedtree
     let _dshape = set dump_shape
+    let _dmatchcomp = set dump_matchcomp
     let _dunique_ids = set unique_ids
     let _dno_unique_ids = clear unique_ids
+    let _dcanonical_ids = set canonical_ids
+    let _dno_canonical_ids = clear canonical_ids
     let _dlocations = set locations
     let _dno_locations = clear locations
     let _error_style =
