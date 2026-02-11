@@ -32,8 +32,6 @@ Depends:
  ${ocaml:Depends}
 Provides:
  ocaml-base-${F:OCamlABI}
-Breaks: ocaml-base-nox (<< 4.13)
-Replaces: ocaml-base-nox (<< 4.13)
 Description: Runtime system for OCaml bytecode executables
  Objective Caml (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
@@ -64,8 +62,6 @@ Suggests:
 Recommends:
  ocaml-man,
  file
-Breaks: ocaml-nox (<< 4.13)
-Replaces: ocaml-nox (<< 4.13)
 Description: ML language implementation with a class-based object system
  Objective Caml (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
@@ -101,16 +97,6 @@ Provides:
  ${ocaml:Provides}
 Recommends:
  ocaml-man
-Breaks:
- libfindlib-ocaml (<< 1.9.6-3~),
- ocaml (<< 4.13.1-5~),
- ocaml-base (<< 4.13.1-5~),
- ocaml-compiler-libs (<< 4.13.1-5~)
-Replaces:
- libfindlib-ocaml (<< 1.9.6-3~),
- ocaml (<< 4.13.1-5~),
- ocaml-base (<< 4.13.1-5~),
- ocaml-compiler-libs (<< 4.13.1-5~)
 Description: OCaml standard library (development files)
  OCaml is an implementation of the ML language, based on the Caml
  Light dialect extended with a complete class-based object system and
@@ -129,17 +115,6 @@ Provides:
  libuchar-ocaml,
  libstdlib-shims-ocaml,
  ${ocaml:Provides}
-Breaks:
- libfindlib-ocaml (<< 1.9.6-3~),
- ocaml (<< 4.13.1-5~),
- ocaml-base (<< 4.13.1-5~),
- ocaml-compiler-libs (<< 4.13.1-5~),
- dh-ocaml (<< 2)
-Replaces:
- libfindlib-ocaml (<< 1.9.6-3~),
- ocaml (<< 4.13.1-5~),
- ocaml-base (<< 4.13.1-5~),
- ocaml-compiler-libs (<< 4.13.1-5~)
 Description: OCaml standard library (runtime files)
  OCaml is an implementation of the ML language, based on the Caml
  Light dialect extended with a complete class-based object system and
@@ -155,16 +130,6 @@ Depends:
  ${ocaml:Depends}
 Provides:
  ${ocaml:Provides}
-Breaks:
- libfindlib-ocaml (<< 1.9.6-3~),
- ocaml (<< 4.13.1-5~),
- ocaml-base (<< 4.13.1-5~),
- ocaml-compiler-libs (<< 4.13.1-5~)
-Replaces:
- libfindlib-ocaml (<< 1.9.6-3~),
- ocaml (<< 4.13.1-5~),
- ocaml-base (<< 4.13.1-5~),
- ocaml-compiler-libs (<< 4.13.1-5~)
 Description: OCaml compiler library (development files)
  OCaml is an implementation of the ML language, based on the Caml
  Light dialect extended with a complete class-based object system and
@@ -207,14 +172,6 @@ Package: ocaml-man
 Architecture: all
 Depends:
  ${misc:Depends}
-Breaks:
- ocaml (<< 4.08),
- ocaml-nox (<< 4.08),
- ocaml-compiler-libs (<< 4.08)
-Replaces:
- ocaml (<< 4.08),
- ocaml-nox (<< 4.08),
- ocaml-compiler-libs (<< 4.08)
 Description: OCaml interpreter and standard libraries (lib manpages)
  Objective (OCaml) is an implementation of the ML language, based on
  the Caml Light dialect extended with a complete class-based object system
