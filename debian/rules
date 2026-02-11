@@ -267,12 +267,6 @@ endif
 	  exit 2; \
 	fi
 
-.PHONY: regenerate
-regenerate: debian/control
-	git ls-tree --name-only -r HEAD debian \
-	  | grep -v '^debian/\(patches/\|source/local-\)' \
-	> debian/MANIFEST
-
 # Architectures where running the test suite completely makes the
 # whole build last more than 30 minutes on buildds. Originally,
 # because some tests do not even finish on mips.
