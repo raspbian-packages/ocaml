@@ -4,9 +4,7 @@ OCaml for Debian
   1) The OCaml package has been split into different binary packages:
 
   o ocaml: contains the full OCaml suite
-  o ocaml-nox: the full suite except for the Graphics and Tk modules
-  o ocaml-base: contains the runtime stuff (ocamlrun + dlls + Tk)
-  o ocaml-base-nox: contains the runtime stuff (ocamlrun + dlls - Tk)
+  o ocaml-base: contains the runtime stuff (ocamlrun + dlls)
 
   o ocaml-compiler-libs: contains several modules used internally by
     the OCaml compilers.  They are not needed for normal OCaml
