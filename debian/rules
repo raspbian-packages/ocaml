@@ -222,6 +222,8 @@ install-stamp-arch: install-stamp
 install-stamp:
 # Install OCaml
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+# Remove config.cmx so that it is not part of compiler-libs ABI
+	rm -f debian/tmp$(OCAML_STDLIB_DIR)/compiler-libs/config.cmx
 ifeq (,$(DEB_TEST_BUILD_PREFIX))
 # Remove Debian-specific file
 	rm -f debian/tmp$(OCAML_STDLIB_DIR)/ld.conf
