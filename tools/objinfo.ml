@@ -85,9 +85,21 @@ let print_cma_infos (lib : Cmo_format.library) =
   printf "\n";
   List.iter print_cmo_infos lib.lib_units
 
-let print_cmi_infos name crcs =
+let print_cmi_infos name crcs flags =
+  let open Cmi_format in
   if not !quiet then begin
     printf "Unit name: %s\n" name;
+    printf "Flags: [ ";
+    begin
+      flags
+      |> List.map (function
+             | Rectypes -> "Rectypes"
+             | Opaque -> "Opaque"
+             | Alerts _ -> "Alerts _")
+      |> String.concat "; "
+      |> printf "%s"
+    end;
+    printf " ]\n";
     printf "Interfaces imported:\n";
     List.iter print_name_crc crcs
   end
@@ -370,6 +382,7 @@ let dump_obj_by_kind filename ic obj_kind =
          | None -> ()
          | Some cmi ->
             print_cmi_infos cmi.Cmi_format.cmi_name cmi.Cmi_format.cmi_crcs
+              cmi.Cmi_format.cmi_flags
        end;
        begin match cmt with
          | None -> ()
