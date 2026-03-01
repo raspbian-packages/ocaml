@@ -2546,6 +2546,12 @@ endif
 %.cmx: %.ml
 	$(V_OCAMLOPT)$(COMPILE_NATIVE_MODULE) -c $<
 
+utils/config.cmi: utils/config.mli
+	$(V_OCAMLC)$(CAMLC) $(OC_COMMON_COMPFLAGS) -I $(@D) $(INCLUDES) -opaque -c $<
+
+utils/config.cmx: utils/config.ml
+	$(V_OCAMLOPT)$(COMPILE_NATIVE_MODULE) -opaque -c $<
+
 partialclean::
 	for d in utils parsing typing bytecomp asmcomp middle_end file_formats \
            lambda middle_end/closure middle_end/flambda \
