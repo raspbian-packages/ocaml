@@ -5,3 +5,4 @@ Use-CCLINKFLAGS-for-linking-all-executables-and-shar.patch
 Mark-test_compact_manydomains-as-multicore.patch
 Increase-the-amount-of-data-written-to-a-pipe-in-a-test.patch
 Compile-utils-config.-cmi-cmx-with-opaque.patch
+Print-.cmi-flags-in-objinfo.patch
