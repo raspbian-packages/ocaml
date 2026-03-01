@@ -1,3 +1,10 @@
+ocaml (5.4.0-4) UNRELEASED; urgency=medium
+
+  * Stabilize compiler-libs ABI by not including config.cmx
+  * Print .cmi flags in objinfo
+
+ -- Stéphane Glondu <glondu@debian.org>  Sun, 01 Mar 2026 21:59:33 +0100
+
 ocaml (5.4.0-3) unstable; urgency=medium
 
   * Remove transitional packages (Closes: #1125099)
