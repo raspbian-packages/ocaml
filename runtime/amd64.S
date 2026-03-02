@@ -239,28 +239,27 @@ G(name):
 
 
 /* When ThreadSanitizer instrumentation is enabled, the code must call
-   the C functions __tsan_func_entry and __tsan_func_exit to signal
-   function entries and exits. They follow the x86_64 calling
-   convention of the platform. For efficiency reasons, we don't always
-   save all caller-saved registers before calling them, but only the
-   registers in use. */
+   the C functions caml_tsan_func_entry_asm and caml_tsan_func_exit_asm to
+   signal function entries and exits. They follow the x86_64 calling convention
+   of the platform. For efficiency reasons, we don't always save all
+   caller-saved registers before calling them, but only the registers in use.
+ */
 
-/* Calls __tsan_func_entry on the current return address. [offset] is the
-   distance from the current stack pointer to the saved return address, in
+/* Calls caml_tsan_func_entry_asm on the current return address. [offset] is
+   the distance from the current stack pointer to the saved return address, in
    bytes. May clobber all caller-saved registers. */
 #if defined(WITH_THREAD_SANITIZER)
 #define TSAN_ENTER_FUNCTION(offset)                             \
         /* arg 1: pc of raise */                                \
         movq    STACK_RETADDR_OFFSET(%rsp, offset), C_ARG_1;    \
         SWITCH_OCAML_TO_C;                                      \
-        C_call  (GCALL(__tsan_func_entry));                     \
+        C_call  (GCALL(caml_tsan_func_entry_asm));              \
         SWITCH_C_TO_OCAML;
 
-/* Calls __tsan_func_exit. May clobber all caller-saved registers. */
+/* Calls caml_tsan_func_exit_asm. May clobber all caller-saved registers. */
 #define TSAN_EXIT_FUNCTION                                      \
         SWITCH_OCAML_TO_C;                                      \
-        movq    $0, C_ARG_1;                                    \
-        C_call  (GCALL(__tsan_func_exit));                      \
+        C_call  (GCALL(caml_tsan_func_exit_asm));               \
         SWITCH_C_TO_OCAML;
 #else
 #define TSAN_ENTER_FUNCTION(offset)
@@ -579,6 +578,26 @@ G(caml_system__code_begin):
 #define TSAN_RESTORE_CALLER_REGS
 #endif
 
+#ifdef WITH_THREAD_SANITIZER
+/* Push return value registers %rax and %xmm0 onto the stack. */
+#define TSAN_PUSH_RETURN_REGS              \
+        pushq   %rax; CFI_ADJUST(8);       \
+        subq    $16, %rsp; CFI_ADJUST(16); \
+        movupd  %xmm0, (%rsp)
+#else
+#define TSAN_PUSH_RETURN_REGS
+#endif
+
+#ifdef WITH_THREAD_SANITIZER
+/* Pop return value registers %rax and %xmm0 from the stack. */
+#define TSAN_POP_RETURN_REGS                \
+        movupd  (%rsp), %xmm0;              \
+        addq    $16, %rsp; CFI_ADJUST(-16); \
+        popq    %rax; CFI_ADJUST(-8)
+#else
+#define TSAN_POP_RETURN_REGS
+#endif
+
 FUNCTION(caml_call_realloc_stack)
 CFI_STARTPROC
         CFI_SIGNAL_FRAME
@@ -713,16 +732,9 @@ LBL(caml_c_call):
         movq    Caml_state(young_ptr), %r15
     /* Load ocaml stack and restore global variables */
         SWITCH_C_TO_OCAML
-#ifdef WITH_THREAD_SANITIZER
-    /* Save non-callee-saved registers %rax and %xmm0 before C call */
-        pushq   %rax; CFI_ADJUST(8);
-        subq    $16, %rsp; CFI_ADJUST(16);
-        movupd   %xmm0, (%rsp)
+        TSAN_PUSH_RETURN_REGS /* Save return value before C call */
         TSAN_EXIT_FUNCTION
-        movupd  (%rsp), %xmm0
-        addq    $16, %rsp; CFI_ADJUST(-16);
-        popq    %rax; CFI_ADJUST(-8);
-#endif
+        TSAN_POP_RETURN_REGS
         LEAVE_FUNCTION
     /* Return to OCaml caller */
         RET_FROM_C_CALL
@@ -733,6 +745,9 @@ FUNCTION(caml_c_call_stack_args)
 CFI_STARTPROC
         CFI_SIGNAL_FRAME
         ENTER_FUNCTION
+        TSAN_SAVE_CALLER_REGS
+        TSAN_ENTER_FUNCTION(0)
+        TSAN_RESTORE_CALLER_REGS
     /* Arguments:
         C arguments         : %rdi, %rsi, %rdx, %rcx, %r8, and %r9
         C function          : %rax
@@ -747,6 +762,9 @@ CFI_STARTPROC
         movq    Caml_state(young_ptr), %r15
     /* Load ocaml stack and restore global variables */
         SWITCH_C_TO_OCAML
+        TSAN_PUSH_RETURN_REGS /* Save return value before C call */
+        TSAN_EXIT_FUNCTION
+        TSAN_POP_RETURN_REGS
     /* Return to OCaml caller */
         LEAVE_FUNCTION
         RET_FROM_C_CALL
@@ -765,6 +783,17 @@ CFI_STARTPROC
         pushq   %rbp; CFI_ADJUST(8)
         movq    %rsp, %rbp
         CFI_DEF_CFA_REGISTER(DW_REG_rbp)
+#ifdef WITH_THREAD_SANITIZER
+    /* The pushed arguments will be considered to be a stack frame, TSan must
+       know about it. */
+       TSAN_SAVE_CALLER_REGS /* Save the arguments */
+        movq    8(%rsp), C_ARG_1
+    /* Note that we are already on the C stack. For this reason, we do not use
+       the usual TSAN_* macros which assume we start on the OCaml stack. */
+        C_call  (GCALL(caml_tsan_func_entry_asm));
+    /* Restore the arguments */
+        TSAN_RESTORE_CALLER_REGS
+#endif
     /* Copy arguments from OCaml to C stack */
 LBL(105):
         subq    $8, %r12
@@ -780,6 +809,13 @@ LBL(106):
 #endif
     /* Call the function (address in %rax) */
         C_call  (*%rax)
+#ifdef WITH_THREAD_SANITIZER
+    /* We can't use the TSAN_EXIT_FUNCTION macro as it assumes an OCaml stack,
+       and we are on a C stack. */
+        TSAN_PUSH_RETURN_REGS /* Save return value */
+        C_call  (GCALL(caml_tsan_func_exit_asm))
+        TSAN_POP_RETURN_REGS
+#endif
     /* Pop arguments back off the stack */
         movq    %rbp, %rsp
         CFI_DEF_CFA_REGISTER(DW_REG_rsp)
@@ -804,7 +840,7 @@ CFI_STARTPROC
         pushq   C_ARG_1; CFI_ADJUST(8)
         /* Read return address */
         movq    (8 + CALLEE_SAVE_REGS_SIZE)(%rsp), C_ARG_1
-        C_call  (GCALL(__tsan_func_entry))
+        C_call  (GCALL(caml_tsan_func_entry_asm))
         popq    C_ARG_1; CFI_ADJUST(-8)
 #endif
     /* Load Caml_state into r14 (was passed as an argument from C) */
@@ -882,11 +918,10 @@ LBL(108):
 #if defined(WITH_THREAD_SANITIZER)
     /* We can't use the TSAN_EXIT_FUNCTION macro as it assumes an OCaml stack,
        and we are on a C stack. */
-        /* Save %rax before C call */
-        pushq   %rax; CFI_ADJUST(8)
-        movq    $0, C_ARG_1
-        C_call  (GCALL(__tsan_func_exit))
-        popq    %rax; CFI_ADJUST(-8)
+        /* Save return value before C call */
+        TSAN_PUSH_RETURN_REGS
+        C_call  (GCALL(caml_tsan_func_exit_asm))
+        TSAN_POP_RETURN_REGS
 #endif
     /* Restore callee-save registers. */
         POP_CALLEE_SAVE_REGS
@@ -1005,7 +1040,7 @@ CFI_STARTPROC
         pushq   C_ARG_2; CFI_ADJUST(8)
         pushq   C_ARG_3; CFI_ADJUST(8)
         movq    24(%rsp), C_ARG_1 /* Read return address */
-        C_call  (GCALL(__tsan_func_entry))
+        C_call  (GCALL(caml_tsan_func_entry_asm))
         popq    C_ARG_3; CFI_ADJUST(-8)
         popq    C_ARG_2; CFI_ADJUST(-8)
         popq    C_ARG_1; CFI_ADJUST(-8)
@@ -1032,7 +1067,7 @@ CFI_STARTPROC
         pushq   C_ARG_2; CFI_ADJUST(8)
         pushq   C_ARG_3; CFI_ADJUST(8)
         movq    24(%rsp), C_ARG_1 /* Read return address */
-        C_call  (GCALL(__tsan_func_entry))
+        C_call  (GCALL(caml_tsan_func_entry_asm))
         popq    C_ARG_3; CFI_ADJUST(-8)
         popq    C_ARG_2; CFI_ADJUST(-8)
         popq    C_ARG_1; CFI_ADJUST(-8)
@@ -1059,7 +1094,7 @@ CFI_STARTPROC
         pushq   C_ARG_2; CFI_ADJUST(8)
         pushq   C_ARG_3; CFI_ADJUST(8)
         movq    24(%rsp), C_ARG_1 /* Read return address */
-        C_call  (GCALL(__tsan_func_entry))
+        C_call  (GCALL(caml_tsan_func_entry_asm))
         popq    C_ARG_3; CFI_ADJUST(-8)
         popq    C_ARG_2; CFI_ADJUST(-8)
         popq    C_ARG_1; CFI_ADJUST(-8)
