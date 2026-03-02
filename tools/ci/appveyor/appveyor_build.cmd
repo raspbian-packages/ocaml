@@ -124,8 +124,10 @@ if "%PORT%" equ "mingw32" (
   set CYGWIN_COMMANDS=%CYGWIN_COMMANDS% i686-w64-mingw32-gcc cygcheck
 )
 if "%PORT%" equ "mingw64" (
-  set CYGWIN_PACKAGES=%CYGWIN_PACKAGES% mingw64-x86_64-gcc-core
-  set CYGWIN_COMMANDS=%CYGWIN_COMMANDS% x86_64-w64-mingw32-gcc
+  rem mingw64-x86_64-runtime does not need explicitly installing, but it's
+  rem useful to have the version reported.
+  set CYGWIN_PACKAGES=%CYGWIN_PACKAGES% mingw64-x86_64-gcc-core mingw64-x86_64-runtime
+  set CYGWIN_COMMANDS=%CYGWIN_COMMANDS% x86_64-w64-mingw32-gcc cygcheck
 )
 if "%PORT%" equ "cygwin32" (
   set CYGWIN_PACKAGES=%CYGWIN_PACKAGES% cygwin32-gcc-core flexdll
@@ -141,7 +143,6 @@ set CYGWIN_INSTALL_PACKAGES=
 set CYGWIN_UPGRADE_REQUIRED=%FORCE_CYGWIN_UPGRADE%
 
 for %%P in (%CYGWIN_PACKAGES%) do call :CheckPackage %%P
-set CYGWIN_INSTALL_PACKAGES=%CYGWIN_INSTALL_PACKAGES%,cygwin=3.6.1-1
 call :UpgradeCygwin
 
 "%CYG_ROOT%\bin\bash.exe" -lc "$APPVEYOR_BUILD_FOLDER/tools/ci/appveyor/appveyor_build.sh install" || exit /b 1

@@ -298,16 +298,15 @@ name:
         SWITCH_C_TO_OCAML
 .endm
 
-/* Invoke __tsan_func_entry(return address in the caller) */
+/* Invoke caml_tsan_func_entry_asm (return address in the caller) */
 .macro TSAN_ENTER_FUNCTION
         mv      a0, ra  /* arg1: return address in caller */
-        TSAN_C_CALL __tsan_func_entry
+        TSAN_C_CALL caml_tsan_func_entry_asm
 .endm
 
-/* Invoke __tsan_func_exit(0) */
+/* Invoke caml_tsan_func_exit_asm */
 .macro TSAN_EXIT_FUNCTION
-        mv      a0, x0
-        TSAN_C_CALL __tsan_func_exit
+        TSAN_C_CALL caml_tsan_func_exit_asm
 .endm
 
 /* This is similar to SAVE_ALL_REGS, but only saving the caller-saved
@@ -409,6 +408,22 @@ name:
         ld      TRAP_PTR, Caml_state(exn_handler)
 .endm
 
+.macro TSAN_PUSH_RETURN_REGS
+        addi    sp, sp, -32
+        CFI_ADJUST(32)
+        sd      a0, 0(sp)
+        fsd     fa0, 16(sp)
+        fsd     fa1, 24(sp)
+.endm
+
+.macro TSAN_POP_RETURN_REGS
+        fld     fa1, 24(sp)
+        fld     fa0, 16(sp)
+        ld      a0, 0(sp)
+        addi    sp, sp, 32
+        CFI_ADJUST(-32)
+.endm
+
 #else /* } { */
 
 .macro TSAN_ENTER_FUNCTION
@@ -421,6 +436,12 @@ name:
 .endm
 
 .macro TSAN_RESTORE_CALLER_REGS
+.endm
+
+.macro TSAN_PUSH_RETURN_REGS
+.endm
+
+.macro TSAN_POP_RETURN_REGS
 .endm
 
 #endif /* } WITH_THREAD_SANITIZER */
@@ -533,23 +554,9 @@ L(caml_c_call):
         ld      TRAP_PTR, Caml_state(exn_handler)
     /* Load ocaml stack */
         SWITCH_C_TO_OCAML
-#if defined(WITH_THREAD_SANITIZER)
-    /* Save return value registers. Since the called function could be
-       anything, it may have returned its result (if any) either in a0
-       or fa0:fa1. */
-        addi    sp, sp, -32
-        CFI_ADJUST(32)
-        sd      a0, 0(sp)
-        fsd     fa0, 16(sp)
-        fsd     fa1, 24(sp)
+        TSAN_PUSH_RETURN_REGS /* Save return value. */
         TSAN_EXIT_FUNCTION
-    /* Restore return value registers */
-        fld     fa1, 24(sp)
-        fld     fa0, 16(sp)
-        ld      a0, 0(sp)
-        addi    sp, sp, 32
-        CFI_ADJUST(-32)
-#endif
+        TSAN_POP_RETURN_REGS
     /* Return */
         LEAVE_FUNCTION
         RET_FROM_C_CALL
@@ -563,6 +570,9 @@ FUNCTION(caml_c_call_stack_args)
         C stack args : begin=STACK_ARG_BEGIN
                        end=STACK_ARG_END */
         ENTER_FUNCTION
+        TSAN_SAVE_CALLER_REGS
+        TSAN_ENTER_FUNCTION
+        TSAN_RESTORE_CALLER_REGS
     /* Switch from OCaml to C */
         SWITCH_OCAML_TO_C
     /* Make the exception handler alloc ptr available to the C code */
@@ -590,6 +600,9 @@ FUNCTION(caml_c_call_stack_args)
         ld      TRAP_PTR, Caml_state(exn_handler)
     /* Switch from C to OCaml */
         SWITCH_C_TO_OCAML
+        TSAN_PUSH_RETURN_REGS /* Save return value. */
+        TSAN_EXIT_FUNCTION
+        TSAN_POP_RETURN_REGS
     /* Return */
         LEAVE_FUNCTION
         RET_FROM_C_CALL
@@ -607,7 +620,7 @@ FUNCTION(caml_start_program)
        on an OCaml stack, yet we are still on a C stack at this point. */
         mv      a0, ra
         ENTER_FUNCTION
-        call    PLT(__tsan_func_entry)
+        call    PLT(caml_tsan_func_entry_asm)
         LEAVE_FUNCTION
         ld      a0, 0(sp)
         addi    sp, sp, 16
@@ -731,9 +744,8 @@ L(return_result):
         addi    sp, sp, -16
         CFI_ADJUST(16)
         sd      a0, 0(sp)
-        mv      a0, x0
         ENTER_FUNCTION
-        call    PLT(__tsan_func_exit)
+        call    PLT(caml_tsan_func_exit_asm)
         LEAVE_FUNCTION
         ld      a0, 0(sp)
         addi    sp, sp, 16
@@ -893,7 +905,7 @@ FUNCTION(caml_callback_asm)
         sd      a2, 16(sp)
         sd      ra, 24(sp)
         mv      a0, ra
-        call    PLT(__tsan_func_entry)
+        call    PLT(caml_tsan_func_entry_asm)
         ld      ra, 24(sp)
         ld      a2, 16(sp)
         ld      a1, 8(sp)
@@ -920,7 +932,7 @@ FUNCTION(caml_callback2_asm)
         sd      a2, 16(sp)
         sd      ra, 24(sp)
         mv      a0, ra
-        call    PLT(__tsan_func_entry)
+        call    PLT(caml_tsan_func_entry_asm)
         ld      ra, 24(sp)
         ld      a2, 16(sp)
         ld      a1, 8(sp)
@@ -949,7 +961,7 @@ FUNCTION(caml_callback3_asm)
         sd      a2, 16(sp)
         sd      ra, 24(sp)
         mv      a0, ra
-        call    PLT(__tsan_func_entry)
+        call    PLT(caml_tsan_func_entry_asm)
         ld      ra, 24(sp)
         ld      a2, 16(sp)
         ld      a1, 8(sp)
