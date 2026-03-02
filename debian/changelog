@@ -1,9 +1,10 @@
-ocaml (5.4.0-4) UNRELEASED; urgency=medium
+ocaml (5.4.1-1) UNRELEASED; urgency=medium
 
+  * New upstream release (Closes: #1129317, CVE-2026-28364)
   * Stabilize compiler-libs ABI by not including config.cmx
   * Print .cmi flags in objinfo
 
- -- Stéphane Glondu <glondu@debian.org>  Sun, 01 Mar 2026 21:59:33 +0100
+ -- Stéphane Glondu <glondu@debian.org>  Mon, 02 Mar 2026 08:03:10 +0100
 
 ocaml (5.4.0-3) unstable; urgency=medium
 
