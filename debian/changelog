@@ -1,4 +1,4 @@
-ocaml (5.4.1-1~exp1) experimental; urgency=medium
+ocaml (5.4.1-1) unstable; urgency=medium
 
   * New upstream release (Closes: #1129317, CVE-2026-28364)
   * Stabilize compiler-libs ABI by not including config.cmx
@@ -6,7 +6,7 @@ ocaml (5.4.1-1~exp1) experimental; urgency=medium
   * Bump Standards-Version to 4.7.3
   * Remove Priority field from debian/control
 
- -- Stéphane Glondu <glondu@debian.org>  Mon, 02 Mar 2026 08:28:58 +0100
+ -- Stéphane Glondu <glondu@debian.org>  Tue, 16 Jun 2026 21:25:11 +0200
 
 ocaml (5.4.0-3) unstable; urgency=medium
 
