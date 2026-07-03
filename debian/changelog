@@ -1,4 +1,4 @@
-ocaml (5.4.0-3+rpi1) forky-staging; urgency=medium
+ocaml (5.4.1-1+rpi1) forky-staging; urgency=medium
 
   [changes brought forward from 4.08.1-4+rpi2 by Peter Michael Green <plugwash@raspbian.org> at Tue, 26 Nov 2019 19:38:59 +0000]
   * Revert previous raspbian changes, changing the triplet 
@@ -10,7 +10,17 @@ ocaml (5.4.0-3+rpi1) forky-staging; urgency=medium
   [changes introduced in 4.08.1-5+rpi1 by Peter Michael Green]
   * Remove gitattributes that cause problems for dgit.
 
- -- Raspbian forward porter <root@raspbian.org>  Thu, 26 Feb 2026 21:33:54 +0000
+ -- Raspbian forward porter <root@raspbian.org>  Fri, 03 Jul 2026 10:46:36 +0000
+
+ocaml (5.4.1-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #1129317, CVE-2026-28364)
+  * Stabilize compiler-libs ABI by not including config.cmx
+  * Print .cmi flags in objinfo
+  * Bump Standards-Version to 4.7.3
+  * Remove Priority field from debian/control
+
+ -- Stéphane Glondu <glondu@debian.org>  Tue, 16 Jun 2026 21:25:11 +0200
 
 ocaml (5.4.0-3) unstable; urgency=medium
 

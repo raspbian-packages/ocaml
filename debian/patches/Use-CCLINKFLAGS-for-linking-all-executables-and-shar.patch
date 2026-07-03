@@ -16,7 +16,7 @@ Last-Update: <2021-12-21>
  1 file changed, 4 insertions(+)
 
 diff --git a/configure.ac b/configure.ac
-index 0535f40..e7772b9 100644
+index 3754ad8..929b13e 100644
 --- a/configure.ac
 +++ b/configure.ac
 @@ -1450,6 +1450,10 @@ AS_CASE([$target],

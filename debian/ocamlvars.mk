@@ -1,7 +1,7 @@
 include /usr/share/dpkg/architecture.mk
 
 OCAMLMAJOR := 5.4
-OCAMLMINOR := 0
+OCAMLMINOR := 1
 
 OCAML_ABI := $(OCAMLMAJOR).$(OCAMLMINOR)
 OCAML_STDLIB_DIR := /usr/lib/$(DEB_TARGET_MULTIARCH)/ocaml/$(OCAML_ABI)

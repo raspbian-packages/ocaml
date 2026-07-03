@@ -233,7 +233,7 @@ void caml_tsan_exit_on_raise(uintnat pc, char* sp, char* trapsp)
     }
 
     caml_tsan_debug_log_pc("forced__tsan_func_exit for", pc);
-    __tsan_func_exit(NULL);
+    caml_tsan_func_exit();
     pc = next_pc;
   }
 }
@@ -248,7 +248,6 @@ void caml_tsan_exit_on_raise_c(char* limit)
 {
   unw_context_t uc;
   unw_cursor_t cursor;
-  unw_word_t sp;
 #ifdef TSAN_DEBUG
   unw_word_t prev_pc;
 #endif
@@ -261,12 +260,23 @@ void caml_tsan_exit_on_raise_c(char* limit)
   if (ret != 0)
     caml_fatal_error("unw_init_local failed with code %d", ret);
 
-  while (1) {
+  unw_word_t initial_sp;
+  ret = unw_get_reg(&cursor, UNW_REG_SP, &initial_sp);
+  if (ret != 0)
+    caml_fatal_error("unw_get_reg SP failed with code %d", ret);
+
+  /* Unwind each call in the stack fragment between `initial_sp` and `limit`. */
+  for(unw_word_t sp = initial_sp; initial_sp <= sp && (char*)sp < limit; ) {
+
 #ifdef TSAN_DEBUG
     if (unw_get_reg(&cursor, UNW_REG_IP, &prev_pc) < 0) {
       caml_fatal_error("unw_get_reg IP failed with code %d", ret);
     }
+
+    caml_tsan_debug_log_pc("forced__tsan_func_exit for", prev_pc);
 #endif
+    /* Still on the C stack, pop on the TSan shadow stack. */
+    caml_tsan_func_exit();
 
     ret = unw_step(&cursor);
     if (ret < 0) {
@@ -279,14 +289,6 @@ void caml_tsan_exit_on_raise_c(char* limit)
     ret = unw_get_reg(&cursor, UNW_REG_SP, &sp);
     if (ret != 0)
       caml_fatal_error("unw_get_reg SP failed with code %d", ret);
-#ifdef TSAN_DEBUG
-    caml_tsan_debug_log_pc("forced__tsan_func_exit for", prev_pc);
-#endif
-    __tsan_func_exit(NULL);
-
-    if ((char*)sp >= limit) {
-      break;
-    }
   }
 }
 
@@ -310,7 +312,7 @@ void caml_tsan_exit_on_perform(uintnat pc, char* sp)
     }
 
     caml_tsan_debug_log_pc("forced__tsan_func_exit for", pc);
-    __tsan_func_exit(NULL);
+    caml_tsan_func_exit();
 
     pc = next_pc;
   }
@@ -346,7 +348,7 @@ CAMLno_tsan void caml_tsan_entry_on_resume(uintnat pc, char* sp,
 
   caml_tsan_entry_on_resume(next_pc, sp, stack);
   caml_tsan_debug_log_pc("forced__tsan_func_entry for", pc);
-  __tsan_func_entry((void*)next_pc);
+  caml_tsan_func_entry((void*)next_pc);
 }
 
 #endif // NATIVE_CODE
@@ -445,3 +447,17 @@ CAMLno_tsan void __tsan_unaligned_volatile_write16(void *ptr)
 {
   __tsan_write16(ptr);
 }
+
+CAMLno_tsan void caml_tsan_func_exit_asm(void) {
+#if defined(HAVE___TSAN_FUNC_EXIT_VOID_VOID_P)
+  __tsan_func_exit(NULL);
+#elif defined(HAVE___TSAN_FUNC_EXIT_VOID_VOID)
+  __tsan_func_exit();
+  #endif
+}
+
+CAMLno_tsan void caml_tsan_func_entry_asm(void *retaddr) {
+  __tsan_func_entry(retaddr);
+}
+
+// caml_tsan_write8 is never used in .S files
